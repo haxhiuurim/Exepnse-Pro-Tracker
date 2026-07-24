@@ -60,6 +60,7 @@
 			membershipExceptions = (
 				Models/Category.swift,
 				Models/Expense.swift,
+				Models/RecurringTransaction.swift,
 				Models/SpendingPeriod.swift,
 				Models/QuickSpendTemplate.swift,
 				Services/StorageService.swift,
