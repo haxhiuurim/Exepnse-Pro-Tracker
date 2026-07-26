@@ -60,11 +60,11 @@
 			membershipExceptions = (
 				Models/Category.swift,
 				Models/Expense.swift,
+				Models/QuickSpendTemplate.swift,
 				Models/RecurringTransaction.swift,
 				Models/SpendingPeriod.swift,
-				Models/QuickSpendTemplate.swift,
-				Services/StorageService.swift,
 				Services/Premium/SpentTodayAttributes.swift,
+				Services/StorageService.swift,
 				Utils/CurrencyCode.swift,
 			);
 			target = 714E83162DBE3597005ED7BB /* InpensoWidgetExtensionExtension */;
@@ -411,7 +411,7 @@
 				CODE_SIGN_ENTITLEMENTS = iExpense/iExpense.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = K9YT824399;
+				DEVELOPMENT_TEAM = 4JKYP9B3CA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
@@ -431,7 +431,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.7;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dragomir.Inpenso;
+				PRODUCT_BUNDLE_IDENTIFIER = com.premiumsolutions.expenses;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -451,7 +451,7 @@
 				CODE_SIGN_ENTITLEMENTS = iExpense/iExpense.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = K9YT824399;
+				DEVELOPMENT_TEAM = 4JKYP9B3CA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
@@ -471,7 +471,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.7;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dragomir.Inpenso;
+				PRODUCT_BUNDLE_IDENTIFIER = com.premiumsolutions.expenses;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -491,7 +491,7 @@
 				CODE_SIGN_ENTITLEMENTS = iExpenseWidgetExtensionExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = K9YT824399;
+				DEVELOPMENT_TEAM = 4JKYP9B3CA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iExpenseWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = iExpenseWidgetExtension;
@@ -503,7 +503,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.7;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dragomir.Inpenso.iExpenseWidgetExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.premiumsolutions.expenses.iExpenseWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -520,7 +520,7 @@
 				CODE_SIGN_ENTITLEMENTS = iExpenseWidgetExtensionExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = K9YT824399;
+				DEVELOPMENT_TEAM = 4JKYP9B3CA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iExpenseWidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = iExpenseWidgetExtension;
@@ -532,7 +532,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.7;
-				PRODUCT_BUNDLE_IDENTIFIER = com.dragomir.Inpenso.iExpenseWidgetExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.premiumsolutions.expenses.iExpenseWidgetExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;

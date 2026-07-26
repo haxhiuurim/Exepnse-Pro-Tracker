@@ -44,7 +44,7 @@ We use the collected information solely for the following purposes:
 **All your data is stored exclusively on your device.** We do not transmit, upload, or sync your data to any external servers, cloud services, or third-party platforms.
 
 Your data is stored using:
-- **UserDefaults** (via App Group: `group.com.vintuss.Inpenso`) for expenses, budgets, and settings
+- **UserDefaults** (via App Group: `group.com.premiumsolutions.expenses`) for expenses, budgets, and settings
 - **SwiftData** (Apple's local database framework) for persistent storage
 - **iOS App Group** for secure data sharing between the main app and widget extension
 

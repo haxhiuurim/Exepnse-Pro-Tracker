@@ -11,9 +11,9 @@ import SwiftUI
 import Combine
 
 enum ProProductID {
-    static let monthly = "com.dragomir.Inpenso.pro.monthly"
-    static let yearly = "com.dragomir.Inpenso.pro.yearly"
-    static let yearlySpecial = "com.dragomir.Inpenso.pro.yearly.special"
+    static let monthly = "com.premiumsolutions.expenses.pro.monthly"
+    static let yearly = "com.premiumsolutions.expenses.pro.yearly"
+    static let yearlySpecial = "com.premiumsolutions.expenses.pro.yearly.special"
 
     static let all: [String] = [monthly, yearly, yearlySpecial]
 }

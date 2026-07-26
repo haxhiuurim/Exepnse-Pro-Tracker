@@ -10,7 +10,7 @@ import SwiftUI
 import AppIntents
 import Foundation
 
-let appGroupID = "group.com.vintuss.Inpenso"
+let appGroupID = "group.com.premiumsolutions.expenses"
 
 func getAppCurrency() -> String {
     let sharedDefaults = UserDefaults(suiteName: appGroupID)
