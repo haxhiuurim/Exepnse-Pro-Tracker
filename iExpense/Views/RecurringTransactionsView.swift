@@ -9,7 +9,7 @@ struct RecurringTransactionsView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
     @ObservedObject var expenseViewModel: ExpenseViewModel
-    @StateObject private var service = RecurringTransactionService.shared
+    @ObservedObject private var service = RecurringTransactionService.shared
 
     @State private var showingEditor = false
     @State private var editingItem: RecurringTransaction?

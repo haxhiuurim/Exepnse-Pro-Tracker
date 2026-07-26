@@ -34,7 +34,8 @@ We use the collected information solely for the following purposes:
 4. **App Customization**: To remember your preferences (currency, theme, default category)
 5. **Data Visualization**: To generate charts, trends, and spending insights within the app
 6. **Receipt Scanning**: To extract line items, prices, and totals from receipt photos you choose to scan — entirely on your device
-7. **Reminders**: To schedule optional local notifications that remind you to log spending
+7. **Reminders**: To schedule optional local notifications that remind you to log spending on a frequency you choose
+8. **App Lock**: Optional Face ID / Touch ID to unlock the app when you enable the security lock
 
 ## Data Storage and Security
 
