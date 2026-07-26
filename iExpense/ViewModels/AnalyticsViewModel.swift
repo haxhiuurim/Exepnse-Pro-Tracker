@@ -98,12 +98,14 @@ class AnalyticsViewModel: ObservableObject {
     @Published var currentBudget: Double = 0.0
     @Published var budgetRemainingPerDay: Double = 0.0
     @Published var daysRemainingInMonth: Int = 0
+    @Published var categoryBudgets: [String: Double] = [:]
 
     private var expenses: [Expense] = []
 
     init(expenses: [Expense]) {
         self.expenses = expenses
         self.monthlyBudgets = StorageService.loadBudgets()
+        self.categoryBudgets = StorageService.loadCategoryBudgets()
         calculateAnalytics()
     }
 
@@ -354,6 +356,16 @@ class AnalyticsViewModel: ObservableObject {
             ))
         }
 
+        for status in categoryBudgetStatuses.prefix(2) where status.progress >= 0.9 {
+            newInsights.append(SpendingInsight(
+                type: status.progress >= 1 ? .negative : .neutral,
+                title: status.progress >= 1 ? "Category over budget" : "Category nearly maxed",
+                description: "\(categoryName(for: status.categoryID)) is at \(Int(status.progress * 100))% of its monthly limit.",
+                icon: "tag.fill",
+                color: status.progress >= 1 ? .red : .orange
+            ))
+        }
+
         insights = newInsights
     }
 
@@ -398,6 +410,23 @@ class AnalyticsViewModel: ObservableObject {
 
     func budgetKey(forMonth month: Int, year: Int) -> String {
         String(format: "%02d-%d", month, year)
+    }
+
+    func saveCategoryBudgets(_ budgets: [String: Double]) {
+        categoryBudgets = budgets
+        StorageService.saveCategoryBudgets(budgets)
+        generateInsights()
+    }
+
+    /// Categories that have a limit, sorted by usage.
+    var categoryBudgetStatuses: [(categoryID: String, spent: Double, limit: Double, progress: Double)] {
+        categoryBudgets
+            .filter { $0.value > 0 }
+            .map { id, limit in
+                let spent = spendingByCategory[id] ?? 0
+                return (id, spent, limit, CategoryBudgetStore.progress(spent: spent, limit: limit))
+            }
+            .sorted { $0.progress > $1.progress }
     }
 
     private func categoryName(for categoryID: String) -> String {

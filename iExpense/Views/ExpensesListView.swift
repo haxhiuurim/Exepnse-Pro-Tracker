@@ -122,10 +122,9 @@ struct ExpensesListView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+                AtmosphereBackground(intensity: 0.5)
 
                 VStack(spacing: 0) {
                     monthYearPicker
@@ -148,7 +147,7 @@ struct ExpensesListView: View {
                 }
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search transactions")
-            .navigationTitle("Transactions")
+            .navigationTitle("Activity")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     toolbarFilters
@@ -156,9 +155,10 @@ struct ExpensesListView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        selectedExpenseToEdit = Expense(title: "", price: 0, date: Date(), category: .food)
+                        NotificationCenter.default.post(name: NSNotification.Name("OpenQuickAdd"), object: nil)
                     } label: {
                         Image(systemName: "plus")
+                            .foregroundStyle(InpensoTheme.copper)
                     }
                 }
             }
@@ -243,6 +243,10 @@ struct ExpensesListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
         .opacity(isListLoaded ? 1 : 0)
         .animation(.easeIn(duration: 0.3), value: isListLoaded)
     }
@@ -383,25 +387,25 @@ struct ExpensesListView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 20) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 70))
-                .foregroundColor(.gray.opacity(0.6))
+            Image(systemName: "wave.3.forward")
+                .font(.system(size: 56, weight: .medium))
+                .foregroundStyle(InpensoTheme.tide.opacity(0.7))
                 .padding()
 
-            Text("No Transactions Found")
-                .font(.title2)
-                .fontWeight(.bold)
+            Text("No activity yet")
+                .font(InpensoTheme.brandFont(24, weight: .bold))
+                .foregroundStyle(InpensoTheme.ink)
 
             if !searchText.isEmpty {
                 Text("Try adjusting your search or filters")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(InpensoTheme.body(15))
+                    .foregroundStyle(InpensoTheme.muted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             } else if selectedCategoryIDs.count < filterCategoryIDs.count {
                 Text("Try selecting more categories in the filter")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                    .font(InpensoTheme.body(15))
+                    .foregroundStyle(InpensoTheme.muted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
 
@@ -419,30 +423,19 @@ struct ExpensesListView: View {
                 }
                 .padding(.top, 8)
             } else {
-                Text("Add your first transaction for \(Calendar.current.monthSymbols[selectedMonth - 1]) \(String(selectedYear))")
-                    .font(.body)
-                    .foregroundColor(.secondary)
+                Text("Add your first spend for \(Calendar.current.monthSymbols[selectedMonth - 1]) \(String(selectedYear))")
+                    .font(InpensoTheme.body(15))
+                    .foregroundStyle(InpensoTheme.muted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
 
                 Button {
-                    selectedExpenseToEdit = Expense(title: "", price: 0, date: Date(), category: .food)
+                    NotificationCenter.default.post(name: NSNotification.Name("OpenQuickAdd"), object: nil)
                 } label: {
-                    let addExpenseLabel: some View =
-                        Label("Add Transaction", systemImage: "plus")
-                            .foregroundColor(.white)
-                            .padding(.vertical, 10)
-                            .padding(.horizontal, 20)
-
-                    if #available(iOS 26.0, *) {
-                        addExpenseLabel
-                            .glassEffect(.regular.tint(.blue).interactive())
-                    } else {
-                        addExpenseLabel
-                            .background(Color.accentColor)
-                            .cornerRadius(10)
-                    }
+                    Label("Add spend", systemImage: "plus")
+                        .frame(maxWidth: 220)
                 }
+                .buttonStyle(InpensoPrimaryButtonStyle())
                 .padding(.top, 8)
             }
         }

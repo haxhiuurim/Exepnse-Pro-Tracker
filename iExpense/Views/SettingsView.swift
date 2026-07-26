@@ -9,7 +9,12 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @EnvironmentObject var settingsManager: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
-    
+    @EnvironmentObject private var reminderService: ReminderService
+    @EnvironmentObject private var biometricLock: BiometricLockService
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var pro: ProEntitlementManager
+    @ObservedObject private var premiumStore = PremiumDataStore.shared
+
     @State private var showingImportFilePicker = false
     @State private var showingExportShareSheet = false
     @State private var exportURL: URL? = nil
@@ -17,29 +22,30 @@ struct SettingsView: View {
     @State private var showingImportSuccess = false
     @State private var showingImportFailure = false
     @State private var showingExportSuccess = false
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                // Appearance Section
-                appearanceSection
-                
-                // Currency Section
-                currencySection
-                
-                // Default Settings Section
-                defaultSettingsSection
+    @State private var biometricError: String?
+    @State private var exportFormat: ExportFormat = .csv
 
-                // Category Management Section
+    private enum ExportFormat { case csv, ofx }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                brandHeader
+                proSection
+                appearanceSection
+                securitySection
+                remindersSection
+                moneyToolsSection
+                currencySection
+                defaultSettingsSection
                 categoriesSection
-                
-                // Data Management Section
                 dataManagementSection
-                
-                // About Section
                 aboutSection
             }
+            .scrollContentBackground(.hidden)
+            .background(AtmosphereBackground(intensity: 0.5))
             .navigationTitle("Settings")
+            .tint(InpensoTheme.ink)
             .sheet(isPresented: $showingImportFilePicker) {
                 documentPicker
             }
@@ -49,7 +55,7 @@ struct SettingsView: View {
             .alert("Data Reset", isPresented: $showingResetConfirmation) {
                 resetAlertButtons
             } message: {
-                Text("This will delete all your expenses and budgets. This action cannot be undone.")
+                Text("This will delete all your expenses, budgets, and recurring items. This action cannot be undone.")
             }
             .alert("Import Successful", isPresented: $showingImportSuccess) {
                 Button("OK", role: .cancel) { }
@@ -66,17 +72,213 @@ struct SettingsView: View {
             } message: {
                 Text("Your data has been exported successfully.")
             }
+            .alert("Couldn't enable lock", isPresented: Binding(
+                get: { biometricError != nil },
+                set: { if !$0 { biometricError = nil } }
+            )) {
+                Button("OK", role: .cancel) { biometricError = nil }
+            } message: {
+                Text(biometricError ?? "")
+            }
         }
     }
-    
-    // MARK: - UI Components
-    
+
+    // MARK: - Sections
+
+    private var brandHeader: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Inpenso")
+                    .font(InpensoTheme.brandFont(28, weight: .bold))
+                    .foregroundStyle(InpensoTheme.ink)
+                Text("Tide Ledger · private on-device finance · no ads")
+                    .font(InpensoTheme.body(13))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+            .padding(.vertical, 4)
+            .listRowBackground(Color.clear)
+        }
+    }
+
+    private var proSection: some View {
+        Section {
+            if pro.isPro {
+                HStack {
+                    Label("Inpenso Pro", systemImage: "sparkles")
+                        .foregroundStyle(InpensoTheme.ink)
+                    Spacer()
+                    Text("Active")
+                        .font(InpensoTheme.label(12, weight: .bold))
+                        .foregroundStyle(InpensoTheme.tide)
+                }
+                #if DEBUG
+                Button("Debug: remove Pro") { pro.debugTogglePro() }
+                    .foregroundStyle(InpensoTheme.danger)
+                #endif
+            } else {
+                Button {
+                    pro.openPaywall(plan: .yearly)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Upgrade to Pro")
+                                .font(InpensoTheme.body(16, weight: .bold))
+                                .foregroundStyle(InpensoTheme.ink)
+                            Text("Yearly from \(ProPlan.yearly.displayPrice) · Monthly \(ProPlan.monthly.displayPrice)")
+                                .font(InpensoTheme.label(12))
+                                .foregroundStyle(InpensoTheme.muted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(InpensoTheme.muted)
+                    }
+                }
+            }
+
+            Toggle("iCloud sync", isOn: Binding(
+                get: { premiumStore.iCloudSyncEnabled },
+                set: { enabled in
+                    if !premiumStore.setiCloudSync(enabled, isPro: pro.isPro) {
+                        pro.openPaywall()
+                    } else if enabled {
+                        ICloudSyncService.shared.pushAll()
+                    }
+                }
+            ))
+        } header: {
+            Text("Inpenso Pro")
+        } footer: {
+            Text(pro.isPro
+                  ? "Thank you — every Pro tool is unlocked. Still zero ads."
+                  : "Free includes core tracking. Pro unlocks OCR, sync, goals, exports & more.")
+        }
+    }
+
     private var appearanceSection: some View {
         Section(header: Text("Appearance")) {
             themePicker
         }
     }
-    
+
+    private var securitySection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { biometricLock.isEnabled },
+                set: { newValue in
+                    Task {
+                        if newValue {
+                            let ok = await biometricLock.enableAfterAuth()
+                            if !ok {
+                                biometricError = biometricLock.lastErrorMessage
+                                    ?? "Authenticate with \(biometricLock.biometryLabel) to enable the lock."
+                            }
+                        } else {
+                            biometricLock.isEnabled = false
+                        }
+                    }
+                }
+            )) {
+                Label("Require \(biometricLock.biometryLabel)", systemImage: biometricLock.biometrySymbol)
+            }
+            .disabled(!biometricLock.canUseBiometrics && !biometricLock.isEnabled)
+        } header: {
+            Text("Security")
+        } footer: {
+            Text(
+                biometricLock.canUseBiometrics
+                ? "When enabled, Inpenso asks for \(biometricLock.biometryLabel) every time you open or return to the app."
+                : "Biometrics aren’t available on this device. You can still use the app without a lock."
+            )
+        }
+    }
+
+    private var remindersSection: some View {
+        Section {
+            Toggle("Spending reminders", isOn: $reminderService.isEnabled)
+
+            if reminderService.isEnabled {
+                Picker("How often", selection: $reminderService.frequency) {
+                    ForEach(ReminderFrequency.allCases) { frequency in
+                        Text(frequency.displayName).tag(frequency)
+                    }
+                }
+
+                DatePicker(
+                    "Remind me at",
+                    selection: Binding(
+                        get: { reminderService.reminderDate },
+                        set: { reminderService.setReminderTime(from: $0) }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+
+                if reminderService.frequency == .weekly {
+                    Picker("On", selection: $reminderService.weeklyWeekday) {
+                        ForEach(1...7, id: \.self) { weekday in
+                            Text(Calendar.current.weekdaySymbols[weekday - 1]).tag(weekday)
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Reminders")
+        } footer: {
+            Text(
+                reminderService.isEnabled
+                ? reminderService.frequency.footerHint
+                : "Get nudged to log spending on a schedule you choose."
+            )
+        }
+    }
+
+    private var moneyToolsSection: some View {
+        Section(header: Text("Money tools")) {
+            NavigationLink {
+                RecurringTransactionsView(expenseViewModel: expenseViewModel)
+            } label: {
+                Label("Recurring transactions", systemImage: "arrow.triangle.2.circlepath")
+            }
+
+            if pro.isPro {
+                NavigationLink {
+                    UpcomingRecurringCalendarView()
+                } label: {
+                    Label("Upcoming this month", systemImage: "calendar")
+                }
+            }
+
+            NavigationLink {
+                SavingsGoalsView()
+            } label: {
+                Label("Goals & envelopes", systemImage: "target")
+            }
+
+            NavigationLink {
+                AccountsNetWorthView()
+            } label: {
+                Label("Accounts & net worth", systemImage: "building.columns")
+            }
+
+            NavigationLink {
+                MerchantRulesView()
+            } label: {
+                Label("Merchant rules", systemImage: "bolt.horizontal")
+            }
+
+            NavigationLink {
+                HouseholdLedgerView()
+            } label: {
+                Label("Household ledger", systemImage: "person.2")
+            }
+
+            NavigationLink {
+                ThemePacksView()
+            } label: {
+                Label("Themes & icons", systemImage: "paintpalette")
+            }
+        }
+    }
+
     private var themePicker: some View {
         Picker("Theme", selection: $settingsManager.selectedTheme) {
             ForEach(AppTheme.allCases) { theme in
@@ -85,13 +287,13 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
     }
-    
+
     private var currencySection: some View {
         Section(header: Text("Currency")) {
             currencyPicker
         }
     }
-    
+
     private var currencyPicker: some View {
         Picker("Currency", selection: $settingsManager.selectedCurrency) {
             ForEach(availableCurrencies, id: \.code) { currency in
@@ -100,18 +302,18 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
     }
-    
+
     private func currencyRow(for currency: (code: String, symbol: String, name: String)) -> some View {
         Text("\(currency.symbol) \(currency.name) (\(currency.code))")
             .tag(currency.code)
     }
-    
+
     private var defaultSettingsSection: some View {
         Section(header: Text("Default Settings")) {
             categoryPicker
         }
     }
-    
+
     private var categoryPicker: some View {
         Picker("Default Category", selection: $settingsManager.defaultCategoryID) {
             ForEach(categoryStore.allCategories) { category in
@@ -126,7 +328,7 @@ struct SettingsView: View {
             normalizeDefaultCategory()
         }
     }
-    
+
     private func categoryRow(for category: FinanceCategory) -> some View {
         HStack {
             Circle()
@@ -153,46 +355,75 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private var dataManagementSection: some View {
         Section(header: Text("Data Management")) {
             exportButton
+            Button {
+                guard pro.isPro else { pro.openPaywall(); return }
+                exportFormat = .csv
+                exportProData(format: .csv)
+            } label: {
+                Label("Export CSV (Pro)", systemImage: "tablecells")
+            }
+            Button {
+                guard pro.isPro else { pro.openPaywall(); return }
+                exportFormat = .ofx
+                exportProData(format: .ofx)
+            } label: {
+                Label("Export OFX (Pro)", systemImage: "doc.badge.gearshape")
+            }
             importButton
             resetButton
         }
     }
-    
+
+    private func exportProData(format: ExportFormat) {
+        let url: URL?
+        switch format {
+        case .csv:
+            url = ExportService.csvURL(expenses: expenseViewModel.expenses, currencyCode: settingsManager.selectedCurrency)
+        case .ofx:
+            url = ExportService.ofxURL(expenses: expenseViewModel.expenses, currencyCode: settingsManager.selectedCurrency)
+        }
+        if let url {
+            exportURL = url
+            showingExportShareSheet = true
+            showingExportSuccess = true
+        }
+    }
+
     private var exportButton: some View {
-        Button(action: {
-            exportData()
-        }) {
+        Button(action: exportData) {
             Label("Export Data", systemImage: "square.and.arrow.up")
         }
     }
-    
+
     private var importButton: some View {
-        Button(action: {
-            showingImportFilePicker = true
-        }) {
+        Button(action: { showingImportFilePicker = true }) {
             Label("Import Data", systemImage: "square.and.arrow.down")
         }
     }
-    
+
     private var resetButton: some View {
-        Button(role: .destructive, action: {
-            showingResetConfirmation = true
-        }) {
+        Button(role: .destructive, action: { showingResetConfirmation = true }) {
             Label("Reset All Data", systemImage: "trash")
         }
         .foregroundColor(.red)
     }
-    
+
     private var aboutSection: some View {
         Section(header: Text("About")) {
             versionRow
+            HStack {
+                Text("Theme")
+                Spacer()
+                Text("Tide Ledger")
+                    .foregroundStyle(InpensoTheme.muted)
+            }
         }
     }
-    
+
     private var versionRow: some View {
         HStack {
             Text("Version")
@@ -201,7 +432,7 @@ struct SettingsView: View {
                 .foregroundColor(.secondary)
         }
     }
-    
+
     private var documentPicker: some View {
         DocumentPicker(
             types: [UTType.json],
@@ -216,7 +447,7 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private var shareSheet: some View {
         Group {
             if let url = exportURL {
@@ -224,16 +455,18 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private var resetAlertButtons: some View {
         Group {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
                 settingsManager.resetAllData()
+                expenseViewModel.loadExpenses()
+                RecurringTransactionService.shared.reload()
             }
         }
     }
-    
+
     private func exportData() {
         if let url = settingsManager.exportData() {
             exportURL = url
@@ -243,47 +476,44 @@ struct SettingsView: View {
     }
 }
 
-// Document Picker for importing files
 struct DocumentPicker: UIViewControllerRepresentable {
     let types: [UTType]
     let allowsMultipleSelection: Bool
     let onPick: ([URL]) -> Void
-    
+
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
         picker.allowsMultipleSelection = allowsMultipleSelection
         picker.delegate = context.coordinator
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, UIDocumentPickerDelegate {
         let parent: DocumentPicker
-        
+
         init(_ parent: DocumentPicker) {
             self.parent = parent
         }
-        
+
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             parent.onPick(urls)
         }
     }
 }
 
-// ShareSheet for exporting files
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    
+
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        return controller
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
-    
+
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
@@ -291,4 +521,8 @@ struct ShareSheet: UIViewControllerRepresentable {
     SettingsView()
         .environmentObject(SettingsViewModel())
         .environmentObject(CategoryStore())
+        .environmentObject(ReminderService.shared)
+        .environmentObject(BiometricLockService.shared)
+        .environmentObject(ExpenseViewModel())
+        .environmentObject(ProEntitlementManager.shared)
 }

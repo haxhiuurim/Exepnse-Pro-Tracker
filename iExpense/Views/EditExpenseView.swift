@@ -44,10 +44,9 @@ struct EditExpenseView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+                AtmosphereBackground(intensity: 0.6)
                 
                 ScrollView {
                     VStack(spacing: 20) {
@@ -124,48 +123,27 @@ struct EditExpenseView: View {
                                 HapticFeedback.success()
                                 dismiss()
                             }) {
-                                let saveButton: some View = HStack {
-                                    Image(systemName: "checkmark.circle.fill")
-                                    Text("Save Changes")
-                                }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                                
-                                if #available(iOS 26.0, *) {
-                                    saveButton
-                                        .glassEffect(.regular.tint(.blue).interactive())
-                                } else {
-                                    saveButton
-                                        .background(Color.blue.opacity(0.8))
-                                        .cornerRadius(12)
-                                }
+                                Label("Save changes", systemImage: "checkmark.circle.fill")
                             }
-                            
+                            .buttonStyle(InpensoPrimaryButtonStyle())
+
                             Button(action: {
                                 hideKeyboard()
                                 deleteExpense()
                                 HapticFeedback.impact(style: .medium)
                                 dismiss()
                             }) {
-                                let deleteButton: some View = HStack {
-                                    Image(systemName: "trash.fill")
-                                    Text("Delete Transaction")
-                                }
+                                Label("Delete transaction", systemImage: "trash.fill")
+                                    .font(InpensoTheme.label(15, weight: .semibold))
+                                    .foregroundStyle(.white)
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                                if #available(iOS 26.0, *) {
-                                    deleteButton
-                                        .glassEffect(.regular.tint(.red).interactive())
-                                } else {
-                                    deleteButton
-                                        .background(Color.red.opacity(0.8))
-                                        .cornerRadius(12)
-                                }
+                                    .padding(.vertical, 14)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .fill(InpensoTheme.danger)
+                                    )
                             }
+                            .buttonStyle(.plain)
                         }
                         .padding(.top, 10)
                     }

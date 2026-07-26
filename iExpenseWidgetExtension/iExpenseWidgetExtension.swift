@@ -1,180 +1,117 @@
-// iExpenseWidgetExtension.swift
-// iExpenseWidgetExtension
+//
+//  iExpenseWidgetExtension.swift
+//  iExpenseWidgetExtension
+//
+//  Period widgets (today / week / month) with one-tap add.
+//
 
 import WidgetKit
 import SwiftUI
 import AppIntents
 import Foundation
 
-// Global app group ID for consistency - must match StorageService.appGroupID
 let appGroupID = "group.com.vintuss.Inpenso"
 
-// Global function to get currency code from shared UserDefaults
 func getAppCurrency() -> String {
-    // First try to get from shared defaults with explicit initialization
     let sharedDefaults = UserDefaults(suiteName: appGroupID)
-    
-    if let sharedDefaults = sharedDefaults {
-        // Force a synchronize before reading
-        sharedDefaults.synchronize()
-        
-        // Try to read the currency directly
-        if let currency = sharedDefaults.string(forKey: "selectedCurrency") {
-            return currency
-        }
+    sharedDefaults?.synchronize()
+    if let currency = sharedDefaults?.string(forKey: "selectedCurrency") {
+        return currency
     }
-    
-    // If we got here, try standard UserDefaults
-    let standardDefaults = UserDefaults.standard
-    standardDefaults.synchronize()
-    let standardCurrency = standardDefaults.string(forKey: "selectedCurrency")
-    
-    // If all else fails, return USD
-    return standardCurrency ?? "USD"
+    return UserDefaults.standard.string(forKey: "selectedCurrency") ?? "USD"
 }
 
-// Get monthly budget from shared UserDefaults
 func getMonthlyBudget() -> Double {
-    let sharedDefaults = UserDefaults(suiteName: appGroupID)
-    
-    if let sharedDefaults = sharedDefaults {
-        // Force a synchronize before reading
-        sharedDefaults.synchronize()
-        
-        // Get the budgets data
-        if let budgetsData = sharedDefaults.data(forKey: "budgets") {
-            do {
-                let budgets = try JSONDecoder().decode([String: Double].self, from: budgetsData)
-                
-                // Get current month in format "MM-YYYY"
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "MM-yyyy"
-                let currentMonthKey = dateFormatter.string(from: Date())
-                
-                // Return the budget for the current month
-                return budgets[currentMonthKey] ?? 0
-            } catch {
-                return 0
-            }
-        }
+    guard let sharedDefaults = UserDefaults(suiteName: appGroupID),
+          let budgetsData = sharedDefaults.data(forKey: "budgets"),
+          let budgets = try? JSONDecoder().decode([String: Double].self, from: budgetsData) else {
+        return 0
     }
-    
-    return 0
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "MM-yyyy"
+    return budgets[dateFormatter.string(from: Date())] ?? 0
 }
 
 struct ExpenseEntry: TimelineEntry {
     let date: Date
+    let period: SpendingPeriod
     let totalSpent: Double
     let totalIncome: Double
-    let spendingByCategory: [Category: Double]
     let monthlyBudget: Double
-    
-    // Computed properties for the widget
+    let todaySpent: Double
+    let weekSpent: Double
+    let monthSpent: Double
+    let topTemplates: [QuickSpendTemplate]
+
+    var netCashflow: Double { totalIncome - totalSpent }
+
     var budgetRemaining: Double {
-        max(0, monthlyBudget - totalSpent)
+        max(0, monthlyBudget - monthSpent)
     }
 
-    var netCashflow: Double {
-        totalIncome - totalSpent
-    }
-    
     var budgetProgress: Double {
-        monthlyBudget > 0 ? min(1.0, totalSpent / monthlyBudget) : 0
+        monthlyBudget > 0 ? min(1.0, monthSpent / monthlyBudget) : 0
     }
-    
-    var topCategories: [(Category, Double)] {
-        Array(spendingByCategory.sorted { $0.value > $1.value }.prefix(5))
-    }
-    
+
     var overBudget: Bool {
-        monthlyBudget > 0 && totalSpent > monthlyBudget
-    }
-    
-    var daysLeftInMonth: Int {
-        let calendar = Calendar.current
-        let today = calendar.component(.day, from: Date())
-        
-        // Get range of days in current month
-        let range = calendar.range(of: .day, in: .month, for: Date())!
-        let daysInMonth = range.count
-        
-        return daysInMonth - today
-    }
-    
-    var dailyBudgetRecommendation: Double {
-        if daysLeftInMonth > 0 && monthlyBudget > 0 {
-            return budgetRemaining / Double(daysLeftInMonth)
-        }
-        return 0
+        monthlyBudget > 0 && monthSpent > monthlyBudget
     }
 }
 
 struct ExpenseQuickAddProvider: AppIntentTimelineProvider {
     typealias Intent = QuickAddConfigurationIntent
-    
-    // Use the shared app group
-    private let sharedDefaults = UserDefaults(suiteName: appGroupID)
 
     func placeholder(in context: Context) -> ExpenseEntry {
         ExpenseEntry(
-            date: Date(), 
-            totalSpent: 0,
+            date: Date(),
+            period: .month,
+            totalSpent: 120,
             totalIncome: 0,
-            spendingByCategory: [:],
-            monthlyBudget: 0
+            monthlyBudget: 1000,
+            todaySpent: 24,
+            weekSpent: 180,
+            monthSpent: 640,
+            topTemplates: Array(QuickSpendTemplate.starterTemplates.prefix(2))
         )
     }
 
     func snapshot(for configuration: QuickAddConfigurationIntent, in context: Context) async -> ExpenseEntry {
-        await loadEntry()
+        loadEntry(period: configuration.period)
     }
 
     func timeline(for configuration: QuickAddConfigurationIntent, in context: Context) async -> Timeline<ExpenseEntry> {
-        let entry = await loadEntry()
-        let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(1800))) // refresh every 30min
-        return timeline
+        let entry = loadEntry(period: configuration.period)
+        return Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(900)))
     }
 
-    private func loadEntry() async -> ExpenseEntry {
+    private func loadEntry(period: SpendingPeriod) -> ExpenseEntry {
         let expenses = StorageService.loadExpenses()
-        let monthlyBudget = getMonthlyBudget()
+        let templates = StorageService.loadQuickTemplates()
+            .sorted { ($0.lastUsed ?? .distantPast) > ($1.lastUsed ?? .distantPast) }
 
-        let calendar = Calendar.current
-        let currentMonth = calendar.component(.month, from: Date())
-        let currentYear = calendar.component(.year, from: Date())
-
-        let filteredExpenses = expenses.filter { expense in
-            let month = calendar.component(.month, from: expense.date)
-            let year = calendar.component(.year, from: expense.date)
-            return month == currentMonth && year == currentYear
-        }
-
-        let expenseTransactions = filteredExpenses.filter { $0.type == .expense }
-        let incomeTransactions = filteredExpenses.filter { $0.type == .income }
-        let total = expenseTransactions.reduce(0) { $0 + $1.price }
-        let incomeTotal = incomeTransactions.reduce(0) { $0 + $1.price }
-
-        var categoryTotals: [Category: Double] = [:]
-        for expense in expenseTransactions {
-            categoryTotals[expense.category, default: 0] += expense.price
-        }
+        StorageService.saveWidgetPeriod(period)
 
         return ExpenseEntry(
-            date: Date(), 
-            totalSpent: total,
-            totalIncome: incomeTotal,
-            spendingByCategory: categoryTotals,
-            monthlyBudget: monthlyBudget
+            date: Date(),
+            period: period,
+            totalSpent: PeriodTotals.spent(from: expenses, period: period),
+            totalIncome: PeriodTotals.income(from: expenses, period: period),
+            monthlyBudget: getMonthlyBudget(),
+            todaySpent: PeriodTotals.spent(from: expenses, period: .today),
+            weekSpent: PeriodTotals.spent(from: expenses, period: .week),
+            monthSpent: PeriodTotals.spent(from: expenses, period: .month),
+            topTemplates: Array(templates.prefix(3))
         )
     }
 }
 
-// MARK: - Widget Views
+// MARK: - Views
+
 struct iExpenseWidgetEntryView: View {
     var entry: ExpenseEntry
     @Environment(\.widgetFamily) var family
-    let currencyCode = getAppCurrency()
-    
+    private let currencyCode = getAppCurrency()
+
     var body: some View {
         switch family {
         case .systemSmall:
@@ -187,258 +124,208 @@ struct iExpenseWidgetEntryView: View {
             smallWidget
         }
     }
-    
-    // MARK: - Small Widget (2x2)
-    var smallWidget: some View {
-        ZStack {
-            VStack(alignment: .center, spacing: 4) {
-                // "Monthly Spend" title with icon
-                HStack(spacing: 4) {
-                    Image(systemName: "dollarsign.circle.fill")
-                        .foregroundColor(entry.overBudget ? .red : .blue)
-                        .font(.system(size: 14))
-                    
-                    Text("MONTHLY SPEND")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .kerning(0.5)
-                }
-                .padding(.top, 4)
-                
+
+    // MARK: Small — single period + add
+
+    private var smallWidget: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Inpenso")
+                    .font(.system(size: 12, weight: .bold, design: .serif))
+                    .foregroundStyle(Color(red: 0.05, green: 0.23, blue: 0.23))
                 Spacer()
-                
-                // Amount in large, attractive font
-                Text(entry.totalSpent, format: .currency(code: currencyCode))
-                    .font(.system(.title2, design: .rounded))
-                    .fontWeight(.bold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .foregroundColor(entry.overBudget ? .red : .primary)
-                    .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
-                
-                // Budget indicator if budget exists
-                if entry.monthlyBudget > 0 {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(entry.overBudget ? .red : .green)
-                            .frame(width: 6, height: 6)
-                        
-                        Text(entry.overBudget ? "Over Budget" : "\(Int(entry.budgetProgress * 100))% of Budget")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(entry.overBudget ? .red : .green)
-                    }
-                    .padding(.bottom, 2)
-                } else {
-                    Text("This Month")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, 2)
-                }
-                
-                Spacer()
+                Text(entry.period.shortTitle.uppercased())
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.79, green: 0.42, blue: 0.24))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+
+            Spacer(minLength: 0)
+
+            Text(entry.totalSpent, format: .currency(code: currencyCode))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.05, green: 0.23, blue: 0.23))
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+
+            Text(entry.period.spentLabel)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+
+            Button(intent: OpenQuickAddIntent()) {
+                Label("Add", systemImage: "plus")
+                    .font(.system(size: 12, weight: .bold))
+                    .frame(maxWidth: .infinity)
+            }
+            .tint(Color(red: 0.79, green: 0.42, blue: 0.24))
+        }
+        .containerBackground(for: .widget) {
+            widgetAtmosphere
         }
     }
-    
-    // MARK: - Medium Widget
-    var mediumWidget: some View {
-        HStack(spacing: 16) {
-            // Left section - Monthly spending amount
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.totalSpent, format: .currency(code: currencyCode))
-                    .font(.system(.title, design: .rounded))
-                    .fontWeight(.bold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .foregroundColor(entry.overBudget ? .red : .primary)
-                
-                Text("spent this month")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
 
-                if entry.totalIncome > 0 {
-                    Text("Net \(entry.netCashflow, format: .currency(code: currencyCode))")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(entry.netCashflow >= 0 ? .green : .red)
+    // MARK: Medium — today/week/month + add
+
+    private var mediumWidget: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Inpenso")
+                    .font(.system(size: 14, weight: .bold, design: .serif))
+                    .foregroundStyle(Color(red: 0.05, green: 0.23, blue: 0.23))
+
+                Text(entry.totalSpent, format: .currency(code: currencyCode))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.05, green: 0.23, blue: 0.23))
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+
+                Text(entry.period.displayTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button(intent: OpenQuickAddIntent()) {
+                    Label("Add spend", systemImage: "plus.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
                 }
+                .tint(Color(red: 0.79, green: 0.42, blue: 0.24))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            
-            // Right section - Budget circle if available
-            if entry.monthlyBudget > 0 {
-                ZStack {
-                    // Background circle
-                    Circle()
-                        .stroke(Color(.systemGray5), lineWidth: 8)
-                        .frame(width: 80, height: 80)
-                    
-                    // Progress circle
-                    Circle()
-                        .trim(from: 0, to: entry.budgetProgress)
-                        .stroke(
-                            entry.overBudget ? Color.red : Color.green,
-                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                        )
-                        .frame(width: 80, height: 80)
-                        .rotationEffect(.degrees(-90))
-                    
-                    // Percentage text
-                    VStack(spacing: 0) {
-                        Text("\(Int(entry.budgetProgress * 100))%")
-                            .font(.system(.body, design: .rounded))
-                            .fontWeight(.bold)
-                            .foregroundColor(entry.overBudget ? .red : .green)
-                        
-                        Text("of budget")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .frame(width: 100, height: 100)
+
+            VStack(alignment: .leading, spacing: 8) {
+                periodLine(title: "Today", amount: entry.todaySpent)
+                periodLine(title: "Week", amount: entry.weekSpent)
+                periodLine(title: "Month", amount: entry.monthSpent)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(16)
+        .containerBackground(for: .widget) {
+            widgetAtmosphere
+        }
     }
-    
-    // MARK: - Large Widget
-    var largeWidget: some View {
-        VStack {
-            // Top - Monthly spending
+
+    // MARK: Large — periods + templates + budget
+
+    private var largeWidget: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Inpenso")
+                        .font(.system(size: 18, weight: .bold, design: .serif))
+                        .foregroundStyle(Color(red: 0.05, green: 0.23, blue: 0.23))
+                    Text(entry.period.displayTitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(intent: OpenQuickAddIntent()) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(Color(red: 0.79, green: 0.42, blue: 0.24), in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+
             Text(entry.totalSpent, format: .currency(code: currencyCode))
-                .font(.system(.largeTitle, design: .rounded))
-                .fontWeight(.bold)
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.05, green: 0.23, blue: 0.23))
+                .minimumScaleFactor(0.7)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .foregroundColor(entry.overBudget ? .red : .primary)
-            
-            Text("spent this month")
-                .font(.headline)
-                .foregroundColor(.secondary)
 
-            if entry.totalIncome > 0 {
-                HStack(spacing: 16) {
-                    VStack {
-                        Text("Income")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(entry.totalIncome, format: .currency(code: currencyCode))
-                            .font(.headline)
-                            .foregroundColor(.green)
-                    }
-
-                    VStack {
-                        Text("Net")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(entry.netCashflow, format: .currency(code: currencyCode))
-                            .font(.headline)
-                            .foregroundColor(entry.netCashflow >= 0 ? .green : .red)
-                    }
-                }
-                .padding(.top, 4)
+            HStack(spacing: 8) {
+                miniStat(title: "Today", amount: entry.todaySpent)
+                miniStat(title: "Week", amount: entry.weekSpent)
+                miniStat(title: "Month", amount: entry.monthSpent)
             }
-            
-            // Budget visualization if available
+
             if entry.monthlyBudget > 0 {
-                Spacer()
-                
-                ZStack {
-                    // Background circle
-                    Circle()
-                        .stroke(Color(.systemGray5), lineWidth: 15)
-                        .frame(width: 180, height: 180)
-                    
-                    // Progress circle
-                    Circle()
-                        .trim(from: 0, to: entry.budgetProgress)
-                        .stroke(
-                            entry.overBudget ? Color.red : Color.green,
-                            style: StrokeStyle(lineWidth: 15, lineCap: .round)
-                        )
-                        .frame(width: 180, height: 180)
-                        .rotationEffect(.degrees(-90))
-                    
-                    // Inner information
-                    VStack(spacing: 4) {
-                        Text(entry.overBudget ? "OVER BUDGET" : "BUDGET")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-                        
-                        if entry.overBudget {
-                            Text(entry.totalSpent - entry.monthlyBudget, format: .currency(code: currencyCode))
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.bold)
-                                .foregroundColor(.red)
-                        } else {
-                            Text(entry.budgetRemaining, format: .currency(code: currencyCode))
-                                .font(.system(.title3, design: .rounded))
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(entry.overBudget ? "Over budget" : "Budget left")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(entry.overBudget ? .red : .secondary)
+                        Spacer()
+                        Text(entry.overBudget ? entry.monthSpent - entry.monthlyBudget : entry.budgetRemaining, format: .currency(code: currencyCode))
+                            .font(.caption.weight(.bold))
+                    }
+                    Gauge(value: entry.budgetProgress) {
+                        EmptyView()
+                    }
+                    .gaugeStyle(.linearCapacity)
+                    .tint(entry.overBudget ? Color.red : Color(red: 0.16, green: 0.56, blue: 0.53))
+                }
+            }
+
+            if !entry.topTemplates.isEmpty {
+                Text("Quick spends")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    ForEach(entry.topTemplates.prefix(3), id: \.id) { template in
+                        Button(intent: AddTemplateExpenseIntent(templateID: template.id.uuidString)) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(template.title)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .lineLimit(1)
+                                Text(template.amount, format: .currency(code: currencyCode))
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                            .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
                         }
-                        
-                        Text("\(Int(entry.budgetProgress * 100))% used")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        .buttonStyle(.plain)
                     }
                 }
-                
-                Spacer()
-                
-                Text("\(entry.daysLeftInMonth) days left in the month")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            } else {
-                Spacer()
-                
-                // If no budget, show a message
-                VStack {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 50))
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, 10)
-                    
-                    Text("No budget set for this month")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                
-                Spacer()
             }
+
+            Spacer(minLength: 0)
         }
-        .padding(16)
+        .containerBackground(for: .widget) {
+            widgetAtmosphere
+        }
     }
-    
-    // Helper function to get category icon
-    private func categoryIcon(for category: Category) -> String {
-        switch category {
-        case .food:
-            return "cart.fill"
-        case .eatingOut:
-            return "fork.knife"
-        case .rent:
-            return "house.fill"
-        case .shopping:
-            return "bag.fill"
-        case .entertainment:
-            return "tv.fill"
-        case .transportation:
-            return "car.fill"
-        case .utilities:
-            return "bolt.fill"
-        case .subscriptions:
-            return "repeat"
-        case .healthcare:
-            return "heart.fill"
-        case .education:
-            return "book.fill"
-        case .others:
-            return "ellipsis"
+
+    private func periodLine(title: String, amount: Double) -> some View {
+        HStack {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(amount, format: .currency(code: currencyCode))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.05, green: 0.23, blue: 0.23))
         }
+    }
+
+    private func miniStat(title: String, amount: Double) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(amount, format: .currency(code: currencyCode))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var widgetAtmosphere: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.96, green: 0.98, blue: 0.97),
+                Color(red: 0.91, green: 0.95, blue: 0.94),
+                Color(red: 0.83, green: 0.90, blue: 0.88)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
@@ -446,39 +333,29 @@ struct iExpenseWidgetExtension: Widget {
     let kind: String = "iExpenseWidgetExtension"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, provider: ExpenseQuickAddProvider()) { entry in
+        AppIntentConfiguration(kind: kind, intent: QuickAddConfigurationIntent.self, provider: ExpenseQuickAddProvider()) { entry in
             iExpenseWidgetEntryView(entry: entry)
-                .containerBackground(.widgetBackground, for: .widget)
         }
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
-        .configurationDisplayName("iExpense Tracker")
-        .description("Track your monthly spending, budget progress, and top categories at a glance.")
+        .configurationDisplayName("Inpenso Spending")
+        .description("See today, week, or month spending — and add a spend with one tap.")
+        .contentMarginsDisabled()
     }
 }
 
-// MARK: - Widget Background Extension
-extension ShapeStyle where Self == Color {
-    static var widgetBackground: Color {
-        Color(.systemBackground)
-    }
-}
-
-// MARK: - Previews
 #Preview(as: .systemSmall) {
     iExpenseWidgetExtension()
 } timeline: {
     ExpenseEntry(
         date: .now,
-        totalSpent: 780.50,
-        totalIncome: 2400.00,
-        spendingByCategory: [
-            .food: 250.00,
-            .shopping: 175.75,
-            .transportation: 80.25,
-            .entertainment: 120.50,
-            .utilities: 154.00
-        ],
-        monthlyBudget: 1000.00
+        period: .today,
+        totalSpent: 42.50,
+        totalIncome: 0,
+        monthlyBudget: 1200,
+        todaySpent: 42.50,
+        weekSpent: 210,
+        monthSpent: 780,
+        topTemplates: Array(QuickSpendTemplate.starterTemplates.prefix(2))
     )
 }
 
@@ -487,16 +364,14 @@ extension ShapeStyle where Self == Color {
 } timeline: {
     ExpenseEntry(
         date: .now,
-        totalSpent: 780.50,
-        totalIncome: 2400.00,
-        spendingByCategory: [
-            .food: 250.00,
-            .shopping: 175.75,
-            .transportation: 80.25,
-            .entertainment: 120.50,
-            .utilities: 154.00
-        ],
-        monthlyBudget: 1000.00
+        period: .week,
+        totalSpent: 210.00,
+        totalIncome: 500,
+        monthlyBudget: 1200,
+        todaySpent: 42.50,
+        weekSpent: 210,
+        monthSpent: 780,
+        topTemplates: Array(QuickSpendTemplate.starterTemplates.prefix(2))
     )
 }
 
@@ -505,15 +380,13 @@ extension ShapeStyle where Self == Color {
 } timeline: {
     ExpenseEntry(
         date: .now,
+        period: .month,
         totalSpent: 780.50,
-        totalIncome: 2400.00,
-        spendingByCategory: [
-            .food: 250.00,
-            .shopping: 175.75,
-            .transportation: 80.25,
-            .entertainment: 120.50,
-            .utilities: 154.00
-        ],
-        monthlyBudget: 1000.00
+        totalIncome: 2400,
+        monthlyBudget: 1200,
+        todaySpent: 42.50,
+        weekSpent: 210,
+        monthSpent: 780.50,
+        topTemplates: Array(QuickSpendTemplate.starterTemplates.prefix(3))
     )
 }

@@ -7,13 +7,13 @@
 
 import SwiftUI
 
-/// A standard card view with consistent styling
+/// Soft surface panel used in forms — Tide Ledger styling.
 struct CardView<Content: View>: View {
     let title: String
     let content: Content
     var titleAlignment: HorizontalAlignment = .leading
     var showDivider: Bool = false
-    
+
     init(
         title: String,
         titleAlignment: HorizontalAlignment = .leading,
@@ -25,69 +25,53 @@ struct CardView<Content: View>: View {
         self.showDivider = showDivider
         self.content = content()
     }
-    
+
     var body: some View {
         VStack(alignment: titleAlignment, spacing: 12) {
-            // Card title
             Text(title)
-                .font(.headline)
+                .font(InpensoTheme.label(14, weight: .semibold))
+                .foregroundStyle(InpensoTheme.slate)
                 .padding(.horizontal)
-            
+
             if showDivider {
                 Divider()
+                    .opacity(0.4)
                     .padding(.horizontal)
             }
-            
-            // Card content
+
             content
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(InpensoTheme.ink.opacity(0.06), lineWidth: 1)
+                )
         )
     }
 }
 
-/// A standard section header text
 struct SectionHeaderText: View {
     let text: String
-    
+
     var body: some View {
         Text(text)
-            .font(.headline)
-            .foregroundColor(.secondary)
+            .font(InpensoTheme.label(13, weight: .semibold))
+            .foregroundStyle(InpensoTheme.muted)
     }
 }
 
 #Preview {
-    VStack(spacing: 20) {
-        CardView(title: "Basic Card") {
-            Text("This is the content of the card")
-                .padding()
-        }
-        
-        CardView(title: "Card with Divider", showDivider: true) {
-            VStack {
-                Text("Above the divider")
-                Text("Below the divider")
+    ZStack {
+        AtmosphereBackground()
+        VStack(spacing: 20) {
+            CardView(title: "Basic Card") {
+                Text("This is the content of the card")
+                    .padding()
             }
-            .padding()
         }
-        
-        CardView(title: "Card with List Content") {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(1..<4) { i in
-                    HStack {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 10, height: 10)
-                        Text("Item \(i)")
-                    }
-                }
-            }
-            .padding()
-        }
+        .padding()
     }
-    .padding()
-} 
+}
