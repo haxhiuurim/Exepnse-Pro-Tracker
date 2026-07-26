@@ -11,7 +11,6 @@ import SwiftData
 struct MainTabView: View {
     @StateObject private var viewModel = ExpenseViewModel()
     @StateObject private var analyticsViewModel = AnalyticsViewModel(expenses: [])
-    @StateObject private var reminderService = ReminderService.shared
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @State private var selectedTab = 0
     @State private var showQuickAdd = false
@@ -89,7 +88,7 @@ struct MainTabView: View {
                 consumePendingQuickAdd()
             }
         }
-        .environmentObject(reminderService)
+        .environmentObject(ReminderService.shared)
     }
 
     private func consumePendingQuickAdd() {

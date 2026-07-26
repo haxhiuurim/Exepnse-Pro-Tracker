@@ -243,6 +243,10 @@ struct ExpensesListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
         .opacity(isListLoaded ? 1 : 0)
         .animation(.easeIn(duration: 0.3), value: isListLoaded)
     }
