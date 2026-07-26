@@ -13,128 +13,145 @@ struct AddExpenseView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
     @ObservedObject var viewModel: ExpenseViewModel
-    
-    // Form fields
+
     @State private var title: String = ""
     @State private var price: String = ""
     @State private var selectedCategoryID: String
     @State private var transactionType: TransactionType = .expense
     @State private var selectedDate: Date = Date()
     @State private var notes: String = ""
-    
-    // UI States
     @State private var showDatePicker = false
     @State private var keyboardVisible: Bool = false
     @State private var showingValidationAlert = false
     @State private var validationMessage = ""
     @State private var animateSuccess = false
-    
-    // Current currency symbol
+    @State private var showReceiptScan = false
+    @State private var saveAsTemplate = false
+
     private var currencySymbol: String {
         let locale = Locale.current
         let currencyCode = settingsViewModel.selectedCurrency
         return locale.localizedCurrencySymbol(forCurrencyCode: currencyCode) ?? currencyCode
     }
-    
+
     init(viewModel: ExpenseViewModel) {
         self.viewModel = viewModel
-        // Initialize with the default category from settings
         let defaultCategoryID = UserDefaults.standard.string(forKey: "defaultCategoryID") ?? Category.food.categoryID
         _selectedCategoryID = State(initialValue: defaultCategoryID)
     }
-    
+
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
-                
+                AtmosphereBackground(intensity: 0.65)
+
                 ScrollView {
-                    VStack(spacing: 20) {
-                        // Title and amount card
+                    VStack(spacing: 18) {
+                        Text("Inpenso")
+                            .font(InpensoTheme.brandFont(28, weight: .bold))
+                            .foregroundStyle(InpensoTheme.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Button {
+                            showReceiptScan = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "doc.text.viewfinder")
+                                    .foregroundStyle(InpensoTheme.tide)
+                                Text("Scan a receipt instead")
+                                    .font(InpensoTheme.body(15, weight: .semibold))
+                                    .foregroundStyle(InpensoTheme.ink)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(InpensoTheme.muted)
+                            }
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color.white.opacity(0.7))
+                            )
+                        }
+                        .buttonStyle(.plain)
+
                         mainDataCard
-                        
-                        // Category selection
+
                         CardView(title: "Category") {
                             CategoryGrid(
                                 selectedCategoryID: $selectedCategoryID,
                                 categories: categoryStore.allCategories
                             )
-                                .padding(.horizontal)
+                            .padding(.horizontal)
                         }
-                        
-                        // Date selection
+
                         DatePickerCard(
                             title: "Date",
                             selectedDate: $selectedDate,
                             isExpanded: $showDatePicker
                         )
-                        
-                        // Notes
+
                         notesCard
-                        
-                        // Save Button
-                        if #available(iOS 26.0, *) {
-                            saveButton
-                                .glassEffect(isFormValid() ? .regular.tint(.blue).interactive() : .regular.tint(.gray))
-                        } else {
-                            saveButton
-                                .background(isFormValid() ? Color.accentColor : Color.gray)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                        if transactionType == .expense {
+                            Toggle(isOn: $saveAsTemplate) {
+                                Text("Save as quick spend shortcut")
+                                    .font(InpensoTheme.body(14, weight: .medium))
+                            }
+                            .tint(InpensoTheme.tide)
+                            .padding(.horizontal, 4)
                         }
+
+                        Button(action: saveExpense) {
+                            Text("Save transaction")
+                        }
+                        .buttonStyle(InpensoPrimaryButtonStyle(enabled: isFormValid()))
+                        .disabled(!isFormValid())
                     }
                     .padding(.horizontal)
                     .padding(.top, 10)
                     .padding(.bottom, 24)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                
-                // Success animation overlay
+
                 if animateSuccess {
                     successOverlay
                 }
             }
-            .navigationTitle("Add Transaction")
+            .navigationTitle("New transaction")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(InpensoTheme.slate)
                 }
-                
-                // Done button only shows when keyboard is visible
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if keyboardVisible {
-                        Button("Done") {
-                            hideKeyboard()
-                        }
+                        Button("Done") { hideKeyboard() }
+                            .foregroundStyle(InpensoTheme.copper)
                     }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-                withAnimation {
-                    keyboardVisible = true
-                }
+                withAnimation { keyboardVisible = true }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                withAnimation {
-                    keyboardVisible = false
-                }
+                withAnimation { keyboardVisible = false }
             }
             .alert(validationMessage, isPresented: $showingValidationAlert) {
                 Button("OK", role: .cancel) { }
+            }
+            .sheet(isPresented: $showReceiptScan) {
+                ReceiptScanView(viewModel: viewModel)
             }
             .onAppear {
                 selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
             }
         }
     }
-    
-    // MARK: - Main Data Card
-    
+
     private var mainDataCard: some View {
-        CardView(title: "Transaction Details", showDivider: true) {
+        CardView(title: "Details", showDivider: true) {
             VStack(spacing: 16) {
                 Picker("Type", selection: $transactionType) {
                     ForEach(TransactionType.allCases) { type in
@@ -144,16 +161,14 @@ struct AddExpenseView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
 
-                // Title field
                 TextFormField(
                     label: "Title",
                     text: $title,
-                    placeholder: transactionType == .expense ? "Expense title" : "Income title",
+                    placeholder: transactionType == .expense ? "What did you spend on?" : "Income source",
                     leadingIcon: "pencil"
                 )
                 .padding(.horizontal)
-                
-                // Price field
+
                 CurrencyFormField(
                     label: "Amount",
                     amount: $price,
@@ -165,22 +180,18 @@ struct AddExpenseView: View {
             }
         }
     }
-    
-    // MARK: - Notes Card
-    
+
     private var notesCard: some View {
-        CardView(title: "Notes (Optional)") {
+        CardView(title: "Notes (optional)") {
             ZStack(alignment: .topLeading) {
-                // Background that adapts to color scheme
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.65))
                     .frame(minHeight: 100)
-                
-                // Text editor
+
                 TextEditor(text: $notes)
-                    .font(.body)
-                    .scrollContentBackground(.hidden) // Hide the default background
-                    .background(Color.clear) // Use transparent background
+                    .font(InpensoTheme.body(15))
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
                     .padding(8)
                     .frame(minHeight: 100)
             }
@@ -188,110 +199,60 @@ struct AddExpenseView: View {
             .padding(.bottom, 8)
         }
     }
-    
-    // MARK: - Save Button
-    
-    private var saveButton: some View {
-        Button(action: saveExpense) {
-            HStack {
-                Spacer()
-                Text("Save Transaction")
-                Spacer()
-            }
-            .padding()
-            .foregroundColor(.white)
-            
-//            HStack {
-//                Spacer()
-//                Text("Save Expense")
-//                    .fontWeight(.bold)
-//                Spacer()
-//            }
-//            .padding()
-//            .background(isFormValid() ? Color.accentColor : Color.gray)
-//            .foregroundColor(.white)
-//            .cornerRadius(16)
-        }
-        .disabled(!isFormValid())
-    }
-    
-//    let saveButton: some View =
-//    
-//    if #available(iOS 26.0, *) {
-//        saveButton
-//            .glassEffect(.regular.tint(.blue).interactive())
-//    } else {
-//        saveButton
-//            .background(Color.blue.opacity(0.8))
-//            .cornerRadius(12)
-//    }
-    
-    // MARK: - Success Overlay
-    
+
     private var successOverlay: some View {
         ZStack {
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 20) {
+            Color.black.opacity(0.35).ignoresSafeArea()
+
+            VStack(spacing: 16) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.green)
-                
-                Text("Transaction Added!")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
+                    .font(.system(size: 72))
+                    .foregroundStyle(InpensoTheme.surplus)
+
+                Text("Saved")
+                    .font(InpensoTheme.brandFont(24, weight: .bold))
+                    .foregroundStyle(InpensoTheme.ink)
             }
-            .padding(30)
+            .padding(32)
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(.systemBackground).opacity(0.8))
-                    .blur(radius: 0.5)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(InpensoTheme.foam)
             )
             .scaleEffect(animateSuccess ? 1.0 : 0.5)
-            .opacity(animateSuccess ? 1.0 : 0)
+            .opacity(animateSuccess ? 1 : 0)
             .animation(.spring(), value: animateSuccess)
         }
     }
-    
-    // MARK: - Helper Methods
-    
+
     private func isFormValid() -> Bool {
-        return !title.isEmpty && !price.isEmpty
+        !title.isEmpty && !price.isEmpty
     }
-    
+
     private func saveExpense() {
-        // Hide keyboard first
         hideKeyboard()
-        
-        // Validate inputs
+
         if title.isEmpty {
             showValidationAlert("Please enter a title.")
             return
         }
-        
+
         if price.isEmpty {
             showValidationAlert("Please enter an amount.")
             return
         }
-        
+
         price = price.replacingOccurrences(of: ",", with: ".")
         guard let priceValue = Double(price) else {
             showValidationAlert("Please enter a valid amount.")
             return
         }
-        
-        // Show success animation
-        withAnimation {
-            animateSuccess = true
-        }
-        
+
+        withAnimation { animateSuccess = true }
+
         let selectedCategory = categoryStore.category(for: selectedCategoryID)
         let legacyCategory = Category.category(from: selectedCategory.id) ?? .others
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Add the transaction with all fields
         _ = viewModel.addExpense(
             title: title,
             price: priceValue,
@@ -301,33 +262,37 @@ struct AddExpenseView: View {
             categoryID: selectedCategory.id,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes
         )
-        
-        // Trigger success haptic
+
+        if saveAsTemplate && transactionType == .expense {
+            viewModel.saveTemplate(
+                title: title,
+                amount: priceValue,
+                categoryID: selectedCategory.id,
+                category: legacyCategory
+            )
+        }
+
         HapticFeedback.success()
-        
-        // Wait for animation, then dismiss
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
             dismiss()
         }
     }
-    
+
     private func showValidationAlert(_ message: String) {
         validationMessage = message
         showingValidationAlert = true
         HapticFeedback.error()
     }
-    
+
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 
-// MARK: - Locale Extension
-
 extension Locale {
     func localizedCurrencySymbol(forCurrencyCode currencyCode: String) -> String? {
-        let identifier = NSLocale(localeIdentifier: self.identifier).displayName(forKey: .currencySymbol, value: currencyCode)
-        return identifier
+        NSLocale(localeIdentifier: identifier).displayName(forKey: .currencySymbol, value: currencyCode)
     }
 }
 

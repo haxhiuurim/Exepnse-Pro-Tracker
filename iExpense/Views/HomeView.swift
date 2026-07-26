@@ -2,7 +2,7 @@
 //  HomeView.swift
 //  iExpense
 //
-//  Created by Dragomir Mindrescu on 27.04.2025.
+//  Tide Ledger home — brand-first cashflow with period widgets and quick add.
 //
 
 import SwiftUI
@@ -14,461 +14,364 @@ struct HomeView: View {
 
     @ObservedObject var viewModel: ExpenseViewModel
     @ObservedObject var analyticsViewModel: AnalyticsViewModel
-    @State private var showingAddExpense = false
-    @State private var showRecentExpenses = true
-    @State private var animateCards = false
-    @State private var selectedExpenseToEdit: Expense? = nil
-    @State private var showingEditExpense = false
-    
-    private let recentDaysToShow = 7
+
+    @Binding var showQuickAdd: Bool
+
+    @State private var period: SpendingPeriod = .month
+    @State private var selectedExpenseToEdit: Expense?
+    @State private var showReceiptScan = false
+    @State private var heroAppeared = false
+    @State private var contentAppeared = false
 
     private var currencyCode: String {
         settingsViewModel.selectedCurrency
     }
-    
+
+    private var periodSpent: Double {
+        viewModel.spent(for: period)
+    }
+
+    private var periodIncome: Double {
+        viewModel.income(for: period)
+    }
+
+    private var periodNet: Double {
+        viewModel.net(for: period)
+    }
+
+    private var periodCategories: [(String, Double)] {
+        PeriodTotals.categoryBreakdown(from: viewModel.expenses, period: period)
+            .sorted { $0.value > $1.value }
+            .prefix(4)
+            .map { ($0.key, $0.value) }
+    }
+
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    headerCard
-                        .padding(.top, 10)
-                    recentSpendingCard
-                    categoryBreakdownCard
-                    recentExpensesSection
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 20)
-            }
-            .navigationTitle("Home")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showingAddExpense = true
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus")
-                            Text("Add")
-                                .font(.callout)
-                                .fontWeight(.semibold)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .cornerRadius(20)
+        NavigationStack {
+            ZStack {
+                AtmosphereBackground()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 22) {
+                        heroSection
+                        periodWidgets
+                        quickActions
+                        categoryPulse
+                        recentSection
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 110)
                 }
             }
-            .sheet(isPresented: $showingAddExpense) {
-                AddExpenseView(viewModel: viewModel)
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $selectedExpenseToEdit) { expense in
                 EditExpenseView(viewModel: viewModel, expense: expense)
             }
+            .sheet(isPresented: $showReceiptScan) {
+                ReceiptScanView(viewModel: viewModel)
+            }
             .onAppear {
-                // Animate cards when view appears with slight delay between each
-                withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
-                    animateCards = true
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                    heroAppeared = true
+                }
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.84).delay(0.12)) {
+                    contentAppeared = true
                 }
             }
         }
     }
-    
-    // MARK: - Header Card
-    
-    private var headerCard: some View {
-        VStack(spacing: 16) {
-            // Total display
-            VStack(spacing: 4) {
-                Text("Monthly Cashflow")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-                
-                Text(analyticsViewModel.netCashflow, format: .currency(code: currencyCode))
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundColor(analyticsViewModel.netCashflow >= 0 ? .green : .red)
-                    .minimumScaleFactor(0.6)
+
+    // MARK: - Hero (brand first)
+
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Inpenso")
+                .font(InpensoTheme.brandFont(42, weight: .bold))
+                .foregroundStyle(InpensoTheme.ink)
+                .opacity(heroAppeared ? 1 : 0)
+                .offset(y: heroAppeared ? 0 : 16)
+
+            Text("Your money, clear as tide.")
+                .font(InpensoTheme.body(16))
+                .foregroundStyle(InpensoTheme.muted)
+                .opacity(heroAppeared ? 1 : 0)
+                .offset(y: heroAppeared ? 0 : 10)
+
+            PeriodSelector(period: $period)
+                .opacity(heroAppeared ? 1 : 0)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(period.spentLabel.uppercased())
+                    .font(InpensoTheme.label(11, weight: .bold))
+                    .foregroundStyle(InpensoTheme.seafoam)
+                    .tracking(1.4)
+
+                Text(periodSpent, format: .currency(code: currencyCode))
+                    .font(InpensoTheme.displayAmount(48))
+                    .foregroundStyle(.white)
+                    .minimumScaleFactor(0.55)
                     .lineLimit(1)
-            }
+                    .contentTransition(.numericText())
 
-            HStack {
-                cashflowMetric(title: "Income", amount: analyticsViewModel.totalIncome, color: .green)
-                Divider()
-                cashflowMetric(title: "Spent", amount: analyticsViewModel.totalSpent, color: .primary)
-                Divider()
-                cashflowMetric(title: "Net", amount: analyticsViewModel.netCashflow, color: analyticsViewModel.netCashflow >= 0 ? .green : .red)
-            }
-            
-            // Budget information if available
-            if analyticsViewModel.currentBudget > 0 {
-                VStack(spacing: 8) {
-                    // Progress bar
-                    let progress = min(1.0, analyticsViewModel.totalSpent / analyticsViewModel.currentBudget)
-                    let progressColor: Color = progress < 0.75 ? .blue : (progress < 0.9 ? .orange : .red)
-                    
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            // Background
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color(.systemGray5))
-                                .frame(height: 8)
-                            
-                            // Progress
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(progressColor)
-                                .frame(width: geometry.size.width * CGFloat(progress), height: 8)
-                        }
-                    }
-                    .frame(height: 8)
-                    
-                    // Budget info
-                    HStack {
-                        Text("\(Int(progress * 100))% of budget")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                        
-                        Text("\(analyticsViewModel.daysRemainingInMonth) days left")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                HStack(spacing: 18) {
+                    miniMetric(label: "In", value: periodIncome, tint: InpensoTheme.seafoam)
+                    miniMetric(label: "Net", value: periodNet, tint: periodNet >= 0 ? InpensoTheme.seafoam : InpensoTheme.copperSoft)
                 }
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.secondarySystemBackground))
-                .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
-        )
-        .offset(y: animateCards ? 0 : -50)
-        .opacity(animateCards ? 1 : 0)
-    }
-    
-    // MARK: - Recent Spending Card
-    
-    private var recentSpendingCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recent Spending")
-                .font(.headline)
-            
-            if analyticsViewModel.dailySpending.isEmpty {
-                Text("No recent spending data")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical)
-            } else {
-                // Get most recent spending data from the daily spending array
-                let recentSpending: [DailySpending] = getRecentSpendingData()
-                
-                // Check if we have any actual spending in this period
-                let totalRecentSpending = recentSpending.reduce(0.0) { $0 + $1.amount }
-                
-                if totalRecentSpending <= 0 {
-                    Text("No spending in the last \(recentDaysToShow) days")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical)
-                        .transaction { transaction in
-                            transaction.animation = nil
-                        }
-                } else {
-                    // Find max value for better scaling
-                    let maxValue = recentSpending.map { $0.amount }.max() ?? 0
-                    
-                    VStack(spacing: 8) {
-                        Chart {
-                            ForEach(recentSpending, id: \.dayOfMonth) { daily in
-                                BarMark(
-                                    x: .value("Day", daily.weekday),
-                                    y: .value("Amount", daily.amount)
-                                )
-                                .foregroundStyle(
-                                    .linearGradient(
-                                        colors: [.blue.opacity(0.7), .blue],
-                                        startPoint: .bottom,
-                                        endPoint: .top
-                                    )
-                                )
-                                .cornerRadius(6)
-                            }
-                            
-                            if analyticsViewModel.averageDailySpend > 0 {
-                                RuleMark(
-                                    y: .value("Average", analyticsViewModel.averageDailySpend)
-                                )
-                                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 5]))
-                                .foregroundStyle(Color.green)
-                                .annotation(position: .top, alignment: .trailing) {
-                                    Text("Avg")
-                                        .font(.caption2)
-                                        .foregroundColor(.green)
-                                        .padding(4)
-                                        .background(Color(.tertiarySystemBackground))
-                                        .cornerRadius(4)
-                                }
-                            }
-                        }
-                        .frame(height: 180)
-                        .chartYAxis {
-                            AxisMarks(position: .leading)
-                        }
-                        // Enforce minimum scale if values are very small
-                        .chartYScale(domain: 0...(max(maxValue * 1.2, analyticsViewModel.averageDailySpend * 1.2, 1)))
-                        
-                        // Add a note about the data
-                        Text("Showing spending for the last \(recentDaysToShow) days")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.secondarySystemBackground))
-                .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
-        )
-        .offset(y: animateCards ? 0 : -30)
-        .opacity(animateCards ? 1 : 0)
-    }
-    
-    // Helper function to get recent spending data
-    private func getRecentSpendingData() -> [DailySpending] {
-        var recentSpending: [DailySpending] = []
-        
-        // For debugging and comprehensive data, let's look at all daily spending
-        let allDays = analyticsViewModel.dailySpending
-        
-        // Find the last 7 days, including today
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        
-        for i in 0..<recentDaysToShow {
-            if let date = calendar.date(byAdding: .day, value: -i, to: today) {
-                // Find the matching day in our data
-                if let day = allDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
-                    recentSpending.insert(day, at: 0) // Insert at front to maintain chronological order
-                }
-            }
-        }
-        
-        return recentSpending
-    }
-    
-    // MARK: - Category Breakdown Card
-    
-    private var categoryBreakdownCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Spending by Category")
-                .font(.headline)
-            
-            if analyticsViewModel.spendingByCategory.isEmpty {
-                Text("No category data available")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical)
-            } else {
-                let sortedCategories = analyticsViewModel.spendingByCategory
-                    .sorted(by: { $0.value > $1.value })
-                    .prefix(5) // Show top 5 categories
-                
-                VStack(spacing: 12) {
-                    ForEach(Array(sortedCategories), id: \.key) { category, amount in
-                        HStack(spacing: 12) {
-                            // Icon and category
-                            HStack(spacing: 8) {
-                                    let categoryDetails = categoryStore.category(for: category)
+                .padding(.top, 4)
 
-                                    Image(systemName: categoryDetails.iconName)
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.white)
-                                    .frame(width: 30, height: 30)
-                                    .background(categoryDetails.color)
-                                    .cornerRadius(8)
-                                
-                                Text(categoryDetails.displayName)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                            }
-                            
-                            Spacer()
-                            
-                            // Amount and percentage
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text(amount, format: .currency(code: currencyCode))
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                
-                                if analyticsViewModel.totalSpent > 0 {
-                                    Text("\(Int((amount / analyticsViewModel.totalSpent) * 100))%")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        
-                        if category != sortedCategories.last?.key {
-                            Divider()
-                        }
-                    }
+                if period == .month, analyticsViewModel.currentBudget > 0 {
+                    budgetBar
+                        .padding(.top, 10)
                 }
             }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [InpensoTheme.ink, InpensoTheme.inkSoft, InpensoTheme.tide.opacity(0.95)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .shadow(color: InpensoTheme.ink.opacity(0.25), radius: 24, x: 0, y: 14)
+            )
+            .scaleEffect(heroAppeared ? 1 : 0.96)
+            .opacity(heroAppeared ? 1 : 0)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.secondarySystemBackground))
-                .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
-        )
-        .offset(y: animateCards ? 0 : -20)
-        .opacity(animateCards ? 1 : 0)
     }
-    
-    // MARK: - Recent Expenses Section
-    
-    private var recentExpensesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Recent Transactions")
-                    .font(.headline)
-                
-                Spacer()
-                
-                Button(action: {
-                    withAnimation {
-                        showRecentExpenses.toggle()
-                    }
-                }) {
-                    Label(showRecentExpenses ? "Hide " : "Show", systemImage: showRecentExpenses ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-//            .padding()
-            
-            if showRecentExpenses {
-                if viewModel.expenses.isEmpty {
-                    Text("No transactions yet")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    
-                } else {
-                    // Show most recent 5 expenses
-                    let recentExpenses = viewModel.expenses.sorted { $0.date > $1.date }.prefix(5)
-                    
-                    ForEach(recentExpenses) { expense in
-                        Button {
-                            selectedExpenseToEdit = expense
-                            showingEditExpense = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                // Category icon
-                                    let category = categoryStore.category(for: expense)
 
-                                    Image(systemName: category.iconName)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white)
-                                    .frame(width: 28, height: 28)
-                                    .background(category.color)
-                                    .cornerRadius(6)
-                                
-                                // Title and date
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(expense.title)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.primary)
-                                    
-                                    Text(expense.date, style: .date)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                // Amount
-                                Text(amountText(for: expense))
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(expense.type.amountColor)
-                            }
-                            .padding(.vertical, 8)
-                        }
-                        
-                        if expense.id != recentExpenses.last?.id {
-                            Divider()
-                                .padding(.leading, 40)
-                        }
-                    }
-                    
-                    // View all button
-                    Button(action: {
-                        // Use NotificationCenter to notify MainTabView to switch to expenses tab
-                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToExpensesTab"), object: nil)
-                    }) {
-                        let viewAllExpensesButton: some View = Text("View All Transactions")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                        
-                        if #available(iOS 26.0, *) {
-                            viewAllExpensesButton
-                                .foregroundColor(.white)
-                                .glassEffect(.regular.tint(.blue).interactive())
-                        } else {
-                            viewAllExpensesButton
-                                .foregroundColor(.blue)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.accentColor, lineWidth: 1.5)
-                                )
-                                .padding(.top, 8)
-                        }
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.secondarySystemBackground))
-                .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
-        )
-        .offset(y: animateCards ? 0 : -10)
-        .opacity(animateCards ? 1 : 0)
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func cashflowMetric(title: String, amount: Double, color: Color) -> some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Text(amount, format: .currency(code: currencyCode))
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(color)
+    private func miniMetric(label: String, value: Double, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(InpensoTheme.label(11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.65))
+            Text(value, format: .currency(code: currencyCode))
+                .font(InpensoTheme.displayAmount(15))
+                .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private func amountText(for expense: Expense) -> String {
-        let formatted = expense.price.formatted(.currency(code: currencyCode))
-        return expense.type == .income ? "+\(formatted)" : formatted
+    private var budgetBar: some View {
+        let progress = min(1.0, analyticsViewModel.totalSpent / max(analyticsViewModel.currentBudget, 1))
+        return VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.15))
+                    Capsule()
+                        .fill(progress > 0.9 ? InpensoTheme.copperSoft : InpensoTheme.seafoam)
+                        .frame(width: geo.size.width * progress)
+                }
+            }
+            .frame(height: 6)
+
+            HStack {
+                Text("\(Int(progress * 100))% of monthly budget")
+                    .font(InpensoTheme.label(11))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Text("\(analyticsViewModel.daysRemainingInMonth)d left")
+                    .font(InpensoTheme.label(11))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+        }
+    }
+
+    // MARK: - Period widgets strip
+
+    private var periodWidgets: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("At a glance")
+                .font(InpensoTheme.label(13, weight: .semibold))
+                .foregroundStyle(InpensoTheme.slate)
+
+            HStack(spacing: 10) {
+                ForEach(SpendingPeriod.allCases) { item in
+                    periodWidgetTile(item)
+                }
+            }
+        }
+        .opacity(contentAppeared ? 1 : 0)
+        .offset(y: contentAppeared ? 0 : 16)
+    }
+
+    private func periodWidgetTile(_ item: SpendingPeriod) -> some View {
+        let amount = viewModel.spent(for: item)
+        let selected = period == item
+
+        return Button {
+            HapticFeedback.selection()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                period = item
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(item.shortTitle)
+                    .font(InpensoTheme.label(11, weight: .bold))
+                    .foregroundStyle(selected ? InpensoTheme.copper : InpensoTheme.muted)
+                Text(amount, format: .currency(code: currencyCode))
+                    .font(InpensoTheme.displayAmount(15))
+                    .foregroundStyle(InpensoTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(0.75))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(selected ? InpensoTheme.copper.opacity(0.45) : InpensoTheme.ink.opacity(0.06), lineWidth: selected ? 1.5 : 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Quick actions
+
+    private var quickActions: some View {
+        HStack(spacing: 12) {
+            Button {
+                showQuickAdd = true
+            } label: {
+                Label("Add spend", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(InpensoPrimaryButtonStyle())
+
+            Button {
+                showReceiptScan = true
+            } label: {
+                Label("Scan", systemImage: "doc.text.viewfinder")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(InpensoSecondaryButtonStyle())
+        }
+        .opacity(contentAppeared ? 1 : 0)
+        .offset(y: contentAppeared ? 0 : 12)
+    }
+
+    // MARK: - Categories
+
+    private var categoryPulse: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Where it went")
+                .font(InpensoTheme.label(13, weight: .semibold))
+                .foregroundStyle(InpensoTheme.slate)
+
+            if periodCategories.isEmpty {
+                Text("No spending in this period yet.")
+                    .font(InpensoTheme.body(14))
+                    .foregroundStyle(InpensoTheme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(periodCategories, id: \.0) { id, amount in
+                        let category = categoryStore.category(for: id)
+                        let share = periodSpent > 0 ? amount / periodSpent : 0
+
+                        HStack(spacing: 12) {
+                            Image(systemName: category.iconName)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(category.color)
+                                .frame(width: 32, height: 32)
+                                .background(category.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(category.displayName)
+                                        .font(InpensoTheme.body(14, weight: .semibold))
+                                        .foregroundStyle(InpensoTheme.ink)
+                                    Spacer()
+                                    Text(amount, format: .currency(code: currencyCode))
+                                        .font(InpensoTheme.label(13, weight: .bold))
+                                        .foregroundStyle(InpensoTheme.slate)
+                                }
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        Capsule().fill(InpensoTheme.ink.opacity(0.06))
+                                        Capsule()
+                                            .fill(category.color.opacity(0.85))
+                                            .frame(width: geo.size.width * share)
+                                    }
+                                }
+                                .frame(height: 5)
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.white.opacity(0.72))
+                )
+            }
+        }
+        .opacity(contentAppeared ? 1 : 0)
+    }
+
+    // MARK: - Recent
+
+    private var recentSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Recent")
+                    .font(InpensoTheme.label(13, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.slate)
+                Spacer()
+                Button("See all") {
+                    NotificationCenter.default.post(name: NSNotification.Name("SwitchToExpensesTab"), object: nil)
+                }
+                .font(InpensoTheme.label(12, weight: .bold))
+                .foregroundStyle(InpensoTheme.copper)
+            }
+
+            if viewModel.expenses.isEmpty {
+                Text("Tap Add spend to log your first transaction.")
+                    .font(InpensoTheme.body(14))
+                    .foregroundStyle(InpensoTheme.muted)
+            } else {
+                VStack(spacing: 4) {
+                    ForEach(viewModel.recentExpenses(limit: 5)) { expense in
+                        Button {
+                            selectedExpenseToEdit = expense
+                        } label: {
+                            TransactionRowView(
+                                expense: expense,
+                                currencyCode: currencyCode,
+                                category: categoryStore.category(for: expense)
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        if expense.id != viewModel.recentExpenses(limit: 5).last?.id {
+                            Divider().opacity(0.35)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.white.opacity(0.72))
+                )
+            }
+        }
+        .opacity(contentAppeared ? 1 : 0)
     }
 }
 
 #Preview {
     HomeView(
         viewModel: ExpenseViewModel(),
-        analyticsViewModel: AnalyticsViewModel(expenses: [])
+        analyticsViewModel: AnalyticsViewModel(expenses: []),
+        showQuickAdd: .constant(false)
     )
     .environmentObject(SettingsViewModel())
     .environmentObject(CategoryStore())

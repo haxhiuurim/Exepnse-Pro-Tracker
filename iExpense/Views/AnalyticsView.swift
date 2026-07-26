@@ -31,45 +31,47 @@ struct AnalyticsView: View {
     }
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Month Year Picker
-                MonthYearPicker(
-                    selectedMonth: $selectedMonth,
-                    selectedYear: $selectedYear,
-                    onMonthYearChanged: {
-                        // Update view model values
-                        analyticsViewModel.selectedMonth = selectedMonth
-                        analyticsViewModel.selectedYear = selectedYear
-                        analyticsViewModel.calculateAnalytics()
-                    }
-                )
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-                
-                // Tab Selection
-                AnalyticsTabSelector(selectedTab: $selectedTab)
-                    .padding(.horizontal)
-                
-                // Content based on selected tab
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(spacing: 16) {
-                        switch selectedTab {
-                        case .overview:
-                            overviewTabContent
-                        case .trends:
-                            trendsTabContent
-                        case .insights:
-                            insightsTabContent
-                        case .budget:
-                            budgetTabContent
+        NavigationStack {
+            ZStack {
+                AtmosphereBackground(intensity: 0.55)
+
+                VStack(spacing: 0) {
+                    // Month Year Picker
+                    MonthYearPicker(
+                        selectedMonth: $selectedMonth,
+                        selectedYear: $selectedYear,
+                        onMonthYearChanged: {
+                            analyticsViewModel.selectedMonth = selectedMonth
+                            analyticsViewModel.selectedYear = selectedYear
+                            analyticsViewModel.calculateAnalytics()
                         }
+                    )
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+
+                    AnalyticsTabSelector(selectedTab: $selectedTab)
+                        .padding(.horizontal)
+
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(spacing: 16) {
+                            switch selectedTab {
+                            case .overview:
+                                overviewTabContent
+                            case .trends:
+                                trendsTabContent
+                            case .insights:
+                                insightsTabContent
+                            case .budget:
+                                budgetTabContent
+                            }
+                        }
+                        .padding()
+                        .padding(.bottom, 80)
                     }
-                    .padding()
+                    .scrollDisabled(false)
                 }
-                .scrollDisabled(false)
             }
-            .navigationTitle("Analytics")
+            .navigationTitle("Insights")
             .alert("Budget Saved", isPresented: $showSaveBudgetSuccess) {
                 Button("OK", role: .cancel) { }
             } message: {

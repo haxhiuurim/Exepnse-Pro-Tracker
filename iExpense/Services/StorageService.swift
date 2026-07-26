@@ -18,6 +18,8 @@ struct StorageService {
     private static let budgetsKey = "budgets"
     private static let categoryCatalogStateKey = "categoryCatalogState"
     private static let customCategoriesKey = "customCategories"
+    private static let quickTemplatesKey = "quickSpendTemplates"
+    private static let widgetPeriodKey = "widgetSpendingPeriod"
 
     static func saveExpenses(_ expenses: [Expense]) {
         guard let userDefaults = userDefaults else { return }
@@ -140,5 +142,42 @@ struct StorageService {
         } catch {
             return nil
         }
+    }
+
+    // MARK: - Quick spend templates
+
+    static func saveQuickTemplates(_ templates: [QuickSpendTemplate]) {
+        guard let userDefaults = userDefaults else { return }
+        do {
+            let data = try JSONEncoder().encode(templates)
+            userDefaults.set(data, forKey: quickTemplatesKey)
+        } catch {
+            // silent
+        }
+    }
+
+    static func loadQuickTemplates() -> [QuickSpendTemplate] {
+        guard let userDefaults = userDefaults,
+              let data = userDefaults.data(forKey: quickTemplatesKey) else {
+            return QuickSpendTemplate.starterTemplates
+        }
+        do {
+            let decoded = try JSONDecoder().decode([QuickSpendTemplate].self, from: data)
+            return decoded.isEmpty ? QuickSpendTemplate.starterTemplates : decoded
+        } catch {
+            return QuickSpendTemplate.starterTemplates
+        }
+    }
+
+    static func saveWidgetPeriod(_ period: SpendingPeriod) {
+        userDefaults?.set(period.rawValue, forKey: widgetPeriodKey)
+    }
+
+    static func loadWidgetPeriod() -> SpendingPeriod {
+        guard let raw = userDefaults?.string(forKey: widgetPeriodKey),
+              let period = SpendingPeriod(rawValue: raw) else {
+            return .month
+        }
+        return period
     }
 }

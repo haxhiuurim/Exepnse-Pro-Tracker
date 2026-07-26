@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @EnvironmentObject var settingsManager: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
+    @EnvironmentObject private var reminderService: ReminderService
     
     @State private var showingImportFilePicker = false
     @State private var showingExportShareSheet = false
@@ -19,10 +20,15 @@ struct SettingsView: View {
     @State private var showingExportSuccess = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
+                brandHeader
+
                 // Appearance Section
                 appearanceSection
+
+                // Reminders
+                remindersSection
                 
                 // Currency Section
                 currencySection
@@ -39,7 +45,10 @@ struct SettingsView: View {
                 // About Section
                 aboutSection
             }
+            .scrollContentBackground(.hidden)
+            .background(AtmosphereBackground(intensity: 0.5))
             .navigationTitle("Settings")
+            .tint(InpensoTheme.ink)
             .sheet(isPresented: $showingImportFilePicker) {
                 documentPicker
             }
@@ -70,10 +79,46 @@ struct SettingsView: View {
     }
     
     // MARK: - UI Components
-    
+
+    private var brandHeader: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Inpenso")
+                    .font(InpensoTheme.brandFont(28, weight: .bold))
+                    .foregroundStyle(InpensoTheme.ink)
+                Text("Tide Ledger · private on-device finance")
+                    .font(InpensoTheme.body(13))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+            .padding(.vertical, 4)
+            .listRowBackground(Color.clear)
+        }
+    }
+
     private var appearanceSection: some View {
         Section(header: Text("Appearance")) {
             themePicker
+        }
+    }
+
+    private var remindersSection: some View {
+        Section {
+            Toggle("Daily log reminder", isOn: $reminderService.isEnabled)
+
+            if reminderService.isEnabled {
+                DatePicker(
+                    "Remind me at",
+                    selection: Binding(
+                        get: { reminderService.reminderDate },
+                        set: { reminderService.setReminderTime(from: $0) }
+                    ),
+                    displayedComponents: .hourAndMinute
+                )
+            }
+        } header: {
+            Text("Reminders")
+        } footer: {
+            Text("A gentle nudge to capture spending before the day ends.")
         }
     }
     
@@ -190,6 +235,12 @@ struct SettingsView: View {
     private var aboutSection: some View {
         Section(header: Text("About")) {
             versionRow
+            HStack {
+                Text("Theme")
+                Spacer()
+                Text("Tide Ledger")
+                    .foregroundStyle(InpensoTheme.muted)
+            }
         }
     }
     
@@ -291,4 +342,5 @@ struct ShareSheet: UIViewControllerRepresentable {
     SettingsView()
         .environmentObject(SettingsViewModel())
         .environmentObject(CategoryStore())
+        .environmentObject(ReminderService.shared)
 }
