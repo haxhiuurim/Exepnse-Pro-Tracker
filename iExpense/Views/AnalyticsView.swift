@@ -424,6 +424,8 @@ struct AnalyticsView: View {
                     currencyCode: currencyCode
                 )
             }
+
+            CategoryBudgetsView(analyticsViewModel: analyticsViewModel)
             
             // Historical budget compliance
             BudgetHistoryView(complianceData: createBudgetComplianceData())

@@ -11,11 +11,11 @@
 // Period widgets          | Today / Week / Month spending widgets + quick add button ✅
 // Quick spend templates   | One-tap shortcuts for frequent spends ✅
 // Receipt OCR             | On-device Vision scan of receipts → items, prices, categories ✅
-// Daily reminders         | Local notification to log spending ✅
+// Configurable reminders  | Daily / weekdays / every 2 days / weekly at chosen time ✅
 // Easy add flow           | Amount-first Quick Add sheet + floating CTA ✅
+// Category budgets        | Per-category monthly caps with progress ✅
+// Recurring transactions  | Auto-post rent/subscriptions/income on schedule ✅
+// Face ID lock            | Optional biometric lock when opening the app ✅
 // iCloud Sync             | Sync expenses between devices automatically ❌
 // Filtering               | Filter expenses by date, category, amount ✅
-// Budgeting               | Allow user to set monthly budget limits ✅
-// Category budgets        | Per-category monthly caps ❌
-// Recurring transactions  | Auto-repeat rent/subscriptions ❌
-// Face ID lock            | App lock for privacy ❌
+// Overall budgeting       | Monthly total budget limits ✅

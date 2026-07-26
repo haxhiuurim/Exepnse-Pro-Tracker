@@ -151,6 +151,8 @@ class SettingsViewModel: ObservableObject {
     func resetAllData() {
         StorageService.saveExpenses([])
         StorageService.saveBudgets([:])
+        StorageService.saveCategoryBudgets([:])
+        StorageService.saveRecurringTransactions([])
     }
     
     // Static method to get app-wide settings without needing to initialize

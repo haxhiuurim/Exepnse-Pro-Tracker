@@ -16,6 +16,8 @@ struct StorageService {
 
     private static let expensesKey = "expenses"
     private static let budgetsKey = "budgets"
+    private static let categoryBudgetsKey = "categoryBudgets"
+    private static let recurringTransactionsKey = "recurringTransactions"
     private static let categoryCatalogStateKey = "categoryCatalogState"
     private static let customCategoriesKey = "customCategories"
     private static let quickTemplatesKey = "quickSpendTemplates"
@@ -179,5 +181,53 @@ struct StorageService {
             return .month
         }
         return period
+    }
+
+    // MARK: - Category budgets
+
+    static func saveCategoryBudgets(_ budgets: [String: Double]) {
+        guard let userDefaults = userDefaults else { return }
+        do {
+            let data = try JSONEncoder().encode(budgets)
+            userDefaults.set(data, forKey: categoryBudgetsKey)
+        } catch {
+            // silent
+        }
+    }
+
+    static func loadCategoryBudgets() -> [String: Double] {
+        guard let userDefaults = userDefaults,
+              let data = userDefaults.data(forKey: categoryBudgetsKey) else {
+            return [:]
+        }
+        do {
+            return try JSONDecoder().decode([String: Double].self, from: data)
+        } catch {
+            return [:]
+        }
+    }
+
+    // MARK: - Recurring transactions
+
+    static func saveRecurringTransactions(_ items: [RecurringTransaction]) {
+        guard let userDefaults = userDefaults else { return }
+        do {
+            let data = try JSONEncoder().encode(items)
+            userDefaults.set(data, forKey: recurringTransactionsKey)
+        } catch {
+            // silent
+        }
+    }
+
+    static func loadRecurringTransactions() -> [RecurringTransaction] {
+        guard let userDefaults = userDefaults,
+              let data = userDefaults.data(forKey: recurringTransactionsKey) else {
+            return []
+        }
+        do {
+            return try JSONDecoder().decode([RecurringTransaction].self, from: data)
+        } catch {
+            return []
+        }
     }
 }

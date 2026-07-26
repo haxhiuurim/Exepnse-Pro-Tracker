@@ -12,56 +12,71 @@ struct MainTabView: View {
     @StateObject private var viewModel = ExpenseViewModel()
     @StateObject private var analyticsViewModel = AnalyticsViewModel(expenses: [])
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @ObservedObject private var biometricLock = BiometricLockService.shared
     @State private var selectedTab = 0
     @State private var showQuickAdd = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView(
-                viewModel: viewModel,
-                analyticsViewModel: analyticsViewModel,
-                showQuickAdd: $showQuickAdd
-            )
-            .tabItem {
-                Label("Home", systemImage: "house.fill")
+        ZStack {
+            TabView(selection: $selectedTab) {
+                HomeView(
+                    viewModel: viewModel,
+                    analyticsViewModel: analyticsViewModel,
+                    showQuickAdd: $showQuickAdd
+                )
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
+                }
+                .tag(0)
+
+                AnalyticsView(analyticsViewModel: analyticsViewModel)
+                    .tabItem {
+                        Label("Insights", systemImage: "chart.xyaxis.line")
+                    }
+                    .tag(1)
+
+                ExpensesListView(viewModel: viewModel)
+                    .tabItem {
+                        Label("Activity", systemImage: "list.bullet")
+                    }
+                    .tag(2)
+
+                SettingsView()
+                    .tabItem {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    .tag(3)
             }
-            .tag(0)
-
-            AnalyticsView(analyticsViewModel: analyticsViewModel)
-                .tabItem {
-                    Label("Insights", systemImage: "chart.xyaxis.line")
+            .tint(InpensoTheme.ink)
+            .id(settingsViewModel.selectedCurrency)
+            .preferredColorScheme(settingsViewModel.selectedTheme.colorScheme)
+            .overlay(alignment: .bottom) {
+                if selectedTab != 3 && biometricLock.isUnlocked {
+                    floatingAddButton
+                        .padding(.bottom, 56)
                 }
-                .tag(1)
+            }
+            .sheet(isPresented: $showQuickAdd) {
+                QuickAddSheet(viewModel: viewModel)
+            }
+            .disabled(biometricLock.isEnabled && !biometricLock.isUnlocked)
 
-            ExpensesListView(viewModel: viewModel)
-                .tabItem {
-                    Label("Activity", systemImage: "list.bullet")
-                }
-                .tag(2)
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .tag(3)
-        }
-        .tint(InpensoTheme.ink)
-        .id(settingsViewModel.selectedCurrency)
-        .preferredColorScheme(settingsViewModel.selectedTheme.colorScheme)
-        .overlay(alignment: .bottom) {
-            if selectedTab != 3 {
-                floatingAddButton
-                    .padding(.bottom, 56)
+            if biometricLock.isEnabled && !biometricLock.isUnlocked {
+                AppLockView(lockService: biometricLock)
+                    .transition(.opacity)
+                    .zIndex(10)
             }
         }
-        .sheet(isPresented: $showQuickAdd) {
-            QuickAddSheet(viewModel: viewModel)
-        }
+        .animation(.easeInOut(duration: 0.2), value: biometricLock.isUnlocked)
         .onAppear {
             analyticsViewModel.updateExpenses(viewModel.expenses)
             configureTabBarAppearance()
             consumePendingQuickAdd()
+            processRecurring()
+            if biometricLock.isEnabled {
+                biometricLock.lockIfNeeded()
+            }
 
             NotificationCenter.default.addObserver(
                 forName: NSNotification.Name("SwitchToExpensesTab"),
@@ -83,12 +98,27 @@ struct MainTabView: View {
             analyticsViewModel.updateExpenses(viewModel.expenses)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
+            switch phase {
+            case .active:
                 viewModel.loadExpenses()
+                processRecurring()
                 consumePendingQuickAdd()
+            case .inactive, .background:
+                biometricLock.lockIfNeeded()
+            @unknown default:
+                break
             }
         }
         .environmentObject(ReminderService.shared)
+        .environmentObject(biometricLock)
+        .environmentObject(viewModel)
+    }
+
+    private func processRecurring() {
+        let created = RecurringTransactionService.shared.processDueTransactions(into: viewModel)
+        if !created.isEmpty {
+            analyticsViewModel.updateExpenses(viewModel.expenses)
+        }
     }
 
     private func consumePendingQuickAdd() {

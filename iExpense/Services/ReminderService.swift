@@ -2,11 +2,38 @@
 //  ReminderService.swift
 //  iExpense
 //
-//  Daily log reminders so spending stays complete.
+//  Configurable spending reminders — frequency + time of day.
 //
 
 import Foundation
 import UserNotifications
+
+enum ReminderFrequency: String, CaseIterable, Identifiable, Codable {
+    case daily
+    case weekdays
+    case everyTwoDays
+    case weekly
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .daily: return "Every day"
+        case .weekdays: return "Weekdays only"
+        case .everyTwoDays: return "Every 2 days"
+        case .weekly: return "Once a week"
+        }
+    }
+
+    var footerHint: String {
+        switch self {
+        case .daily: return "A reminder every day at the time you choose."
+        case .weekdays: return "Monday–Friday at the time you choose."
+        case .everyTwoDays: return "Every other day at the time you choose."
+        case .weekly: return "Once a week on the weekday you pick."
+        }
+    }
+}
 
 @MainActor
 final class ReminderService: ObservableObject {
@@ -15,6 +42,13 @@ final class ReminderService: ObservableObject {
     @Published var isEnabled: Bool = false {
         didSet {
             UserDefaults.standard.set(isEnabled, forKey: Keys.enabled)
+            Task { await syncSchedule() }
+        }
+    }
+
+    @Published var frequency: ReminderFrequency = .daily {
+        didSet {
+            UserDefaults.standard.set(frequency.rawValue, forKey: Keys.frequency)
             Task { await syncSchedule() }
         }
     }
@@ -33,17 +67,32 @@ final class ReminderService: ObservableObject {
         }
     }
 
+    /// 1 = Sunday … 7 = Saturday (Calendar weekday)
+    @Published var weeklyWeekday: Int = 2 {
+        didSet {
+            UserDefaults.standard.set(weeklyWeekday, forKey: Keys.weekday)
+            Task { await syncSchedule() }
+        }
+    }
+
     private enum Keys {
         static let enabled = "dailyReminderEnabled"
+        static let frequency = "reminderFrequency"
         static let hour = "dailyReminderHour"
         static let minute = "dailyReminderMinute"
-        static let requestID = "inpenso.daily.spend.reminder"
+        static let weekday = "reminderWeekday"
+        static let requestPrefix = "inpenso.spend.reminder."
     }
 
     init() {
         isEnabled = UserDefaults.standard.bool(forKey: Keys.enabled)
+        if let raw = UserDefaults.standard.string(forKey: Keys.frequency),
+           let freq = ReminderFrequency(rawValue: raw) {
+            frequency = freq
+        }
         reminderHour = UserDefaults.standard.object(forKey: Keys.hour) as? Int ?? 20
         reminderMinute = UserDefaults.standard.object(forKey: Keys.minute) as? Int ?? 0
+        weeklyWeekday = UserDefaults.standard.object(forKey: Keys.weekday) as? Int ?? 2
     }
 
     var reminderDate: Date {
@@ -51,6 +100,12 @@ final class ReminderService: ObservableObject {
         comps.hour = reminderHour
         comps.minute = reminderMinute
         return Calendar.current.date(from: comps) ?? Date()
+    }
+
+    var weekdaySymbol: String {
+        let symbols = Calendar.current.weekdaySymbols
+        let index = max(0, min(symbols.count - 1, weeklyWeekday - 1))
+        return symbols[index]
     }
 
     func setReminderTime(from date: Date) {
@@ -78,7 +133,11 @@ final class ReminderService: ObservableObject {
 
     func syncSchedule() async {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [Keys.requestID])
+        let pending = await center.pendingNotificationRequests()
+        let oldIDs = pending
+            .map(\.identifier)
+            .filter { $0.hasPrefix(Keys.requestPrefix) }
+        center.removePendingNotificationRequests(withIdentifiers: oldIDs)
 
         guard isEnabled else { return }
         let allowed = await requestPermissionIfNeeded()
@@ -90,17 +149,71 @@ final class ReminderService: ObservableObject {
             return
         }
 
-        var dateComponents = DateComponents()
-        dateComponents.hour = reminderHour
-        dateComponents.minute = reminderMinute
-
         let content = UNMutableNotificationContent()
-        content.title = "Log today's spending"
-        content.body = "Quick tip: open Inpenso and tap + to capture what you spent."
+        content.title = "Log your spending"
+        content.body = "Open Inpenso and tap + to capture what you spent."
         content.sound = .default
 
-        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        let request = UNNotificationRequest(identifier: Keys.requestID, content: content, trigger: trigger)
-        try? await center.add(request)
+        switch frequency {
+        case .daily:
+            var comps = DateComponents()
+            comps.hour = reminderHour
+            comps.minute = reminderMinute
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
+            try? await center.add(UNNotificationRequest(
+                identifier: Keys.requestPrefix + "daily",
+                content: content,
+                trigger: trigger
+            ))
+
+        case .weekdays:
+            for weekday in 2...6 { // Mon–Fri
+                var comps = DateComponents()
+                comps.weekday = weekday
+                comps.hour = reminderHour
+                comps.minute = reminderMinute
+                let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
+                try? await center.add(UNNotificationRequest(
+                    identifier: Keys.requestPrefix + "weekday.\(weekday)",
+                    content: content,
+                    trigger: trigger
+                ))
+            }
+
+        case .everyTwoDays:
+            // Schedule the next 30 occurrences (iOS calendar triggers can't natively do every-N-days)
+            let calendar = Calendar.current
+            var next = calendar.date(
+                bySettingHour: reminderHour,
+                minute: reminderMinute,
+                second: 0,
+                of: Date()
+            ) ?? Date()
+            if next <= Date() {
+                next = calendar.date(byAdding: .day, value: 1, to: next) ?? next
+            }
+            for index in 0..<15 {
+                let fire = calendar.date(byAdding: .day, value: index * 2, to: next) ?? next
+                let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+                try? await center.add(UNNotificationRequest(
+                    identifier: Keys.requestPrefix + "bi.\(index)",
+                    content: content,
+                    trigger: trigger
+                ))
+            }
+
+        case .weekly:
+            var comps = DateComponents()
+            comps.weekday = weeklyWeekday
+            comps.hour = reminderHour
+            comps.minute = reminderMinute
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
+            try? await center.add(UNNotificationRequest(
+                identifier: Keys.requestPrefix + "weekly",
+                content: content,
+                trigger: trigger
+            ))
+        }
     }
 }

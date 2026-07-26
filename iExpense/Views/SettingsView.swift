@@ -10,7 +10,9 @@ struct SettingsView: View {
     @EnvironmentObject var settingsManager: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
     @EnvironmentObject private var reminderService: ReminderService
-    
+    @EnvironmentObject private var biometricLock: BiometricLockService
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+
     @State private var showingImportFilePicker = false
     @State private var showingExportShareSheet = false
     @State private var exportURL: URL? = nil
@@ -18,31 +20,20 @@ struct SettingsView: View {
     @State private var showingImportSuccess = false
     @State private var showingImportFailure = false
     @State private var showingExportSuccess = false
-    
+    @State private var biometricError: String?
+
     var body: some View {
         NavigationStack {
             Form {
                 brandHeader
-
-                // Appearance Section
                 appearanceSection
-
-                // Reminders
+                securitySection
                 remindersSection
-                
-                // Currency Section
+                moneyToolsSection
                 currencySection
-                
-                // Default Settings Section
                 defaultSettingsSection
-
-                // Category Management Section
                 categoriesSection
-                
-                // Data Management Section
                 dataManagementSection
-                
-                // About Section
                 aboutSection
             }
             .scrollContentBackground(.hidden)
@@ -58,7 +49,7 @@ struct SettingsView: View {
             .alert("Data Reset", isPresented: $showingResetConfirmation) {
                 resetAlertButtons
             } message: {
-                Text("This will delete all your expenses and budgets. This action cannot be undone.")
+                Text("This will delete all your expenses, budgets, and recurring items. This action cannot be undone.")
             }
             .alert("Import Successful", isPresented: $showingImportSuccess) {
                 Button("OK", role: .cancel) { }
@@ -75,10 +66,18 @@ struct SettingsView: View {
             } message: {
                 Text("Your data has been exported successfully.")
             }
+            .alert("Couldn't enable lock", isPresented: Binding(
+                get: { biometricError != nil },
+                set: { if !$0 { biometricError = nil } }
+            )) {
+                Button("OK", role: .cancel) { biometricError = nil }
+            } message: {
+                Text(biometricError ?? "")
+            }
         }
     }
-    
-    // MARK: - UI Components
+
+    // MARK: - Sections
 
     private var brandHeader: some View {
         Section {
@@ -101,11 +100,49 @@ struct SettingsView: View {
         }
     }
 
+    private var securitySection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { biometricLock.isEnabled },
+                set: { newValue in
+                    Task {
+                        if newValue {
+                            let ok = await biometricLock.enableAfterAuth()
+                            if !ok {
+                                biometricError = biometricLock.lastErrorMessage
+                                    ?? "Authenticate with \(biometricLock.biometryLabel) to enable the lock."
+                            }
+                        } else {
+                            biometricLock.isEnabled = false
+                        }
+                    }
+                }
+            )) {
+                Label("Require \(biometricLock.biometryLabel)", systemImage: biometricLock.biometrySymbol)
+            }
+            .disabled(!biometricLock.canUseBiometrics && !biometricLock.isEnabled)
+        } header: {
+            Text("Security")
+        } footer: {
+            Text(
+                biometricLock.canUseBiometrics
+                ? "When enabled, Inpenso asks for \(biometricLock.biometryLabel) every time you open or return to the app."
+                : "Biometrics aren’t available on this device. You can still use the app without a lock."
+            )
+        }
+    }
+
     private var remindersSection: some View {
         Section {
-            Toggle("Daily log reminder", isOn: $reminderService.isEnabled)
+            Toggle("Spending reminders", isOn: $reminderService.isEnabled)
 
             if reminderService.isEnabled {
+                Picker("How often", selection: $reminderService.frequency) {
+                    ForEach(ReminderFrequency.allCases) { frequency in
+                        Text(frequency.displayName).tag(frequency)
+                    }
+                }
+
                 DatePicker(
                     "Remind me at",
                     selection: Binding(
@@ -114,14 +151,36 @@ struct SettingsView: View {
                     ),
                     displayedComponents: .hourAndMinute
                 )
+
+                if reminderService.frequency == .weekly {
+                    Picker("On", selection: $reminderService.weeklyWeekday) {
+                        ForEach(1...7, id: \.self) { weekday in
+                            Text(Calendar.current.weekdaySymbols[weekday - 1]).tag(weekday)
+                        }
+                    }
+                }
             }
         } header: {
             Text("Reminders")
         } footer: {
-            Text("A gentle nudge to capture spending before the day ends.")
+            Text(
+                reminderService.isEnabled
+                ? reminderService.frequency.footerHint
+                : "Get nudged to log spending on a schedule you choose."
+            )
         }
     }
-    
+
+    private var moneyToolsSection: some View {
+        Section(header: Text("Money tools")) {
+            NavigationLink {
+                RecurringTransactionsView(expenseViewModel: expenseViewModel)
+            } label: {
+                Label("Recurring transactions", systemImage: "arrow.triangle.2.circlepath")
+            }
+        }
+    }
+
     private var themePicker: some View {
         Picker("Theme", selection: $settingsManager.selectedTheme) {
             ForEach(AppTheme.allCases) { theme in
@@ -130,13 +189,13 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
     }
-    
+
     private var currencySection: some View {
         Section(header: Text("Currency")) {
             currencyPicker
         }
     }
-    
+
     private var currencyPicker: some View {
         Picker("Currency", selection: $settingsManager.selectedCurrency) {
             ForEach(availableCurrencies, id: \.code) { currency in
@@ -145,18 +204,18 @@ struct SettingsView: View {
         }
         .pickerStyle(.menu)
     }
-    
+
     private func currencyRow(for currency: (code: String, symbol: String, name: String)) -> some View {
         Text("\(currency.symbol) \(currency.name) (\(currency.code))")
             .tag(currency.code)
     }
-    
+
     private var defaultSettingsSection: some View {
         Section(header: Text("Default Settings")) {
             categoryPicker
         }
     }
-    
+
     private var categoryPicker: some View {
         Picker("Default Category", selection: $settingsManager.defaultCategoryID) {
             ForEach(categoryStore.allCategories) { category in
@@ -171,7 +230,7 @@ struct SettingsView: View {
             normalizeDefaultCategory()
         }
     }
-    
+
     private func categoryRow(for category: FinanceCategory) -> some View {
         HStack {
             Circle()
@@ -198,7 +257,7 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private var dataManagementSection: some View {
         Section(header: Text("Data Management")) {
             exportButton
@@ -206,32 +265,26 @@ struct SettingsView: View {
             resetButton
         }
     }
-    
+
     private var exportButton: some View {
-        Button(action: {
-            exportData()
-        }) {
+        Button(action: exportData) {
             Label("Export Data", systemImage: "square.and.arrow.up")
         }
     }
-    
+
     private var importButton: some View {
-        Button(action: {
-            showingImportFilePicker = true
-        }) {
+        Button(action: { showingImportFilePicker = true }) {
             Label("Import Data", systemImage: "square.and.arrow.down")
         }
     }
-    
+
     private var resetButton: some View {
-        Button(role: .destructive, action: {
-            showingResetConfirmation = true
-        }) {
+        Button(role: .destructive, action: { showingResetConfirmation = true }) {
             Label("Reset All Data", systemImage: "trash")
         }
         .foregroundColor(.red)
     }
-    
+
     private var aboutSection: some View {
         Section(header: Text("About")) {
             versionRow
@@ -243,7 +296,7 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private var versionRow: some View {
         HStack {
             Text("Version")
@@ -252,7 +305,7 @@ struct SettingsView: View {
                 .foregroundColor(.secondary)
         }
     }
-    
+
     private var documentPicker: some View {
         DocumentPicker(
             types: [UTType.json],
@@ -267,7 +320,7 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private var shareSheet: some View {
         Group {
             if let url = exportURL {
@@ -275,16 +328,18 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private var resetAlertButtons: some View {
         Group {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
                 settingsManager.resetAllData()
+                expenseViewModel.loadExpenses()
+                RecurringTransactionService.shared.reload()
             }
         }
     }
-    
+
     private func exportData() {
         if let url = settingsManager.exportData() {
             exportURL = url
@@ -294,47 +349,44 @@ struct SettingsView: View {
     }
 }
 
-// Document Picker for importing files
 struct DocumentPicker: UIViewControllerRepresentable {
     let types: [UTType]
     let allowsMultipleSelection: Bool
     let onPick: ([URL]) -> Void
-    
+
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
         picker.allowsMultipleSelection = allowsMultipleSelection
         picker.delegate = context.coordinator
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, UIDocumentPickerDelegate {
         let parent: DocumentPicker
-        
+
         init(_ parent: DocumentPicker) {
             self.parent = parent
         }
-        
+
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             parent.onPick(urls)
         }
     }
 }
 
-// ShareSheet for exporting files
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    
+
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        return controller
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
-    
+
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
@@ -343,4 +395,6 @@ struct ShareSheet: UIViewControllerRepresentable {
         .environmentObject(SettingsViewModel())
         .environmentObject(CategoryStore())
         .environmentObject(ReminderService.shared)
+        .environmentObject(BiometricLockService.shared)
+        .environmentObject(ExpenseViewModel())
 }
