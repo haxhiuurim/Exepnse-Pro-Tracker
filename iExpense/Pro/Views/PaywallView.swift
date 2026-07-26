@@ -44,26 +44,45 @@ struct PaywallView: View {
                 )
                 .ignoresSafeArea()
 
-                // Soft copper glow
                 Circle()
-                    .fill(InpensoTheme.copper.opacity(0.22))
+                    .fill(InpensoTheme.copper.opacity(0.2))
                     .frame(width: 280, height: 280)
                     .blur(radius: 60)
                     .offset(x: 140, y: -220)
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: InpensoTheme.Space.xl) {
                         header
                         planCards
-                        ctaButton
-                        restoreRow
                         featureList
                         legalFooter
                     }
-                    .padding(22)
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, InpensoTheme.Space.lg)
+                    .padding(.top, InpensoTheme.Space.sm)
+                    .padding(.bottom, 120)
                     .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 18)
+                    .offset(y: appeared ? 0 : 16)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: InpensoTheme.Space.sm) {
+                        ctaButton
+                        restoreRow
+                    }
+                    .padding(.horizontal, InpensoTheme.Space.lg)
+                    .padding(.top, InpensoTheme.Space.md)
+                    .padding(.bottom, InpensoTheme.Space.sm)
+                    .background(
+                        LinearGradient(
+                            colors: [
+                                InpensoTheme.ink.opacity(0),
+                                InpensoTheme.ink.opacity(0.92),
+                                InpensoTheme.ink
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .ignoresSafeArea(edges: .bottom)
+                    )
                 }
             }
             .toolbar {
@@ -73,9 +92,9 @@ struct PaywallView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(8)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .frame(width: 30, height: 30)
                             .background(Circle().fill(.white.opacity(0.12)))
                     }
                 }
@@ -90,7 +109,7 @@ struct PaywallView: View {
             }
             .onAppear {
                 selected = initialPlan == .yearlySpecial ? .yearly : initialPlan
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
+                withAnimation(InpensoTheme.Motion.gentle) {
                     appeared = true
                 }
             }
@@ -98,26 +117,27 @@ struct PaywallView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
             Text("INPENSO PRO")
-                .font(InpensoTheme.label(12, weight: .bold))
+                .font(InpensoTheme.label(11, weight: .bold))
                 .tracking(2)
                 .foregroundStyle(InpensoTheme.seafoam)
 
             Text("Your ledger,\nunlocked.")
-                .font(InpensoTheme.brandFont(36, weight: .bold))
+                .font(InpensoTheme.brandFont(34, weight: .bold))
                 .foregroundStyle(.white)
                 .lineSpacing(2)
 
             Text("No ads. Private on-device power — with Pro tools when you need them.")
                 .font(InpensoTheme.body(15))
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundStyle(.white.opacity(0.7))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, 8)
+        .padding(.top, InpensoTheme.Space.xs)
     }
 
     private var planCards: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: InpensoTheme.Space.sm) {
             planCard(.yearly)
             planCard(.monthly)
         }
@@ -240,27 +260,27 @@ struct PaywallView: View {
     }
 
     private var featureList: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Everything in Pro")
-                .font(InpensoTheme.label(13, weight: .bold))
-                .foregroundStyle(.white.opacity(0.55))
-                .padding(.top, 8)
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+            Text("EVERYTHING IN PRO")
+                .font(InpensoTheme.label(11, weight: .bold))
+                .tracking(1.1)
+                .foregroundStyle(.white.opacity(0.45))
 
             ForEach(features, id: \.title) { feature in
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: InpensoTheme.Space.sm) {
                     Image(systemName: feature.icon)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(InpensoTheme.seafoam)
-                        .frame(width: 28, height: 28)
+                        .frame(width: 30, height: 30)
                         .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(feature.title)
                             .font(InpensoTheme.body(14, weight: .semibold))
                             .foregroundStyle(.white)
                         Text(feature.detail)
                             .font(InpensoTheme.label(12))
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.white.opacity(0.52))
                     }
                 }
             }
@@ -270,8 +290,8 @@ struct PaywallView: View {
     private var legalFooter: some View {
         Text("Subscriptions renew automatically unless cancelled at least 24 hours before the end of the period. Manage in Settings → Apple ID. No ads — ever.")
             .font(InpensoTheme.label(11))
-            .foregroundStyle(.white.opacity(0.4))
-            .padding(.top, 8)
+            .foregroundStyle(.white.opacity(0.38))
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -380,9 +400,10 @@ struct SpecialOfferPaywallView: View {
                 .padding(22)
                 .background(InpensoTheme.foam)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .padding(.horizontal, 22)
-            .shadow(color: .black.opacity(0.25), radius: 30, y: 16)
+            .clipShape(RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero, style: .continuous))
+            .padding(.horizontal, InpensoTheme.Space.lg)
+            .shadow(color: .black.opacity(0.28), radius: 28, y: 14)
+            .padding(.vertical, InpensoTheme.Space.xl)
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
@@ -408,14 +429,14 @@ struct UpgradePillButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: compact ? 11 : 13, weight: .bold))
+                    .font(.system(size: compact ? 10 : 12, weight: .bold))
                 Text(compact ? "Pro" : "Upgrade")
-                    .font(InpensoTheme.label(compact ? 12 : 13, weight: .bold))
+                    .font(InpensoTheme.label(compact ? 11 : 13, weight: .bold))
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, compact ? 12 : 14)
+            .padding(.horizontal, compact ? 11 : 14)
             .padding(.vertical, compact ? 7 : 9)
             .background(
                 LinearGradient(
@@ -425,7 +446,7 @@ struct UpgradePillButton: View {
                 ),
                 in: Capsule(style: .continuous)
             )
-            .shadow(color: InpensoTheme.copper.opacity(0.35), radius: 8, y: 3)
+            .shadow(color: InpensoTheme.copper.opacity(0.3), radius: 8, y: 3)
         }
         .buttonStyle(.plain)
     }
@@ -437,30 +458,35 @@ struct ProGateBanner: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: InpensoTheme.Space.sm) {
                 Image(systemName: "lock.fill")
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(InpensoTheme.copper)
-                VStack(alignment: .leading, spacing: 2) {
+                    .frame(width: 32, height: 32)
+                    .background(InpensoTheme.copper.opacity(0.12), in: Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
                     Text(message)
                         .font(InpensoTheme.body(13, weight: .semibold))
                         .foregroundStyle(InpensoTheme.ink)
                         .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text("Upgrade to Pro")
                         .font(InpensoTheme.label(12, weight: .bold))
                         .foregroundStyle(InpensoTheme.copper)
                 }
-                Spacer()
+                Spacer(minLength: 4)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(InpensoTheme.muted)
             }
-            .padding(14)
+            .padding(InpensoTheme.Space.md - 2)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(InpensoTheme.copper.opacity(0.1))
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                    .fill(InpensoTheme.copper.opacity(0.08))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(InpensoTheme.copper.opacity(0.25), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                            .stroke(InpensoTheme.copper.opacity(0.2), lineWidth: 1)
                     )
             )
         }

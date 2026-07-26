@@ -55,7 +55,8 @@ struct MainTabView: View {
             .overlay(alignment: .bottom) {
                 if selectedTab != 3 && biometricLock.isUnlocked {
                     floatingAddButton
-                        .padding(.bottom, 56)
+                        .padding(.bottom, 8)
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
             .sheet(isPresented: $showQuickAdd) {
@@ -178,7 +179,7 @@ struct MainTabView: View {
             Image(systemName: "plus")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 58, height: 58)
+                .frame(width: 56, height: 56)
                 .background(
                     Circle()
                         .fill(
@@ -188,11 +189,11 @@ struct MainTabView: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .shadow(color: InpensoTheme.copper.opacity(0.4), radius: 12, x: 0, y: 6)
+                        .shadow(color: InpensoTheme.copper.opacity(0.38), radius: 14, y: 6)
                 )
         }
         .accessibilityLabel("Add spend")
-        .offset(y: -6)
+        .padding(.bottom, 52)
     }
 
     private func configureTabBarAppearance() {
