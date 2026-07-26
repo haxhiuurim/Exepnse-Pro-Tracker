@@ -11,13 +11,13 @@ struct TransactionRowView: View {
     let category: FinanceCategory
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: InpensoTheme.Space.sm + 2) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(category.color.opacity(0.18))
-                    .frame(width: 44, height: 44)
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm + 2, style: .continuous)
+                    .fill(category.color.opacity(0.16))
+                    .frame(width: 42, height: 42)
                 Image(systemName: category.iconName)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(category.color)
             }
 
@@ -28,18 +28,19 @@ struct TransactionRowView: View {
                     .lineLimit(1)
 
                 Text(expense.date, format: .dateTime.month(.abbreviated).day().hour().minute())
-                    .font(InpensoTheme.label(12, weight: .medium))
+                    .font(InpensoTheme.label(11, weight: .medium))
                     .foregroundStyle(InpensoTheme.muted)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: InpensoTheme.Space.xs)
 
             Text(amountText)
-                .font(InpensoTheme.displayAmount(16))
+                .font(InpensoTheme.displayAmount(15))
                 .foregroundStyle(expense.type == .income ? InpensoTheme.positive : InpensoTheme.ink)
+                .layoutPriority(1)
         }
-        .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 
     private var amountText: String {

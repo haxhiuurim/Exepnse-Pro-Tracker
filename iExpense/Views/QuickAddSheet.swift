@@ -41,7 +41,7 @@ struct QuickAddSheet: View {
                 AtmosphereBackground(intensity: 0.7)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: InpensoTheme.Space.xl) {
                         brandHeader
                         amountHero
                         categoryStrip
@@ -50,11 +50,11 @@ struct QuickAddSheet: View {
                         actionRow
                         saveButton
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 40)
+                    .padding(.horizontal, InpensoTheme.Space.screen)
+                    .padding(.top, InpensoTheme.Space.sm)
+                    .padding(.bottom, InpensoTheme.Space.xxl)
                     .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 18)
+                    .offset(y: animateIn ? 0 : 16)
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
@@ -104,9 +104,9 @@ struct QuickAddSheet: View {
     // MARK: - Sections
 
     private var brandHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
             Text("Inpenso")
-                .font(InpensoTheme.brandFont(34, weight: .bold))
+                .font(InpensoTheme.brandFont(32, weight: .bold))
                 .foregroundStyle(InpensoTheme.ink)
             Text("Capture a spend in seconds.")
                 .font(InpensoTheme.body(15))
@@ -115,29 +115,29 @@ struct QuickAddSheet: View {
     }
 
     private var amountHero: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
             Text("AMOUNT")
                 .font(InpensoTheme.label(11, weight: .bold))
                 .foregroundStyle(InpensoTheme.muted)
-                .tracking(1.2)
+                .tracking(1.3)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(currencySymbol)
-                    .font(InpensoTheme.displayAmount(36))
+                    .font(InpensoTheme.displayAmount(32))
                     .foregroundStyle(InpensoTheme.tide)
 
                 TextField("0.00", text: $amount)
-                    .font(InpensoTheme.displayAmount(48))
+                    .font(InpensoTheme.displayAmount(46))
                     .keyboardType(.decimalPad)
                     .focused($amountFocused)
                     .foregroundStyle(InpensoTheme.ink)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, InpensoTheme.Space.xs)
         }
-        .padding(20)
+        .padding(InpensoTheme.Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero - 4, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [InpensoTheme.foam, InpensoTheme.mist],
@@ -146,20 +146,20 @@ struct QuickAddSheet: View {
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(InpensoTheme.tide.opacity(0.2), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero - 4, style: .continuous)
+                        .stroke(InpensoTheme.tide.opacity(0.18), lineWidth: 1)
                 )
         )
     }
 
     private var categoryStrip: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
             Text("Category")
                 .font(InpensoTheme.label(13, weight: .semibold))
                 .foregroundStyle(InpensoTheme.slate)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: InpensoTheme.Space.xs + 2) {
                     ForEach(categoryStore.allCategories) { category in
                         Button {
                             HapticFeedback.selection()

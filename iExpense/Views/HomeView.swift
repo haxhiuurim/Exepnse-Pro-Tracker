@@ -2,7 +2,7 @@
 //  HomeView.swift
 //  iExpense
 //
-//  Tide Ledger home — brand-first cashflow with period widgets and quick add.
+//  Tide Ledger home — brand-first cashflow with refined spacing rhythm.
 //
 
 import SwiftUI
@@ -24,21 +24,10 @@ struct HomeView: View {
     @State private var heroAppeared = false
     @State private var contentAppeared = false
 
-    private var currencyCode: String {
-        settingsViewModel.selectedCurrency
-    }
-
-    private var periodSpent: Double {
-        viewModel.spent(for: period)
-    }
-
-    private var periodIncome: Double {
-        viewModel.income(for: period)
-    }
-
-    private var periodNet: Double {
-        viewModel.net(for: period)
-    }
+    private var currencyCode: String { settingsViewModel.selectedCurrency }
+    private var periodSpent: Double { viewModel.spent(for: period) }
+    private var periodIncome: Double { viewModel.income(for: period) }
+    private var periodNet: Double { viewModel.net(for: period) }
 
     private var periodCategories: [(String, Double)] {
         PeriodTotals.categoryBreakdown(from: viewModel.expenses, period: period)
@@ -53,25 +42,30 @@ struct HomeView: View {
                 AtmosphereBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
                         heroSection
                         if !pro.isPro {
-                            upgradeBanner
+                            upgradeStrip
+                                .reveal(contentAppeared, delay: 0.05)
                         } else if period == .today {
                             SpentTodayLiveActivityBanner(
                                 amount: periodSpent,
                                 currencyCode: currencyCode
                             )
-                            .opacity(contentAppeared ? 1 : 0)
+                            .reveal(contentAppeared, delay: 0.05)
                         }
                         periodWidgets
+                            .reveal(contentAppeared, delay: 0.08)
                         quickActions
+                            .reveal(contentAppeared, delay: 0.1)
                         categoryPulse
+                            .reveal(contentAppeared, delay: 0.14)
                         recentSection
+                            .reveal(contentAppeared, delay: 0.18)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 110)
+                    .padding(.horizontal, InpensoTheme.Space.screen)
+                    .padding(.top, InpensoTheme.Space.xs)
+                    .padding(.bottom, InpensoTheme.Space.bottomClearance)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -82,12 +76,8 @@ struct HomeView: View {
                 ReceiptScanView(viewModel: viewModel)
             }
             .onAppear {
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
-                    heroAppeared = true
-                }
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.84).delay(0.12)) {
-                    contentAppeared = true
-                }
+                withAnimation(InpensoTheme.Motion.gentle) { heroAppeared = true }
+                withAnimation(InpensoTheme.Motion.reveal.delay(0.1)) { contentAppeared = true }
                 pro.maybePresentSpecialOffer()
                 if pro.isPro {
                     SpentTodayLiveActivity.startOrUpdate(
@@ -109,137 +99,162 @@ struct HomeView: View {
         }
     }
 
-    private var upgradeBanner: some View {
+    // MARK: - Upgrade (slim — doesn't overpower brand hero)
+
+    private var upgradeStrip: some View {
         Button {
             pro.openPaywall(plan: .yearly)
         } label: {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Inpenso Pro")
-                        .font(InpensoTheme.brandFont(20, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text("Unlimited OCR, sync, goals & more — no ads.")
-                        .font(InpensoTheme.body(13))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .multilineTextAlignment(.leading)
+            HStack(spacing: InpensoTheme.Space.sm) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.seafoam)
+                    .frame(width: 36, height: 36)
+                    .background(InpensoTheme.seafoam.opacity(0.15), in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Unlock Inpenso Pro")
+                        .font(InpensoTheme.body(14, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text("OCR, sync, goals — no ads · from \(ProPlan.yearly.displayPrice)/yr")
+                        .font(InpensoTheme.label(11))
+                        .foregroundStyle(InpensoTheme.muted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
-                Spacer(minLength: 8)
+
+                Spacer(minLength: 4)
+
                 Text("Upgrade")
-                    .font(InpensoTheme.label(13, weight: .bold))
-                    .foregroundStyle(InpensoTheme.ink)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(InpensoTheme.seafoam, in: Capsule(style: .continuous))
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(
+                    .font(InpensoTheme.label(12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
                         LinearGradient(
-                            colors: [InpensoTheme.ink, InpensoTheme.inkSoft, InpensoTheme.copper.opacity(0.85)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+                            colors: [InpensoTheme.copper, InpensoTheme.copperSoft],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        in: Capsule(style: .continuous)
                     )
-                    .shadow(color: InpensoTheme.ink.opacity(0.2), radius: 16, y: 8)
+            }
+            .padding(.horizontal, InpensoTheme.Space.md)
+            .padding(.vertical, InpensoTheme.Space.sm)
+            .background(
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                    .fill(Color.white.opacity(0.8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                            .stroke(InpensoTheme.copper.opacity(0.18), lineWidth: 1)
+                    )
             )
         }
         .buttonStyle(.plain)
-        .opacity(contentAppeared ? 1 : 0)
-        .offset(y: contentAppeared ? 0 : 12)
     }
 
-    // MARK: - Hero (brand first)
+    // MARK: - Hero
 
     private var heroSection: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+            HStack(alignment: .center) {
                 Text("Inpenso")
-                    .font(InpensoTheme.brandFont(42, weight: .bold))
+                    .font(InpensoTheme.brandFont(40, weight: .bold))
                     .foregroundStyle(InpensoTheme.ink)
-                    .opacity(heroAppeared ? 1 : 0)
-                    .offset(y: heroAppeared ? 0 : 16)
+                    .reveal(heroAppeared)
 
                 Spacer()
 
                 if !pro.isPro {
-                    UpgradePillButton {
+                    UpgradePillButton(compact: true) {
                         pro.openPaywall(plan: .yearly)
                     }
-                    .opacity(heroAppeared ? 1 : 0)
+                    .reveal(heroAppeared, delay: 0.04)
                 } else {
                     Text("PRO")
-                        .font(InpensoTheme.label(11, weight: .bold))
+                        .font(InpensoTheme.label(10, weight: .bold))
+                        .tracking(0.8)
                         .foregroundStyle(InpensoTheme.seafoam)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(InpensoTheme.ink, in: Capsule())
-                        .opacity(heroAppeared ? 1 : 0)
+                        .reveal(heroAppeared, delay: 0.04)
                 }
             }
 
             Text("Your money, clear as tide.")
-                .font(InpensoTheme.body(16))
+                .font(InpensoTheme.body(15))
                 .foregroundStyle(InpensoTheme.muted)
-                .opacity(heroAppeared ? 1 : 0)
-                .offset(y: heroAppeared ? 0 : 10)
+                .reveal(heroAppeared, delay: 0.05)
 
             PeriodSelector(period: $period)
+                .reveal(heroAppeared, delay: 0.08)
+
+            cashPanel
+                .scaleEffect(heroAppeared ? 1 : 0.97)
                 .opacity(heroAppeared ? 1 : 0)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(period.spentLabel.uppercased())
-                    .font(InpensoTheme.label(11, weight: .bold))
-                    .foregroundStyle(InpensoTheme.seafoam)
-                    .tracking(1.4)
-
-                Text(periodSpent, format: .currency(code: currencyCode))
-                    .font(InpensoTheme.displayAmount(48))
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.55)
-                    .lineLimit(1)
-                    .contentTransition(.numericText())
-
-                HStack(spacing: 18) {
-                    miniMetric(label: "In", value: periodIncome, tint: InpensoTheme.seafoam)
-                    miniMetric(label: "Net", value: periodNet, tint: periodNet >= 0 ? InpensoTheme.seafoam : InpensoTheme.copperSoft)
-                }
-                .padding(.top, 4)
-
-                if period == .month, analyticsViewModel.currentBudget > 0 {
-                    budgetBar
-                        .padding(.top, 10)
-                }
-            }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [InpensoTheme.ink, InpensoTheme.inkSoft, InpensoTheme.tide.opacity(0.95)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .shadow(color: InpensoTheme.ink.opacity(0.25), radius: 24, x: 0, y: 14)
-            )
-            .scaleEffect(heroAppeared ? 1 : 0.96)
-            .opacity(heroAppeared ? 1 : 0)
+                .animation(InpensoTheme.Motion.gentle.delay(0.06), value: heroAppeared)
         }
     }
 
+    private var cashPanel: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            Text(period.spentLabel.uppercased())
+                .font(InpensoTheme.label(11, weight: .bold))
+                .foregroundStyle(InpensoTheme.seafoam)
+                .tracking(1.5)
+
+            Text(periodSpent, format: .currency(code: currencyCode))
+                .font(InpensoTheme.displayAmount(44))
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.55)
+                .lineLimit(1)
+                .contentTransition(.numericText())
+                .animation(InpensoTheme.Motion.snappy, value: periodSpent)
+
+            HStack(spacing: 0) {
+                miniMetric(label: "Income", value: periodIncome, tint: InpensoTheme.seafoam)
+                Spacer()
+                Rectangle()
+                    .fill(.white.opacity(0.12))
+                    .frame(width: 1, height: 28)
+                Spacer()
+                miniMetric(label: "Net", value: periodNet, tint: periodNet >= 0 ? InpensoTheme.seafoam : InpensoTheme.copperSoft)
+            }
+            .padding(.top, InpensoTheme.Space.xxs)
+
+            if period == .month, analyticsViewModel.currentBudget > 0 {
+                budgetBar
+                    .padding(.top, InpensoTheme.Space.xs)
+            }
+        }
+        .padding(InpensoTheme.Space.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [InpensoTheme.ink, InpensoTheme.inkSoft, InpensoTheme.tide.opacity(0.92)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: InpensoTheme.ink.opacity(0.22), radius: 20, y: 12)
+        )
+    }
+
     private func miniMetric(label: String, value: Double, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(label)
-                .font(InpensoTheme.label(11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.65))
+                .font(InpensoTheme.label(11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
             Text(value, format: .currency(code: currencyCode))
-                .font(InpensoTheme.displayAmount(15))
+                .font(InpensoTheme.displayAmount(16))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var budgetBar: some View {
@@ -247,42 +262,39 @@ struct HomeView: View {
         return VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.15))
+                    Capsule().fill(.white.opacity(0.14))
                     Capsule()
                         .fill(progress > 0.9 ? InpensoTheme.copperSoft : InpensoTheme.seafoam)
-                        .frame(width: geo.size.width * progress)
+                        .frame(width: max(6, geo.size.width * progress))
+                        .animation(InpensoTheme.Motion.gentle, value: progress)
                 }
             }
-            .frame(height: 6)
+            .frame(height: 5)
 
             HStack {
-                Text("\(Int(progress * 100))% of monthly budget")
+                Text("\(Int(progress * 100))% of budget")
                     .font(InpensoTheme.label(11))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white.opacity(0.65))
                 Spacer()
                 Text("\(analyticsViewModel.daysRemainingInMonth)d left")
                     .font(InpensoTheme.label(11))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white.opacity(0.65))
             }
         }
     }
 
-    // MARK: - Period widgets strip
+    // MARK: - At a glance
 
     private var periodWidgets: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("At a glance")
-                .font(InpensoTheme.label(13, weight: .semibold))
-                .foregroundStyle(InpensoTheme.slate)
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            InpensoSectionHeader(title: "At a glance")
 
-            HStack(spacing: 10) {
+            HStack(spacing: InpensoTheme.Space.sm) {
                 ForEach(SpendingPeriod.allCases) { item in
                     periodWidgetTile(item)
                 }
             }
         }
-        .opacity(contentAppeared ? 1 : 0)
-        .offset(y: contentAppeared ? 0 : 16)
     }
 
     private func periodWidgetTile(_ item: SpendingPeriod) -> some View {
@@ -291,11 +303,9 @@ struct HomeView: View {
 
         return Button {
             HapticFeedback.selection()
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                period = item
-            }
+            withAnimation(InpensoTheme.Motion.snappy) { period = item }
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
                 Text(item.shortTitle)
                     .font(InpensoTheme.label(11, weight: .bold))
                     .foregroundStyle(selected ? InpensoTheme.copper : InpensoTheme.muted)
@@ -303,153 +313,139 @@ struct HomeView: View {
                     .font(InpensoTheme.displayAmount(15))
                     .foregroundStyle(InpensoTheme.ink)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.55)
+                    .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
+            .padding(InpensoTheme.Space.sm + 2)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.white.opacity(0.75))
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                    .fill(Color.white.opacity(0.8))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(selected ? InpensoTheme.copper.opacity(0.45) : InpensoTheme.ink.opacity(0.06), lineWidth: selected ? 1.5 : 1)
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                            .stroke(
+                                selected ? InpensoTheme.copper.opacity(0.4) : InpensoTheme.ink.opacity(0.05),
+                                lineWidth: selected ? 1.5 : 1
+                            )
                     )
             )
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Quick actions
+    // MARK: - Actions
 
     private var quickActions: some View {
-        HStack(spacing: 12) {
-            Button {
-                showQuickAdd = true
-            } label: {
+        HStack(spacing: InpensoTheme.Space.sm) {
+            Button { showQuickAdd = true } label: {
                 Label("Add spend", systemImage: "plus")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(InpensoPrimaryButtonStyle())
 
-            Button {
-                showReceiptScan = true
-            } label: {
+            Button { showReceiptScan = true } label: {
                 Label("Scan", systemImage: "doc.text.viewfinder")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(InpensoSecondaryButtonStyle())
         }
-        .opacity(contentAppeared ? 1 : 0)
-        .offset(y: contentAppeared ? 0 : 12)
     }
 
     // MARK: - Categories
 
     private var categoryPulse: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Where it went")
-                .font(InpensoTheme.label(13, weight: .semibold))
-                .foregroundStyle(InpensoTheme.slate)
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            InpensoSectionHeader(title: "Where it went")
 
             if periodCategories.isEmpty {
-                Text("No spending in this period yet.")
-                    .font(InpensoTheme.body(14))
-                    .foregroundStyle(InpensoTheme.muted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
+                SurfacePanel(padding: InpensoTheme.Space.md) {
+                    Text("No spending in this period yet.")
+                        .font(InpensoTheme.body(14))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
             } else {
-                VStack(spacing: 12) {
-                    ForEach(periodCategories, id: \.0) { id, amount in
-                        let category = categoryStore.category(for: id)
-                        let share = periodSpent > 0 ? amount / periodSpent : 0
+                SurfacePanel(padding: InpensoTheme.Space.md) {
+                    VStack(spacing: InpensoTheme.Space.md) {
+                        ForEach(periodCategories, id: \.0) { id, amount in
+                            let category = categoryStore.category(for: id)
+                            let share = periodSpent > 0 ? amount / periodSpent : 0
 
-                        HStack(spacing: 12) {
-                            Image(systemName: category.iconName)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(category.color)
-                                .frame(width: 32, height: 32)
-                                .background(category.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            HStack(spacing: InpensoTheme.Space.sm) {
+                                Image(systemName: category.iconName)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(category.color)
+                                    .frame(width: 34, height: 34)
+                                    .background(
+                                        category.color.opacity(0.14),
+                                        in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                    )
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(category.displayName)
-                                        .font(InpensoTheme.body(14, weight: .semibold))
-                                        .foregroundStyle(InpensoTheme.ink)
-                                    Spacer()
-                                    Text(amount, format: .currency(code: currencyCode))
-                                        .font(InpensoTheme.label(13, weight: .bold))
-                                        .foregroundStyle(InpensoTheme.slate)
-                                }
-                                GeometryReader { geo in
-                                    ZStack(alignment: .leading) {
-                                        Capsule().fill(InpensoTheme.ink.opacity(0.06))
-                                        Capsule()
-                                            .fill(category.color.opacity(0.85))
-                                            .frame(width: geo.size.width * share)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    HStack(alignment: .firstTextBaseline) {
+                                        Text(category.displayName)
+                                            .font(InpensoTheme.body(14, weight: .semibold))
+                                            .foregroundStyle(InpensoTheme.ink)
+                                        Spacer()
+                                        Text(amount, format: .currency(code: currencyCode))
+                                            .font(InpensoTheme.label(13, weight: .bold))
+                                            .foregroundStyle(InpensoTheme.slate)
                                     }
+                                    GeometryReader { geo in
+                                        ZStack(alignment: .leading) {
+                                            Capsule().fill(InpensoTheme.ink.opacity(0.06))
+                                            Capsule()
+                                                .fill(category.color.opacity(0.85))
+                                                .frame(width: max(4, geo.size.width * share))
+                                        }
+                                    }
+                                    .frame(height: 4)
                                 }
-                                .frame(height: 5)
                             }
                         }
                     }
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.white.opacity(0.72))
-                )
             }
         }
-        .opacity(contentAppeared ? 1 : 0)
     }
 
     // MARK: - Recent
 
     private var recentSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Recent")
-                    .font(InpensoTheme.label(13, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.slate)
-                Spacer()
-                Button("See all") {
-                    NotificationCenter.default.post(name: NSNotification.Name("SwitchToExpensesTab"), object: nil)
-                }
-                .font(InpensoTheme.label(12, weight: .bold))
-                .foregroundStyle(InpensoTheme.copper)
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            InpensoSectionHeader(title: "Recent", actionTitle: "See all") {
+                NotificationCenter.default.post(name: NSNotification.Name("SwitchToExpensesTab"), object: nil)
             }
 
             if viewModel.expenses.isEmpty {
-                Text("Tap Add spend to log your first transaction.")
-                    .font(InpensoTheme.body(14))
-                    .foregroundStyle(InpensoTheme.muted)
+                SurfacePanel(padding: InpensoTheme.Space.md) {
+                    Text("Tap Add spend to log your first transaction.")
+                        .font(InpensoTheme.body(14))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
             } else {
-                VStack(spacing: 4) {
-                    ForEach(viewModel.recentExpenses(limit: 5)) { expense in
-                        Button {
-                            selectedExpenseToEdit = expense
-                        } label: {
-                            TransactionRowView(
-                                expense: expense,
-                                currencyCode: currencyCode,
-                                category: categoryStore.category(for: expense)
-                            )
-                        }
-                        .buttonStyle(.plain)
+                SurfacePanel(padding: InpensoTheme.Space.md - 2) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(viewModel.recentExpenses(limit: 5).enumerated()), id: \.element.id) { index, expense in
+                            Button {
+                                selectedExpenseToEdit = expense
+                            } label: {
+                                TransactionRowView(
+                                    expense: expense,
+                                    currencyCode: currencyCode,
+                                    category: categoryStore.category(for: expense)
+                                )
+                                .padding(.vertical, InpensoTheme.Space.xs)
+                            }
+                            .buttonStyle(.plain)
 
-                        if expense.id != viewModel.recentExpenses(limit: 5).last?.id {
-                            Divider().opacity(0.35)
+                            if index < viewModel.recentExpenses(limit: 5).count - 1 {
+                                Divider().opacity(0.28)
+                            }
                         }
                     }
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.white.opacity(0.72))
-                )
             }
         }
-        .opacity(contentAppeared ? 1 : 0)
     }
 }
 
