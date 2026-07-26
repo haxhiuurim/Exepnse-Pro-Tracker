@@ -11,6 +11,7 @@ struct QuickAddSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
+    @EnvironmentObject private var pro: ProEntitlementManager
     @ObservedObject var viewModel: ExpenseViewModel
 
     @State private var amount: String = ""
@@ -20,6 +21,7 @@ struct QuickAddSheet: View {
     @State private var showReceiptScan = false
     @State private var showSaveAsTemplate = false
     @State private var animateIn = false
+    @State private var showScanLimit = false
     @FocusState private var amountFocused: Bool
 
     private var currencySymbol: String {
@@ -78,12 +80,21 @@ struct QuickAddSheet: View {
             .sheet(isPresented: $showReceiptScan) {
                 ReceiptScanView(viewModel: viewModel)
             }
+            .alert("Free scans used up", isPresented: $showScanLimit) {
+                Button("Upgrade") { pro.openPaywall() }
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Free includes \(FreeTierLimits.receiptScansPerMonth) scans/month.")
+            }
             .onAppear {
                 selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
                 amountFocused = true
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.85).delay(0.05)) {
                     animateIn = true
                 }
+            }
+            .onChange(of: title) { _, newValue in
+                applyMerchantRule(for: newValue)
             }
         }
         .presentationDetents([.large])
@@ -193,6 +204,12 @@ struct QuickAddSheet: View {
                                 .stroke(InpensoTheme.ink.opacity(0.08), lineWidth: 1)
                         )
                 )
+
+            if pro.isPro, let rule = PremiumDataStore.shared.suggestedCategoryID(forTitle: title) {
+                Text("Rule matched → \(categoryStore.category(for: rule).displayName)")
+                    .font(InpensoTheme.label(11, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
+            }
         }
     }
 
@@ -258,7 +275,11 @@ struct QuickAddSheet: View {
 
     private var actionRow: some View {
         Button {
-            showReceiptScan = true
+            if pro.canScanReceipt {
+                showReceiptScan = true
+            } else {
+                showScanLimit = true
+            }
         } label: {
             HStack(spacing: 12) {
                 ZStack {
@@ -272,7 +293,11 @@ struct QuickAddSheet: View {
                     Text("Scan receipt")
                         .font(InpensoTheme.body(15, weight: .semibold))
                         .foregroundStyle(InpensoTheme.ink)
-                    Text("Photo a receipt to auto-fill items & total")
+                    Text(
+                        pro.isPro
+                        ? "Unlimited on-device OCR"
+                        : "\(pro.receiptScansRemaining) free scans left this month"
+                    )
                         .font(InpensoTheme.label(12))
                         .foregroundStyle(InpensoTheme.muted)
                 }
@@ -354,5 +379,12 @@ struct QuickAddSheet: View {
         )
         HapticFeedback.success()
         showSaveAsTemplate = true
+    }
+
+    private func applyMerchantRule(for title: String) {
+        guard pro.isPro else { return }
+        if let categoryID = PremiumDataStore.shared.suggestedCategoryID(forTitle: title) {
+            selectedCategoryID = categoryID
+        }
     }
 }

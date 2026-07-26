@@ -8,12 +8,13 @@ import SwiftUI
 struct RecurringTransactionsView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
+    @EnvironmentObject private var pro: ProEntitlementManager
     @ObservedObject var expenseViewModel: ExpenseViewModel
     @ObservedObject private var service = RecurringTransactionService.shared
 
     @State private var showingEditor = false
     @State private var editingItem: RecurringTransaction?
-    @State private var appeared = false
+    @State private var showLimitAlert = false
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
 
@@ -23,10 +24,32 @@ struct RecurringTransactionsView: View {
 
             List {
                 Section {
-                    Text("Rent, subscriptions, and paychecks can post automatically on schedule.")
+                    Text(pro.isPro
+                         ? "Rent, subscriptions, and paychecks can post automatically on schedule."
+                         : "Free includes \(FreeTierLimits.recurringItems) recurring items. Pro unlocks unlimited + a 30-day calendar.")
                         .font(InpensoTheme.body(13))
                         .foregroundStyle(InpensoTheme.muted)
                         .listRowBackground(Color.clear)
+                }
+
+                if !pro.isPro {
+                    Section {
+                        ProGateBanner(message: "\(service.items.count)/\(FreeTierLimits.recurringItems) free recurring slots used.") {
+                            pro.openPaywall()
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                    }
+                }
+
+                if pro.isPro {
+                    Section {
+                        NavigationLink {
+                            UpcomingRecurringCalendarView()
+                        } label: {
+                            Label("Upcoming this month", systemImage: "calendar")
+                        }
+                    }
                 }
 
                 if service.items.isEmpty {
@@ -80,6 +103,10 @@ struct RecurringTransactionsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    if editingItem == nil && !pro.canAddRecurring(currentCount: service.items.count) {
+                        showLimitAlert = true
+                        return
+                    }
                     editingItem = nil
                     showingEditor = true
                 } label: {
@@ -92,12 +119,22 @@ struct RecurringTransactionsView: View {
             RecurringEditorSheet(
                 existing: editingItem,
                 onSave: { item in
+                    if editingItem == nil && !pro.canAddRecurring(currentCount: service.items.count) {
+                        showLimitAlert = true
+                        return
+                    }
                     service.upsert(item)
                     _ = service.processDueTransactions(into: expenseViewModel)
                 }
             )
             .environmentObject(settingsViewModel)
             .environmentObject(categoryStore)
+        }
+        .alert("Free limit reached", isPresented: $showLimitAlert) {
+            Button("Upgrade") { pro.openPaywall() }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Free plans include \(FreeTierLimits.recurringItems) recurring items. Upgrade for unlimited + calendar.")
         }
         .onAppear {
             service.reload()

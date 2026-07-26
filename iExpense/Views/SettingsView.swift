@@ -12,6 +12,8 @@ struct SettingsView: View {
     @EnvironmentObject private var reminderService: ReminderService
     @EnvironmentObject private var biometricLock: BiometricLockService
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var pro: ProEntitlementManager
+    @ObservedObject private var premiumStore = PremiumDataStore.shared
 
     @State private var showingImportFilePicker = false
     @State private var showingExportShareSheet = false
@@ -21,11 +23,15 @@ struct SettingsView: View {
     @State private var showingImportFailure = false
     @State private var showingExportSuccess = false
     @State private var biometricError: String?
+    @State private var exportFormat: ExportFormat = .csv
+
+    private enum ExportFormat { case csv, ofx }
 
     var body: some View {
         NavigationStack {
             Form {
                 brandHeader
+                proSection
                 appearanceSection
                 securitySection
                 remindersSection
@@ -85,12 +91,66 @@ struct SettingsView: View {
                 Text("Inpenso")
                     .font(InpensoTheme.brandFont(28, weight: .bold))
                     .foregroundStyle(InpensoTheme.ink)
-                Text("Tide Ledger · private on-device finance")
+                Text("Tide Ledger · private on-device finance · no ads")
                     .font(InpensoTheme.body(13))
                     .foregroundStyle(InpensoTheme.muted)
             }
             .padding(.vertical, 4)
             .listRowBackground(Color.clear)
+        }
+    }
+
+    private var proSection: some View {
+        Section {
+            if pro.isPro {
+                HStack {
+                    Label("Inpenso Pro", systemImage: "sparkles")
+                        .foregroundStyle(InpensoTheme.ink)
+                    Spacer()
+                    Text("Active")
+                        .font(InpensoTheme.label(12, weight: .bold))
+                        .foregroundStyle(InpensoTheme.tide)
+                }
+                #if DEBUG
+                Button("Debug: remove Pro") { pro.debugTogglePro() }
+                    .foregroundStyle(InpensoTheme.danger)
+                #endif
+            } else {
+                Button {
+                    pro.openPaywall(plan: .yearly)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Upgrade to Pro")
+                                .font(InpensoTheme.body(16, weight: .bold))
+                                .foregroundStyle(InpensoTheme.ink)
+                            Text("Yearly from \(ProPlan.yearly.displayPrice) · Monthly \(ProPlan.monthly.displayPrice)")
+                                .font(InpensoTheme.label(12))
+                                .foregroundStyle(InpensoTheme.muted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(InpensoTheme.muted)
+                    }
+                }
+            }
+
+            Toggle("iCloud sync", isOn: Binding(
+                get: { premiumStore.iCloudSyncEnabled },
+                set: { enabled in
+                    if !premiumStore.setiCloudSync(enabled, isPro: pro.isPro) {
+                        pro.openPaywall()
+                    } else if enabled {
+                        ICloudSyncService.shared.pushAll()
+                    }
+                }
+            ))
+        } header: {
+            Text("Inpenso Pro")
+        } footer: {
+            Text(pro.isPro
+                  ? "Thank you — every Pro tool is unlocked. Still zero ads."
+                  : "Free includes core tracking. Pro unlocks OCR, sync, goals, exports & more.")
         }
     }
 
@@ -178,6 +238,44 @@ struct SettingsView: View {
             } label: {
                 Label("Recurring transactions", systemImage: "arrow.triangle.2.circlepath")
             }
+
+            if pro.isPro {
+                NavigationLink {
+                    UpcomingRecurringCalendarView()
+                } label: {
+                    Label("Upcoming this month", systemImage: "calendar")
+                }
+            }
+
+            NavigationLink {
+                SavingsGoalsView()
+            } label: {
+                Label("Goals & envelopes", systemImage: "target")
+            }
+
+            NavigationLink {
+                AccountsNetWorthView()
+            } label: {
+                Label("Accounts & net worth", systemImage: "building.columns")
+            }
+
+            NavigationLink {
+                MerchantRulesView()
+            } label: {
+                Label("Merchant rules", systemImage: "bolt.horizontal")
+            }
+
+            NavigationLink {
+                HouseholdLedgerView()
+            } label: {
+                Label("Household ledger", systemImage: "person.2")
+            }
+
+            NavigationLink {
+                ThemePacksView()
+            } label: {
+                Label("Themes & icons", systemImage: "paintpalette")
+            }
         }
     }
 
@@ -261,8 +359,37 @@ struct SettingsView: View {
     private var dataManagementSection: some View {
         Section(header: Text("Data Management")) {
             exportButton
+            Button {
+                guard pro.isPro else { pro.openPaywall(); return }
+                exportFormat = .csv
+                exportProData(format: .csv)
+            } label: {
+                Label("Export CSV (Pro)", systemImage: "tablecells")
+            }
+            Button {
+                guard pro.isPro else { pro.openPaywall(); return }
+                exportFormat = .ofx
+                exportProData(format: .ofx)
+            } label: {
+                Label("Export OFX (Pro)", systemImage: "doc.badge.gearshape")
+            }
             importButton
             resetButton
+        }
+    }
+
+    private func exportProData(format: ExportFormat) {
+        let url: URL?
+        switch format {
+        case .csv:
+            url = ExportService.csvURL(expenses: expenseViewModel.expenses, currencyCode: settingsManager.selectedCurrency)
+        case .ofx:
+            url = ExportService.ofxURL(expenses: expenseViewModel.expenses, currencyCode: settingsManager.selectedCurrency)
+        }
+        if let url {
+            exportURL = url
+            showingExportShareSheet = true
+            showingExportSuccess = true
         }
     }
 
@@ -397,4 +524,5 @@ struct ShareSheet: UIViewControllerRepresentable {
         .environmentObject(ReminderService.shared)
         .environmentObject(BiometricLockService.shared)
         .environmentObject(ExpenseViewModel())
+        .environmentObject(ProEntitlementManager.shared)
 }

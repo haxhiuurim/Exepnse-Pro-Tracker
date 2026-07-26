@@ -11,6 +11,7 @@ import Charts
 struct HomeView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
+    @EnvironmentObject private var pro: ProEntitlementManager
 
     @ObservedObject var viewModel: ExpenseViewModel
     @ObservedObject var analyticsViewModel: AnalyticsViewModel
@@ -54,6 +55,15 @@ struct HomeView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 22) {
                         heroSection
+                        if !pro.isPro {
+                            upgradeBanner
+                        } else if period == .today {
+                            SpentTodayLiveActivityBanner(
+                                amount: periodSpent,
+                                currencyCode: currencyCode
+                            )
+                            .opacity(contentAppeared ? 1 : 0)
+                        }
                         periodWidgets
                         quickActions
                         categoryPulse
@@ -78,19 +88,95 @@ struct HomeView: View {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.84).delay(0.12)) {
                     contentAppeared = true
                 }
+                pro.maybePresentSpecialOffer()
+                if pro.isPro {
+                    SpentTodayLiveActivity.startOrUpdate(
+                        amount: viewModel.spent(for: .today),
+                        currencyCode: currencyCode,
+                        isPro: true
+                    )
+                }
+            }
+            .onChange(of: viewModel.expenses) {
+                if pro.isPro {
+                    SpentTodayLiveActivity.startOrUpdate(
+                        amount: viewModel.spent(for: .today),
+                        currencyCode: currencyCode,
+                        isPro: true
+                    )
+                }
             }
         }
+    }
+
+    private var upgradeBanner: some View {
+        Button {
+            pro.openPaywall(plan: .yearly)
+        } label: {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Inpenso Pro")
+                        .font(InpensoTheme.brandFont(20, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Unlimited OCR, sync, goals & more — no ads.")
+                        .font(InpensoTheme.body(13))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 8)
+                Text("Upgrade")
+                    .font(InpensoTheme.label(13, weight: .bold))
+                    .foregroundStyle(InpensoTheme.ink)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(InpensoTheme.seafoam, in: Capsule(style: .continuous))
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [InpensoTheme.ink, InpensoTheme.inkSoft, InpensoTheme.copper.opacity(0.85)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .shadow(color: InpensoTheme.ink.opacity(0.2), radius: 16, y: 8)
+            )
+        }
+        .buttonStyle(.plain)
+        .opacity(contentAppeared ? 1 : 0)
+        .offset(y: contentAppeared ? 0 : 12)
     }
 
     // MARK: - Hero (brand first)
 
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Inpenso")
-                .font(InpensoTheme.brandFont(42, weight: .bold))
-                .foregroundStyle(InpensoTheme.ink)
-                .opacity(heroAppeared ? 1 : 0)
-                .offset(y: heroAppeared ? 0 : 16)
+            HStack(alignment: .top) {
+                Text("Inpenso")
+                    .font(InpensoTheme.brandFont(42, weight: .bold))
+                    .foregroundStyle(InpensoTheme.ink)
+                    .opacity(heroAppeared ? 1 : 0)
+                    .offset(y: heroAppeared ? 0 : 16)
+
+                Spacer()
+
+                if !pro.isPro {
+                    UpgradePillButton {
+                        pro.openPaywall(plan: .yearly)
+                    }
+                    .opacity(heroAppeared ? 1 : 0)
+                } else {
+                    Text("PRO")
+                        .font(InpensoTheme.label(11, weight: .bold))
+                        .foregroundStyle(InpensoTheme.seafoam)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(InpensoTheme.ink, in: Capsule())
+                        .opacity(heroAppeared ? 1 : 0)
+                }
+            }
 
             Text("Your money, clear as tide.")
                 .font(InpensoTheme.body(16))
@@ -375,4 +461,5 @@ struct HomeView: View {
     )
     .environmentObject(SettingsViewModel())
     .environmentObject(CategoryStore())
+    .environmentObject(ProEntitlementManager.shared)
 }

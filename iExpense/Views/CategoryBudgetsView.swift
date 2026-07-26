@@ -10,12 +10,18 @@ import SwiftUI
 struct CategoryBudgetsView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
+    @EnvironmentObject private var pro: ProEntitlementManager
     @ObservedObject var analyticsViewModel: AnalyticsViewModel
 
     @State private var draftLimits: [String: String] = [:]
     @State private var showSaved = false
+    @State private var showLimitAlert = false
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
+
+    private var activeBudgetCount: Int {
+        analyticsViewModel.categoryBudgets.values.filter { $0 > 0 }.count
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -23,9 +29,17 @@ struct CategoryBudgetsView: View {
                 .font(InpensoTheme.label(14, weight: .semibold))
                 .foregroundStyle(InpensoTheme.slate)
 
-            Text("Set a monthly cap for each category. Progress uses this month’s spending.")
+            Text(pro.isPro
+                 ? "Set a monthly cap for each category. Progress uses this month’s spending."
+                 : "Free includes \(FreeTierLimits.categoryBudgets) category budgets. Pro unlocks unlimited + alerts.")
                 .font(InpensoTheme.body(13))
                 .foregroundStyle(InpensoTheme.muted)
+
+            if !pro.isPro {
+                ProGateBanner(message: "You’re using \(activeBudgetCount)/\(FreeTierLimits.categoryBudgets) free category budgets.") {
+                    pro.openPaywall()
+                }
+            }
 
             VStack(spacing: 12) {
                 ForEach(categoryStore.allCategories) { category in
@@ -50,6 +64,12 @@ struct CategoryBudgetsView: View {
         }
         .alert("Category budgets saved", isPresented: $showSaved) {
             Button("OK", role: .cancel) { }
+        }
+        .alert("Free limit reached", isPresented: $showLimitAlert) {
+            Button("Upgrade") { pro.openPaywall() }
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Free plans can set \(FreeTierLimits.categoryBudgets) category budgets. Upgrade for unlimited caps and alerts.")
         }
     }
 
@@ -139,8 +159,20 @@ struct CategoryBudgetsView: View {
                 budgets[id] = value
             }
         }
+
+        if !pro.canAddCategoryBudget(currentCount: budgets.count) {
+            // Keep only the first N free budgets by highest existing spend
+            let allowed = budgets
+                .sorted { (analyticsViewModel.spendingByCategory[$0.key] ?? 0) > (analyticsViewModel.spendingByCategory[$1.key] ?? 0) }
+                .prefix(FreeTierLimits.categoryBudgets)
+            budgets = Dictionary(uniqueKeysWithValues: allowed.map { ($0.key, $0.value) })
+            showLimitAlert = true
+        }
+
         analyticsViewModel.saveCategoryBudgets(budgets)
-        showSaved = true
+        if !showLimitAlert {
+            showSaved = true
+        }
         HapticFeedback.success()
     }
 }

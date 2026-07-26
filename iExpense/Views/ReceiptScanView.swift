@@ -13,6 +13,7 @@ struct ReceiptScanView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
+    @EnvironmentObject private var pro: ProEntitlementManager
     @ObservedObject var viewModel: ExpenseViewModel
 
     @State private var pickerItem: PhotosPickerItem?
@@ -23,6 +24,7 @@ struct ReceiptScanView: View {
     @State private var merchantOverride: String = ""
     @State private var saveAsSingle = true
     @State private var animateSuccess = false
+    @State private var showLimitPaywall = false
 
     var body: some View {
         NavigationStack {
@@ -57,6 +59,12 @@ struct ReceiptScanView: View {
                 Button("OK", role: .cancel) { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
+            }
+            .alert("Free scans used up", isPresented: $showLimitPaywall) {
+                Button("Upgrade") { pro.openPaywall() }
+                Button("Not now", role: .cancel) {}
+            } message: {
+                Text("Free includes \(FreeTierLimits.receiptScansPerMonth) receipt scans per month. Upgrade for unlimited OCR.")
             }
             .fullScreenCover(isPresented: $showCamera) {
                 CameraPicker { image in
@@ -105,11 +113,17 @@ struct ReceiptScanView: View {
                     .foregroundStyle(InpensoTheme.muted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
+
+                if !pro.isPro {
+                    Text("\(pro.receiptScansRemaining) of \(FreeTierLimits.receiptScansPerMonth) free scans left this month")
+                        .font(InpensoTheme.label(12, weight: .bold))
+                        .foregroundStyle(InpensoTheme.copper)
+                }
             }
 
             VStack(spacing: 12) {
                 Button {
-                    showCamera = true
+                    beginCapture { showCamera = true }
                 } label: {
                     Label("Take photo", systemImage: "camera.fill")
                 }
@@ -120,11 +134,25 @@ struct ReceiptScanView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(InpensoSecondaryButtonStyle())
+                .disabled(!pro.canScanReceipt)
+                .simultaneousGesture(TapGesture().onEnded {
+                    if !pro.canScanReceipt {
+                        showLimitPaywall = true
+                    }
+                })
             }
             .padding(.horizontal, 24)
 
             Spacer()
         }
+    }
+
+    private func beginCapture(_ action: () -> Void) {
+        guard pro.canScanReceipt else {
+            showLimitPaywall = true
+            return
+        }
+        action()
     }
 
     // MARK: - Review
@@ -295,11 +323,16 @@ struct ReceiptScanView: View {
     // MARK: - Actions
 
     private func process(image: UIImage) async {
+        guard pro.canScanReceipt else {
+            await MainActor.run { showLimitPaywall = true }
+            return
+        }
         isScanning = true
         defer { isScanning = false }
         do {
             let scanned = try await ReceiptScannerService.shared.scan(image: image)
             await MainActor.run {
+                pro.recordReceiptScan()
                 result = scanned
                 merchantOverride = scanned.merchant ?? "Receipt"
                 HapticFeedback.success()

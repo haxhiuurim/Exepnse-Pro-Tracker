@@ -13,6 +13,7 @@ struct MainTabView: View {
     @StateObject private var analyticsViewModel = AnalyticsViewModel(expenses: [])
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @ObservedObject private var biometricLock = BiometricLockService.shared
+    @ObservedObject private var pro = ProEntitlementManager.shared
     @State private var selectedTab = 0
     @State private var showQuickAdd = false
     @Environment(\.scenePhase) private var scenePhase
@@ -60,6 +61,14 @@ struct MainTabView: View {
             .sheet(isPresented: $showQuickAdd) {
                 QuickAddSheet(viewModel: viewModel)
             }
+            .sheet(isPresented: $pro.showPaywall) {
+                PaywallView(pro: pro, initialPlan: pro.selectedPaywallPlan)
+                    .presentationDetents([.large])
+            }
+            .fullScreenCover(isPresented: $pro.showSpecialOffer) {
+                SpecialOfferPaywallView(pro: pro)
+                    .presentationBackground(.clear)
+            }
             .disabled(biometricLock.isEnabled && !biometricLock.isUnlocked)
 
             if biometricLock.isEnabled && !biometricLock.isUnlocked {
@@ -77,6 +86,10 @@ struct MainTabView: View {
             if biometricLock.isEnabled {
                 biometricLock.lockIfNeeded()
             }
+            if PremiumDataStore.shared.iCloudSyncEnabled {
+                ICloudSyncService.shared.pullIfAvailable()
+            }
+            Task { await pro.refresh() }
 
             NotificationCenter.default.addObserver(
                 forName: NSNotification.Name("SwitchToExpensesTab"),
@@ -93,9 +106,28 @@ struct MainTabView: View {
             ) { _ in
                 showQuickAdd = true
             }
+
+            NotificationCenter.default.addObserver(
+                forName: .inpensoICloudDidPull,
+                object: nil,
+                queue: .main
+            ) { _ in
+                viewModel.loadExpenses()
+                analyticsViewModel.updateExpenses(viewModel.expenses)
+            }
         }
         .onChange(of: viewModel.expenses) {
             analyticsViewModel.updateExpenses(viewModel.expenses)
+            if pro.isPro {
+                SpentTodayLiveActivity.startOrUpdate(
+                    amount: viewModel.spent(for: .today),
+                    currencyCode: settingsViewModel.selectedCurrency,
+                    isPro: true
+                )
+                if PremiumDataStore.shared.iCloudSyncEnabled {
+                    ICloudSyncService.shared.pushAll()
+                }
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -103,6 +135,9 @@ struct MainTabView: View {
                 viewModel.loadExpenses()
                 processRecurring()
                 consumePendingQuickAdd()
+                if PremiumDataStore.shared.iCloudSyncEnabled {
+                    ICloudSyncService.shared.pullIfAvailable()
+                }
             case .inactive, .background:
                 biometricLock.lockIfNeeded()
             @unknown default:
@@ -112,6 +147,8 @@ struct MainTabView: View {
         .environmentObject(ReminderService.shared)
         .environmentObject(biometricLock)
         .environmentObject(viewModel)
+        .environmentObject(pro)
+        .environmentObject(PremiumDataStore.shared)
     }
 
     private func processRecurring() {
