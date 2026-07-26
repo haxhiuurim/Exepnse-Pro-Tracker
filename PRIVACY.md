@@ -16,7 +16,8 @@ Inpenso collects the following types of data that you voluntarily provide:
 
 - **Expense Information**: Title, amount, date, category, and optional notes for each expense you record
 - **Budget Information**: Monthly budget amounts you set for tracking purposes
-- **App Preferences**: Currency selection, default category, and theme preferences (light/dark/system)
+- **App Preferences**: Currency selection, default category, theme preferences, and reminder settings
+- **Receipt Photos (optional)**: Images you capture or select for receipt scanning. Text is recognized **on-device** with Apple Vision; photos are not uploaded to any server
 
 ### Automatically Collected Information
 
@@ -32,6 +33,8 @@ We use the collected information solely for the following purposes:
 3. **Siri Integration**: To enable voice commands and Siri Shortcuts for adding expenses
 4. **App Customization**: To remember your preferences (currency, theme, default category)
 5. **Data Visualization**: To generate charts, trends, and spending insights within the app
+6. **Receipt Scanning**: To extract line items, prices, and totals from receipt photos you choose to scan — entirely on your device
+7. **Reminders**: To schedule optional local notifications that remind you to log spending
 
 ## Data Storage and Security
 
