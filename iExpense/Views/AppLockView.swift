@@ -52,7 +52,7 @@ struct AppLockView: View {
                         Text("Unlock with \(lockService.biometryLabel)")
                     }
                 }
-                .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.copper))
+                .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.tide))
                 .disabled(isAuthenticating)
                 .inpensoScreenPadding()
 

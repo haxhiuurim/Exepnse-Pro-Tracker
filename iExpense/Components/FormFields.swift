@@ -32,7 +32,7 @@ struct TextFormField: View {
                     .font(InpensoTheme.body(16))
                     .foregroundStyle(InpensoTheme.ink)
                     .keyboardType(keyboardType)
-                    .tint(InpensoTheme.copper)
+                    .tint(InpensoTheme.tide)
 
                 if let iconName = trailingIcon {
                     Button { trailingAction?() } label: {
@@ -77,7 +77,7 @@ struct CurrencyFormField: View {
                     .foregroundStyle(InpensoTheme.ink)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
-                    .tint(InpensoTheme.copper)
+                    .tint(InpensoTheme.tide)
                     .onChange(of: amount) {
                         amount = formatCurrencyInput(amount)
                     }

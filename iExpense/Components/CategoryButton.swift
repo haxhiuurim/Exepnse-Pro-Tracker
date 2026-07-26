@@ -17,9 +17,10 @@ struct CategoryButton: View {
                     RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
                         .fill(isSelected ? category.color : InpensoTheme.mist)
                         .frame(width: 48, height: 48)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                                .stroke(isSelected ? category.color : InpensoTheme.hairline, lineWidth: 1)
+                        .shadow(
+                            color: isSelected ? category.color.opacity(0.25) : InpensoTheme.ink.opacity(0.04),
+                            radius: isSelected ? 8 : 4,
+                            y: 2
                         )
 
                     Image(systemName: category.iconName)

@@ -2,7 +2,7 @@
 //  SharedTripsView.swift
 //  iExpense
 //
-//  Shared trip ledgers via invite code (PHP backend).
+//  Primary Trips tab — split spendings with friends via invite code.
 //
 
 import SwiftUI
@@ -10,101 +10,226 @@ import SwiftUI
 struct SharedTripsView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @StateObject private var model = SharedTripsViewModel()
+    @State private var showConnection = false
 
     var body: some View {
         ZStack {
             AtmosphereBackground()
 
-            List {
-                Section {
-                    TextField("Your display name", text: $model.displayName)
-                    TextField("API base URL", text: $model.baseURL)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        .autocorrectionDisabled()
-                    Text("Example: https://api.yourdomain.com")
-                        .font(InpensoTheme.label(12))
-                        .foregroundStyle(InpensoTheme.muted)
-                } header: {
-                    Text("Connection")
-                } footer: {
-                    Text("Host the PHP backend from /backend, then paste its public URL here.")
-                }
-
-                Section {
-                    Button {
-                        Task { await model.refresh() }
-                    } label: {
-                        Label("Refresh trips", systemImage: "arrow.clockwise")
-                    }
-
-                    Button {
-                        model.showCreate = true
-                    } label: {
-                        Label("Create trip", systemImage: "plus")
-                    }
-
-                    Button {
-                        model.showJoin = true
-                    } label: {
-                        Label("Join with invite code", systemImage: "person.badge.plus")
-                    }
-                }
-
-                Section("Your trips") {
-                    if model.trips.isEmpty {
-                        Text(model.isLoading ? "Loading…" : "No trips yet. Create one or join with a code.")
-                            .font(InpensoTheme.body(14))
-                            .foregroundStyle(InpensoTheme.muted)
-                    } else {
-                        ForEach(model.trips) { trip in
-                            NavigationLink {
-                                SharedTripDetailView(tripID: trip.id)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(trip.name)
-                                        .font(InpensoTheme.body(16, weight: .semibold))
-                                        .foregroundStyle(InpensoTheme.ink)
-                                    Text("Code \(trip.inviteCode) · \(trip.memberCount) people · \(trip.currency)")
-                                        .font(InpensoTheme.label(12))
-                                        .foregroundStyle(InpensoTheme.muted)
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                    }
-                }
-
-                if let error = model.errorMessage {
-                    Section {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
+                    tripsBrandHeader
+                    headerCopy
+                    primaryActions
+                    tripsList
+                    if let error = model.errorMessage {
                         Text(error)
-                            .foregroundStyle(InpensoTheme.danger)
                             .font(InpensoTheme.body(14))
+                            .foregroundStyle(InpensoTheme.danger)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .padding(.horizontal, InpensoTheme.Space.screen)
+                .padding(.top, InpensoTheme.Space.md)
+                .padding(.bottom, InpensoTheme.Space.bottomClearance)
             }
-            .scrollContentBackground(.hidden)
-            .listRowBackground(InpensoTheme.panelFill)
-            .listRowSeparatorTint(InpensoTheme.hairline)
-            .listSectionSpacing(InpensoTheme.Space.section)
         }
-        .navigationTitle("Shared trips")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showConnection = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            InpensoTheme.mist,
+                            in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                        )
+                }
+                .accessibilityLabel("Trip connection settings")
+            }
+        }
         .task { await model.refresh() }
+        .refreshable { await model.refresh() }
+        .sheet(isPresented: $showConnection) {
+            NavigationStack {
+                TripConnectionSheet(model: model)
+            }
+            .presentationDetents([.medium])
+        }
         .alert("Create trip", isPresented: $model.showCreate) {
             TextField("Trip name", text: $model.newTripName)
-            Button("Create") { Task { await model.createTrip(currency: settingsViewModel.selectedCurrency) } }
+            Button("Create") {
+                Task { await model.createTrip(currency: settingsViewModel.selectedCurrency) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Friends join with the invite code you get after creating.")
+            Text("You’ll get an invite code to share with friends.")
         }
         .alert("Join trip", isPresented: $model.showJoin) {
             TextField("Invite code", text: $model.joinCode)
                 .textInputAutocapitalization(.characters)
             Button("Join") { Task { await model.joinTrip() } }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enter the code your friend shared.")
+        }
+    }
+
+    private var tripsBrandHeader: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Trips")
+                .font(InpensoTheme.brandFont(28, weight: .heavy))
+                .foregroundStyle(InpensoTheme.ink)
+            Text("Split spendings with friends")
+                .font(InpensoTheme.label(13))
+                .foregroundStyle(InpensoTheme.muted)
+        }
+    }
+
+    private var headerCopy: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Create a trip, share the invite code, and track who paid what.")
+                .font(InpensoTheme.body(14))
+                .foregroundStyle(InpensoTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var primaryActions: some View {
+        HStack(spacing: InpensoTheme.Space.sm) {
+            Button {
+                model.showCreate = true
+            } label: {
+                Label("Create", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.tide))
+
+            Button {
+                model.showJoin = true
+            } label: {
+                Label("Join", systemImage: "person.badge.plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(InpensoSecondaryButtonStyle())
+        }
+    }
+
+    private var tripsList: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            InpensoSectionHeader(title: "Your trips")
+
+            if model.isLoading && model.trips.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, InpensoTheme.Space.xl)
+            } else if model.trips.isEmpty {
+                VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+                    Text("No trips yet")
+                        .font(InpensoTheme.body(16, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text("Create a trip for a weekend away, or join one with an invite code.")
+                        .font(InpensoTheme.body(14))
+                        .foregroundStyle(InpensoTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(InpensoTheme.Space.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inpensoPanelBackground()
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(model.trips.enumerated()), id: \.element.id) { index, trip in
+                        NavigationLink {
+                            SharedTripDetailView(tripID: trip.id)
+                        } label: {
+                            HStack(spacing: InpensoTheme.Space.sm) {
+                                Image(systemName: "suitcase.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(InpensoTheme.tide)
+                                    .frame(width: 40, height: 40)
+                                    .background(
+                                        InpensoTheme.tide.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                    )
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(trip.name)
+                                        .font(InpensoTheme.body(16, weight: .semibold))
+                                        .foregroundStyle(InpensoTheme.ink)
+                                    Text("\(trip.inviteCode) · \(trip.memberCount) people · \(trip.currency)")
+                                        .font(InpensoTheme.label(12))
+                                        .foregroundStyle(InpensoTheme.muted)
+                                }
+
+                                Spacer(minLength: 4)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(InpensoTheme.muted)
+                            }
+                            .padding(.horizontal, InpensoTheme.Space.md)
+                            .padding(.vertical, InpensoTheme.Space.sm + 2)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if index < model.trips.count - 1 {
+                            Divider()
+                                .overlay(InpensoTheme.hairline)
+                                .padding(.leading, 68)
+                        }
+                    }
+                }
+                .inpensoPanelBackground()
+            }
+        }
+    }
+}
+
+private struct TripConnectionSheet: View {
+    @ObservedObject var model: SharedTripsViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Your display name", text: $model.displayName)
+                TextField("API base URL", text: $model.baseURL)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+            } header: {
+                Text("Connection")
+            } footer: {
+                Text("Host the PHP backend from /backend, then paste its public URL here.")
+            }
+
+            Section {
+                Button("Save & refresh") {
+                    Task {
+                        await model.refresh()
+                        dismiss()
+                    }
+                }
+                .font(InpensoTheme.body(16, weight: .semibold))
+                .foregroundStyle(InpensoTheme.ink)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(AtmosphereBackground())
+        .navigationTitle("Connection")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") { dismiss() }
+            }
         }
     }
 }
@@ -143,7 +268,7 @@ final class SharedTripsViewModel: ObservableObject {
             newTripName = ""
             trips.insert(trip, at: 0)
             UIPasteboard.general.string = trip.inviteCode
-            errorMessage = "Created. Invite code \(trip.inviteCode) copied."
+            errorMessage = "Invite code \(trip.inviteCode) copied — share it with friends."
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -177,7 +302,7 @@ struct SharedTripDetailView: View {
             AtmosphereBackground()
             List {
                 if let detail {
-                    Section("Invite") {
+                    Section("Invite code") {
                         HStack {
                             Text(detail.trip.inviteCode)
                                 .font(InpensoTheme.displayAmount(22))
@@ -207,7 +332,7 @@ struct SharedTripDetailView: View {
                             .foregroundStyle(InpensoTheme.muted)
                     }
 
-                    Section("Expenses") {
+                    Section("Shared expenses") {
                         if detail.expenses.isEmpty {
                             Text("No shared expenses yet.")
                                 .font(InpensoTheme.body(14))

@@ -2,7 +2,7 @@
 //  HomeView.swift
 //  iExpense
 //
-//  Cash overview — spent first, Expense & Income always visible.
+//  North home — brand-led cash overview for a fresh app feel.
 //
 
 import SwiftUI
@@ -21,6 +21,7 @@ struct HomeView: View {
     @State private var period: SpendingPeriod = .month
     @State private var selectedExpenseToEdit: Expense?
     @State private var showReceiptScan = false
+    @State private var showInsights = false
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
     private var periodSpent: Double { viewModel.spent(for: period) }
@@ -30,11 +31,15 @@ struct HomeView: View {
     private var topCategories: [(String, Double)] {
         PeriodTotals.categoryBreakdown(from: viewModel.expenses, period: period)
             .sorted { $0.value > $1.value }
-            .prefix(4)
+            .prefix(3)
             .map { ($0.key, $0.value) }
     }
 
-    private var recent: [Expense] { viewModel.recentExpenses(limit: 8) }
+    private var recent: [Expense] { viewModel.recentExpenses(limit: 6) }
+
+    private var monthTitle: String {
+        Date.now.formatted(.dateTime.month(.wide).year())
+    }
 
     var body: some View {
         NavigationStack {
@@ -42,54 +47,33 @@ struct HomeView: View {
                 AtmosphereBackground()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        PeriodSelector(period: $period)
-                            .padding(.horizontal, InpensoTheme.Space.screen)
-                            .padding(.top, InpensoTheme.Space.md)
-
-                        totalsBlock
-                            .padding(.horizontal, InpensoTheme.Space.screen)
-                            .padding(.top, InpensoTheme.Space.xl)
-
-                        actionRow
-                            .padding(.horizontal, InpensoTheme.Space.screen)
-                            .padding(.top, InpensoTheme.Space.lg)
-
+                    VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
+                        brandHeader
+                        heroCard
+                        actionStack
+                        tripsBanner
                         if period == .month, analyticsViewModel.currentBudget > 0 {
                             budgetStrip
-                                .padding(.horizontal, InpensoTheme.Space.screen)
-                                .padding(.top, InpensoTheme.Space.lg)
                         }
-
                         if !topCategories.isEmpty {
                             categoriesSection
-                                .padding(.top, InpensoTheme.Space.section)
                         }
-
                         recentSection
-                            .padding(.top, InpensoTheme.Space.section)
-                            .padding(.bottom, InpensoTheme.Space.bottomClearance)
                     }
+                    .padding(.horizontal, InpensoTheme.Space.screen)
+                    .padding(.top, InpensoTheme.Space.sm)
+                    .padding(.bottom, InpensoTheme.Space.bottomClearance)
                 }
             }
-            .navigationTitle("Money")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showReceiptScan = true
-                    } label: {
-                        Image(systemName: "doc.text.viewfinder")
-                            .font(.system(size: 17, weight: .medium))
-                    }
-                    .accessibilityLabel("Scan receipt")
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $selectedExpenseToEdit) { expense in
                 EditExpenseView(viewModel: viewModel, expense: expense)
             }
             .sheet(isPresented: $showReceiptScan) {
                 ReceiptScanView(viewModel: viewModel)
+            }
+            .navigationDestination(isPresented: $showInsights) {
+                AnalyticsView(analyticsViewModel: analyticsViewModel)
             }
             .onAppear {
                 pro.maybePresentSpecialOffer()
@@ -113,45 +97,73 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Totals
+    // MARK: - Brand header
 
-    private var totalsBlock: some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+    private var brandHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Inpenso")
+                    .font(InpensoTheme.brandFont(28, weight: .heavy))
+                    .foregroundStyle(InpensoTheme.ink)
+                Text(monthTitle)
+                    .font(InpensoTheme.label(13))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+            Spacer()
+            Button {
+                showReceiptScan = true
+            } label: {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.ink)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle().fill(InpensoTheme.panelFill)
+                            .shadow(color: InpensoTheme.ink.opacity(0.06), radius: 8, y: 2)
+                    )
+            }
+            .accessibilityLabel("Scan receipt")
+        }
+    }
+
+    // MARK: - Hero
+
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.lg) {
+            PeriodSelector(period: $period)
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(period.spentLabel)
-                    .font(InpensoTheme.label(14))
+                    .font(InpensoTheme.label(13, weight: .semibold))
                     .foregroundStyle(InpensoTheme.muted)
-
                 Text(periodSpent, format: .currency(code: currencyCode))
-                    .font(InpensoTheme.displayAmount(44))
+                    .font(InpensoTheme.displayAmount(42))
                     .foregroundStyle(InpensoTheme.ink)
-                    .minimumScaleFactor(0.55)
+                    .minimumScaleFactor(0.5)
                     .lineLimit(1)
                     .contentTransition(.numericText())
             }
 
             HStack(spacing: 0) {
-                sideStat(
-                    label: "Income",
-                    value: periodIncome,
-                    color: InpensoTheme.incomeTint
-                )
+                heroStat("Income", periodIncome, InpensoTheme.incomeTint)
                 Rectangle()
                     .fill(InpensoTheme.hairline)
-                    .frame(width: 1, height: 36)
+                    .frame(width: 1, height: 40)
                     .padding(.horizontal, InpensoTheme.Space.md)
-                sideStat(
-                    label: "Net",
-                    value: periodNet,
-                    color: periodNet >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint
-                )
+                heroStat("Net", periodNet, periodNet >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint)
             }
         }
+        .padding(InpensoTheme.Space.lg)
+        .background(
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero, style: .continuous)
+                .fill(InpensoTheme.panelFill)
+                .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 16, y: 6)
+        )
     }
 
-    private func sideStat(label: String, value: Double, color: Color) -> some View {
+    private func heroStat(_ title: String, _ value: Double, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
+            Text(title)
                 .font(InpensoTheme.label(12))
                 .foregroundStyle(InpensoTheme.muted)
             Text(value, format: .currency(code: currencyCode))
@@ -165,109 +177,150 @@ struct HomeView: View {
 
     // MARK: - Actions
 
-    private var actionRow: some View {
-        HStack(spacing: InpensoTheme.Space.sm) {
+    private var actionStack: some View {
+        VStack(spacing: InpensoTheme.Space.sm) {
             Button {
                 HapticFeedback.impact()
                 onAddTransaction(.expense)
             } label: {
-                Label("Expense", systemImage: "minus")
-                    .labelStyle(.titleAndIcon)
+                Label("Add expense", systemImage: "minus.circle.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.expenseTint))
-            .accessibilityHint("Log an expense")
 
             Button {
                 HapticFeedback.impact()
                 onAddTransaction(.income)
             } label: {
-                Label("Income", systemImage: "plus")
-                    .labelStyle(.titleAndIcon)
+                Label("Add income", systemImage: "plus.circle.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.incomeTint))
-            .accessibilityHint("Log income")
         }
+    }
+
+    private var tripsBanner: some View {
+        Button {
+            NotificationCenter.default.post(name: NSNotification.Name("SwitchToTripsTab"), object: nil)
+        } label: {
+            HStack(spacing: InpensoTheme.Space.md) {
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(0.2))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "person.3.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Trips with friends")
+                        .font(InpensoTheme.body(16, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Create or join with an invite code")
+                        .font(InpensoTheme.label(12))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .padding(InpensoTheme.Space.md)
+            .background(
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [InpensoTheme.tide, Color(inpensoHex: "#2554D6")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Budget
 
     private var budgetStrip: some View {
         let progress = min(1.0, analyticsViewModel.totalSpent / max(analyticsViewModel.currentBudget, 1))
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Monthly budget")
-                    .font(InpensoTheme.label(13))
-                    .foregroundStyle(InpensoTheme.muted)
-                Spacer()
-                Text("\(Int(progress * 100))%")
-                    .font(InpensoTheme.label(13, weight: .semibold))
-                    .foregroundStyle(progress > 0.9 ? InpensoTheme.danger : InpensoTheme.ink)
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(InpensoTheme.mistDeep)
-                    Capsule()
-                        .fill(progress > 0.9 ? InpensoTheme.danger : InpensoTheme.ink)
-                        .frame(width: max(3, geo.size.width * progress))
+        return SurfacePanel {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Monthly budget")
+                        .font(InpensoTheme.label(13, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.muted)
+                    Spacer()
+                    Text("\(Int(progress * 100))%")
+                        .font(InpensoTheme.label(13, weight: .bold))
+                        .foregroundStyle(progress > 0.9 ? InpensoTheme.danger : InpensoTheme.tide)
                 }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(InpensoTheme.mist)
+                        Capsule()
+                            .fill(progress > 0.9 ? InpensoTheme.danger : InpensoTheme.tide)
+                            .frame(width: max(4, geo.size.width * progress))
+                    }
+                }
+                .frame(height: 8)
+                Text("\(analyticsViewModel.daysRemainingInMonth) days left")
+                    .font(InpensoTheme.label(12))
+                    .foregroundStyle(InpensoTheme.muted)
             }
-            .frame(height: 5)
-
-            Text("\(analyticsViewModel.daysRemainingInMonth) days left · \(analyticsViewModel.currentBudget.formatted(.currency(code: currencyCode))) set")
-                .font(InpensoTheme.label(12))
-                .foregroundStyle(InpensoTheme.muted)
         }
-        .padding(InpensoTheme.Space.md)
-        .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                .fill(InpensoTheme.panelFill)
-        )
     }
 
     // MARK: - Categories
 
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-            InpensoSectionHeader(title: "Top categories")
-                .padding(.horizontal, InpensoTheme.Space.screen)
+            InpensoSectionHeader(title: "Top categories", actionTitle: "Insights") {
+                showInsights = true
+            }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: InpensoTheme.Space.sm) {
-                    ForEach(topCategories, id: \.0) { id, amount in
-                        let category = categoryStore.category(for: id)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: category.iconName)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(category.color)
-                                .frame(width: 36, height: 36)
-                                .background(
-                                    category.color.opacity(0.12),
-                                    in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                                )
-
-                            Text(category.displayName)
-                                .font(InpensoTheme.label(13, weight: .medium))
-                                .foregroundStyle(InpensoTheme.ink)
-                                .lineLimit(1)
-
-                            Text(amount, format: .currency(code: currencyCode))
-                                .font(InpensoTheme.displayAmount(15))
-                                .foregroundStyle(InpensoTheme.slate)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+            VStack(spacing: InpensoTheme.Space.sm) {
+                ForEach(topCategories, id: \.0) { id, amount in
+                    let category = categoryStore.category(for: id)
+                    let share = periodSpent > 0 ? amount / periodSpent : 0
+                    HStack(spacing: InpensoTheme.Space.sm) {
+                        Image(systemName: category.iconName)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(category.color)
+                            .frame(width: 40, height: 40)
+                            .background(
+                                category.color.opacity(0.14),
+                                in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                            )
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(category.displayName)
+                                    .font(InpensoTheme.body(15, weight: .semibold))
+                                    .foregroundStyle(InpensoTheme.ink)
+                                Spacer()
+                                Text(amount, format: .currency(code: currencyCode))
+                                    .font(InpensoTheme.displayAmount(14))
+                                    .foregroundStyle(InpensoTheme.slate)
+                            }
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(InpensoTheme.mist)
+                                    Capsule()
+                                        .fill(category.color)
+                                        .frame(width: max(4, geo.size.width * share))
+                                }
+                            }
+                            .frame(height: 5)
                         }
-                        .padding(InpensoTheme.Space.md)
-                        .frame(width: 132, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                                .fill(InpensoTheme.panelFill)
-                        )
                     }
+                    .padding(InpensoTheme.Space.md)
+                    .background(
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                            .fill(InpensoTheme.panelFill)
+                    )
                 }
-                .padding(.horizontal, InpensoTheme.Space.screen)
             }
         }
     }
@@ -279,25 +332,18 @@ struct HomeView: View {
             InpensoSectionHeader(title: "Recent", actionTitle: "See all") {
                 NotificationCenter.default.post(name: NSNotification.Name("SwitchToExpensesTab"), object: nil)
             }
-            .padding(.horizontal, InpensoTheme.Space.screen)
 
             if recent.isEmpty {
-                VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-                    Text("No transactions yet")
-                        .font(InpensoTheme.body(16, weight: .semibold))
-                        .foregroundStyle(InpensoTheme.ink)
-                    Text("Use Expense or Income above to add your first entry.")
-                        .font(InpensoTheme.body(14))
-                        .foregroundStyle(InpensoTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                SurfacePanel(padding: InpensoTheme.Space.lg) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Start tracking")
+                            .font(InpensoTheme.body(17, weight: .bold))
+                            .foregroundStyle(InpensoTheme.ink)
+                        Text("Add an expense or income to see your cashflow here.")
+                            .font(InpensoTheme.body(14))
+                            .foregroundStyle(InpensoTheme.muted)
+                    }
                 }
-                .padding(InpensoTheme.Space.lg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .fill(InpensoTheme.panelFill)
-                )
-                .padding(.horizontal, InpensoTheme.Space.screen)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(recent.enumerated()), id: \.element.id) { index, expense in
@@ -309,19 +355,21 @@ struct HomeView: View {
                                 currencyCode: currencyCode,
                                 category: categoryStore.category(for: expense)
                             )
-                            .padding(.horizontal, InpensoTheme.Space.screen)
+                            .padding(.horizontal, InpensoTheme.Space.md)
                             .padding(.vertical, InpensoTheme.Space.sm)
                         }
                         .buttonStyle(.plain)
 
                         if index < recent.count - 1 {
-                            Divider()
-                                .overlay(InpensoTheme.hairline)
-                                .padding(.leading, InpensoTheme.Space.screen + 48)
+                            Divider().overlay(InpensoTheme.hairline).padding(.leading, 68)
                         }
                     }
                 }
-                .background(InpensoTheme.panelFill)
+                .background(
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                        .fill(InpensoTheme.panelFill)
+                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 12, y: 4)
+                )
             }
         }
     }

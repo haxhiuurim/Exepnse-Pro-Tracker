@@ -107,15 +107,14 @@ struct ExpenseQuickAddProvider: AppIntentTimelineProvider {
 
 // MARK: - Views
 
-private enum FieldNotesWidgetColor {
-    static let ink = Color(red: 0.090, green: 0.090, blue: 0.090)
-    static let copper = Color(red: 0.090, green: 0.090, blue: 0.090)
-    static let tide = Color(red: 0.008, green: 0.518, blue: 0.780)
-    static let expense = Color(red: 0.878, green: 0.243, blue: 0.184)
-    static let income = Color(red: 0.059, green: 0.463, blue: 0.431)
-    static let foam = Color(red: 0.969, green: 0.969, blue: 0.961)
-    static let mist = Color(red: 0.941, green: 0.941, blue: 0.933)
-    static let hairline = Color(red: 0.898, green: 0.898, blue: 0.898)
+private enum NorthWidgetColor {
+    static let ink = Color(red: 0.043, green: 0.106, blue: 0.200)
+    static let tide = Color(red: 0.231, green: 0.431, blue: 0.961)
+    static let expense = Color(red: 0.941, green: 0.263, blue: 0.365)
+    static let income = Color(red: 0.071, green: 0.725, blue: 0.506)
+    static let foam = Color(red: 0.933, green: 0.945, blue: 0.965)
+    static let mist = Color(red: 0.894, green: 0.918, blue: 0.953)
+    static let hairline = Color(red: 0.843, green: 0.867, blue: 0.918)
 }
 
 struct iExpenseWidgetEntryView: View {
@@ -143,18 +142,18 @@ struct iExpenseWidgetEntryView: View {
             HStack {
                 Text("Inpenso")
                     .font(.system(size: 12, weight: .bold, design: .default))
-                    .foregroundStyle(FieldNotesWidgetColor.ink)
+                    .foregroundStyle(NorthWidgetColor.ink)
                 Spacer()
                 Text(entry.period.shortTitle.uppercased())
                     .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(FieldNotesWidgetColor.copper)
+                    .foregroundStyle(NorthWidgetColor.tide)
             }
 
             Spacer(minLength: 0)
 
             Text(entry.totalSpent, format: .currency(code: currencyCode))
                 .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundStyle(FieldNotesWidgetColor.ink)
+                .foregroundStyle(NorthWidgetColor.ink)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
 
@@ -169,7 +168,7 @@ struct iExpenseWidgetEntryView: View {
                     .font(.system(size: 12, weight: .bold))
                     .frame(maxWidth: .infinity)
             }
-            .tint(FieldNotesWidgetColor.copper)
+            .tint(NorthWidgetColor.tide)
         }
         .containerBackground(for: .widget) {
             widgetAtmosphere
@@ -183,11 +182,11 @@ struct iExpenseWidgetEntryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Inpenso")
                     .font(.system(size: 14, weight: .bold, design: .default))
-                    .foregroundStyle(FieldNotesWidgetColor.ink)
+                    .foregroundStyle(NorthWidgetColor.ink)
 
                 Text(entry.totalSpent, format: .currency(code: currencyCode))
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundStyle(FieldNotesWidgetColor.ink)
+                    .foregroundStyle(NorthWidgetColor.ink)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
 
@@ -199,7 +198,7 @@ struct iExpenseWidgetEntryView: View {
                     Label("Add spend", systemImage: "plus.circle.fill")
                         .font(.system(size: 13, weight: .semibold))
                 }
-                .tint(FieldNotesWidgetColor.copper)
+                .tint(NorthWidgetColor.tide)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -223,7 +222,7 @@ struct iExpenseWidgetEntryView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Inpenso")
                         .font(.system(size: 18, weight: .bold, design: .default))
-                        .foregroundStyle(FieldNotesWidgetColor.ink)
+                        .foregroundStyle(NorthWidgetColor.ink)
                     Text(entry.period.displayTitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -234,14 +233,14 @@ struct iExpenseWidgetEntryView: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(width: 32, height: 32)
-                        .background(FieldNotesWidgetColor.copper, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(NorthWidgetColor.tide, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
 
             Text(entry.totalSpent, format: .currency(code: currencyCode))
                 .font(.system(size: 36, weight: .bold, design: .rounded))
-                .foregroundStyle(FieldNotesWidgetColor.ink)
+                .foregroundStyle(NorthWidgetColor.ink)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
 
@@ -256,7 +255,7 @@ struct iExpenseWidgetEntryView: View {
                     HStack {
                         Text(entry.overBudget ? "Over budget" : "Budget left")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(entry.overBudget ? FieldNotesWidgetColor.expense : .secondary)
+                            .foregroundStyle(entry.overBudget ? NorthWidgetColor.expense : .secondary)
                         Spacer()
                         Text(entry.overBudget ? entry.monthSpent - entry.monthlyBudget : entry.budgetRemaining, format: .currency(code: currencyCode))
                             .font(.caption.weight(.bold))
@@ -265,7 +264,7 @@ struct iExpenseWidgetEntryView: View {
                         EmptyView()
                     }
                     .gaugeStyle(.linearCapacity)
-                    .tint(entry.overBudget ? FieldNotesWidgetColor.expense : FieldNotesWidgetColor.income)
+                    .tint(entry.overBudget ? NorthWidgetColor.expense : NorthWidgetColor.income)
                 }
             }
 
@@ -286,7 +285,7 @@ struct iExpenseWidgetEntryView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(8)
-                            .background(FieldNotesWidgetColor.mist, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .background(NorthWidgetColor.mist, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }
@@ -308,7 +307,7 @@ struct iExpenseWidgetEntryView: View {
             Spacer()
             Text(amount, format: .currency(code: currencyCode))
                 .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(FieldNotesWidgetColor.ink)
+                .foregroundStyle(NorthWidgetColor.ink)
         }
     }
 
@@ -324,11 +323,15 @@ struct iExpenseWidgetEntryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(FieldNotesWidgetColor.mist, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(NorthWidgetColor.mist, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var widgetAtmosphere: some View {
-        FieldNotesWidgetColor.foam
+        LinearGradient(
+            colors: [NorthWidgetColor.foam, Color(red: 0.910, green: 0.929, blue: 0.965)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 }
 

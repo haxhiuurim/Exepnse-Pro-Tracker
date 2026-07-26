@@ -2,11 +2,18 @@
 //  MainTabView.swift
 //  iExpense
 //
-//  Created by Dragomir Mindrescu on 27.04.2025.
+//  Tab IA: Home · Activity · Trips · More
 //
 
 import SwiftUI
 import SwiftData
+
+private enum AppTab: Int {
+    case home = 0
+    case activity = 1
+    case trips = 2
+    case more = 3
+}
 
 struct MainTabView: View {
     @StateObject private var viewModel = ExpenseViewModel()
@@ -14,10 +21,14 @@ struct MainTabView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @ObservedObject private var biometricLock = BiometricLockService.shared
     @ObservedObject private var pro = ProEntitlementManager.shared
-    @State private var selectedTab = 0
+    @State private var selectedTab = AppTab.home.rawValue
     @State private var showQuickAdd = false
     @State private var quickAddType: TransactionType = .expense
     @Environment(\.scenePhase) private var scenePhase
+
+    private var showsFloatingAdd: Bool {
+        selectedTab == AppTab.home.rawValue || selectedTab == AppTab.activity.rawValue
+    }
 
     var body: some View {
         ZStack {
@@ -26,38 +37,41 @@ struct MainTabView: View {
                     viewModel: viewModel,
                     analyticsViewModel: analyticsViewModel,
                     showQuickAdd: $showQuickAdd,
-                    onAddTransaction: { type in
-                        openQuickAdd(type)
-                    }
+                    onAddTransaction: { openQuickAdd($0) }
                 )
                 .tabItem {
-                    Label("Money", systemImage: "house.fill")
+                    Label("Home", systemImage: "house.fill")
                 }
-                .tag(0)
-
-                AnalyticsView(analyticsViewModel: analyticsViewModel)
-                    .tabItem {
-                        Label("Insights", systemImage: "chart.xyaxis.line")
-                    }
-                    .tag(1)
+                .tag(AppTab.home.rawValue)
 
                 ExpensesListView(viewModel: viewModel)
                     .tabItem {
                         Label("Activity", systemImage: "list.bullet")
                     }
-                    .tag(2)
+                    .tag(AppTab.activity.rawValue)
 
-                SettingsView()
-                    .tabItem {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                    .tag(3)
+                NavigationStack {
+                    SharedTripsView()
+                }
+                .tabItem {
+                    Label("Trips", systemImage: "person.3.fill")
+                }
+                .tag(AppTab.trips.rawValue)
+
+                MoreHubView(
+                    analyticsViewModel: analyticsViewModel,
+                    expenseViewModel: viewModel
+                )
+                .tabItem {
+                    Label("More", systemImage: "ellipsis.circle.fill")
+                }
+                .tag(AppTab.more.rawValue)
             }
             .tint(InpensoTheme.ink)
             .id(settingsViewModel.selectedCurrency)
             .preferredColorScheme(settingsViewModel.selectedTheme.colorScheme)
             .overlay(alignment: .bottom) {
-                if selectedTab != 3 && biometricLock.isUnlocked {
+                if showsFloatingAdd && biometricLock.isUnlocked {
                     floatingAddButton
                         .padding(.bottom, 8)
                         .transition(.scale.combined(with: .opacity))
@@ -101,7 +115,15 @@ struct MainTabView: View {
                 object: nil,
                 queue: .main
             ) { _ in
-                selectedTab = 2
+                selectedTab = AppTab.activity.rawValue
+            }
+
+            NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("SwitchToTripsTab"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                selectedTab = AppTab.trips.rawValue
             }
 
             NotificationCenter.default.addObserver(
@@ -173,7 +195,7 @@ struct MainTabView: View {
         if defaults?.bool(forKey: "pendingQuickAdd") == true {
             defaults?.set(false, forKey: "pendingQuickAdd")
             defaults?.synchronize()
-            selectedTab = 0
+            selectedTab = AppTab.home.rawValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 openQuickAdd(.expense)
             }
@@ -199,7 +221,7 @@ struct MainTabView: View {
                 .frame(width: 56, height: 56)
                 .background(
                     RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .fill(InpensoTheme.copper)
+                        .fill(InpensoTheme.tide)
                 )
         }
         .accessibilityLabel("Add transaction")
@@ -219,20 +241,16 @@ struct MainTabView: View {
             .foregroundColor: UIColor(InpensoTheme.ink)
         ]
 
-        appearance.stackedLayoutAppearance.normal.iconColor = UIColor(InpensoTheme.muted)
-        appearance.stackedLayoutAppearance.normal.titleTextAttributes = normalAttributes
-        appearance.stackedLayoutAppearance.selected.iconColor = UIColor(InpensoTheme.ink)
-        appearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttributes
-
-        appearance.inlineLayoutAppearance.normal.iconColor = UIColor(InpensoTheme.muted)
-        appearance.inlineLayoutAppearance.normal.titleTextAttributes = normalAttributes
-        appearance.inlineLayoutAppearance.selected.iconColor = UIColor(InpensoTheme.ink)
-        appearance.inlineLayoutAppearance.selected.titleTextAttributes = selectedAttributes
-
-        appearance.compactInlineLayoutAppearance.normal.iconColor = UIColor(InpensoTheme.muted)
-        appearance.compactInlineLayoutAppearance.normal.titleTextAttributes = normalAttributes
-        appearance.compactInlineLayoutAppearance.selected.iconColor = UIColor(InpensoTheme.ink)
-        appearance.compactInlineLayoutAppearance.selected.titleTextAttributes = selectedAttributes
+        for layout in [
+            appearance.stackedLayoutAppearance,
+            appearance.inlineLayoutAppearance,
+            appearance.compactInlineLayoutAppearance
+        ] {
+            layout.normal.iconColor = UIColor(InpensoTheme.muted)
+            layout.normal.titleTextAttributes = normalAttributes
+            layout.selected.iconColor = UIColor(InpensoTheme.ink)
+            layout.selected.titleTextAttributes = selectedAttributes
+        }
 
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance

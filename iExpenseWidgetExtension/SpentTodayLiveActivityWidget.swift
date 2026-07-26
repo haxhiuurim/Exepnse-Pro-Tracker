@@ -8,10 +8,10 @@ import WidgetKit
 import SwiftUI
 
 private enum LiveActivityColor {
-    static let ink = Color(red: 0.090, green: 0.090, blue: 0.090)
-    static let foam = Color(red: 0.969, green: 0.969, blue: 0.961)
-    static let tide = Color(red: 0.008, green: 0.518, blue: 0.780)
-    static let muted = Color(red: 0.451, green: 0.451, blue: 0.451)
+    static let ink = Color(red: 0.043, green: 0.106, blue: 0.200)
+    static let foam = Color(red: 0.933, green: 0.945, blue: 0.965)
+    static let tide = Color(red: 0.231, green: 0.431, blue: 0.961)
+    static let muted = Color(red: 0.420, green: 0.478, blue: 0.565)
 }
 
 struct SpentTodayLiveActivityWidget: Widget {

@@ -27,46 +27,47 @@ struct AnalyticsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AtmosphereBackground()
+        ZStack {
+            AtmosphereBackground()
 
-                VStack(spacing: InpensoTheme.Space.md) {
-                    MonthYearPicker(
-                        selectedMonth: $selectedMonth,
-                        selectedYear: $selectedYear,
-                        onMonthYearChanged: {
-                            analyticsViewModel.selectedMonth = selectedMonth
-                            analyticsViewModel.selectedYear = selectedYear
-                            analyticsViewModel.calculateAnalytics()
-                        }
-                    )
+            VStack(spacing: InpensoTheme.Space.md) {
+                MonthYearPicker(
+                    selectedMonth: $selectedMonth,
+                    selectedYear: $selectedYear,
+                    onMonthYearChanged: {
+                        analyticsViewModel.selectedMonth = selectedMonth
+                        analyticsViewModel.selectedYear = selectedYear
+                        analyticsViewModel.calculateAnalytics()
+                    }
+                )
+                .inpensoScreenPadding()
+
+                AnalyticsTabSelector(selectedTab: $selectedTab)
                     .inpensoScreenPadding()
 
-                    AnalyticsTabSelector(selectedTab: $selectedTab)
-                        .inpensoScreenPadding()
-
-                    ScrollView(.vertical, showsIndicators: true) {
-                        VStack(spacing: InpensoTheme.Space.section) {
-                            switch selectedTab {
-                            case .overview: overviewTabContent
-                            case .trends: trendsTabContent
-                            case .insights: insightsTabContent
-                            case .budget: budgetTabContent
-                            }
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: InpensoTheme.Space.section) {
+                        switch selectedTab {
+                        case .overview: overviewTabContent
+                        case .trends: trendsTabContent
+                        case .insights: insightsTabContent
+                        case .budget: budgetTabContent
                         }
-                        .inpensoScreenPadding()
-                        .padding(.bottom, InpensoTheme.Space.bottomClearance)
                     }
+                    .inpensoScreenPadding()
+                    .padding(.bottom, InpensoTheme.Space.bottomClearance)
                 }
-                .padding(.top, InpensoTheme.Space.sm)
             }
-            .navigationTitle("Insights")
-            .alert("Budget Saved", isPresented: $showSaveBudgetSuccess) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("Your monthly budget has been saved successfully.")
-            }
+            .padding(.top, InpensoTheme.Space.sm)
+        }
+        .navigationTitle("Insights")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .alert("Budget Saved", isPresented: $showSaveBudgetSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Your monthly budget has been saved successfully.")
         }
     }
 

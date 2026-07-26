@@ -62,6 +62,6 @@ struct iExpenseApp: App {
         UINavigationBar.appearance().standardAppearance = nav
         UINavigationBar.appearance().scrollEdgeAppearance = nav
         UINavigationBar.appearance().compactAppearance = nav
-        UINavigationBar.appearance().tintColor = UIColor(InpensoTheme.ink)
+        UINavigationBar.appearance().tintColor = UIColor(InpensoTheme.tide)
     }
 }

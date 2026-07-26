@@ -144,14 +144,7 @@ struct InsightsCardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(InpensoTheme.Space.md)
-        .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                .fill(InpensoTheme.panelFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .stroke(InpensoTheme.hairline, lineWidth: 1)
-                )
-        )
+        .inpensoPanelBackground()
     }
 
     private func insightThemeColor(for insight: SpendingInsight) -> Color {

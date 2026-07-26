@@ -7,7 +7,7 @@
 
 // MARK: Idea              | Description
 // Analytics               | See total spending, spending per category, weekly charts ✅
-// UI/UX Polish            | Field Notes redesign — charcoal, vermillion expense, teal income ✅
+// UI/UX Polish            | North redesign — new-app navy/cobalt shell, Home·Activity·Trips·More ✅
 // Period widgets          | Today / Week / Month spending widgets + quick add button ✅
 // Quick spend templates   | One-tap shortcuts for frequent spends ✅
 // Receipt OCR             | On-device Vision scan + free monthly cap / Pro unlimited ✅

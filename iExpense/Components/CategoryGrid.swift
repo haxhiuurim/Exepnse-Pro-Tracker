@@ -76,14 +76,7 @@ struct CategoryGridWithCallback: View {
             categories: FinanceCategory.builtInCategories
         )
         .padding(.vertical, InpensoTheme.Space.md)
-        .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                .fill(InpensoTheme.panelFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .stroke(InpensoTheme.hairline, lineWidth: 1)
-                )
-        )
+        .inpensoPanelBackground()
         .padding(InpensoTheme.Space.screen)
     }
 }

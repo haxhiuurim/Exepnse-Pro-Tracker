@@ -15,7 +15,7 @@ final class PremiumDataStore: ObservableObject {
     @Published var merchantRules: [MerchantRule] = []
     @Published var accounts: [FinanceAccount] = []
     @Published var household: HouseholdLedger = .empty
-    @Published var selectedThemeID: String = "tide"
+    @Published var selectedThemeID: String = ThemePack.standard.id
     @Published var selectedIcon: AppIconOption = .classic
     @Published var iCloudSyncEnabled: Bool = false
 
@@ -37,11 +37,9 @@ final class PremiumDataStore: ObservableObject {
             FinanceAccount(name: "Main checking", kind: .checking, balance: 0)
         ]
         household = load(HouseholdLedger.self, key: Keys.household) ?? .empty
-        selectedThemeID = UserDefaults.standard.string(forKey: Keys.theme) ?? "tide"
-        if let raw = UserDefaults.standard.string(forKey: Keys.icon),
-           let icon = AppIconOption(rawValue: raw) {
-            selectedIcon = icon
-        }
+        selectedThemeID = ThemePack.standard.id
+        UserDefaults.standard.set(ThemePack.standard.id, forKey: Keys.theme)
+        selectedIcon = .classic
         iCloudSyncEnabled = UserDefaults.standard.bool(forKey: Keys.iCloud)
     }
 
@@ -50,7 +48,7 @@ final class PremiumDataStore: ObservableObject {
     }
 
     var selectedTheme: ThemePack {
-        ThemePack.all.first { $0.id == selectedThemeID } ?? ThemePack.all[0]
+        ThemePack.standard
     }
 
     // MARK: - Goals

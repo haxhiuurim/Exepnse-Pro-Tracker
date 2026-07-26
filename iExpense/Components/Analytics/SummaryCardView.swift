@@ -62,14 +62,7 @@ struct SummaryCard: View {
         .padding(InpensoTheme.Space.md)
         .frame(height: 104)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                .fill(InpensoTheme.panelFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .stroke(InpensoTheme.hairline, lineWidth: 1)
-                )
-        )
+        .inpensoPanelBackground()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(accessibilityValueText)")
     }

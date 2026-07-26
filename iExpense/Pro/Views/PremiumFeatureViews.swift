@@ -551,124 +551,26 @@ struct HouseholdLedgerView: View {
     }
 }
 
-// MARK: - Themes
+// MARK: - Themes (removed — single North theme only)
 
+/// Kept as an empty destination for any stale links; app ships one theme.
 struct ThemePacksView: View {
-    @EnvironmentObject private var pro: ProEntitlementManager
-    @ObservedObject private var store = PremiumDataStore.shared
-
     var body: some View {
         ZStack {
-            AtmosphereBackground(intensity: 0.55)
-            ScrollView {
-                VStack(spacing: InpensoTheme.Space.sm) {
-                    ForEach(ThemePack.all) { pack in
-                        Button {
-                            if !store.selectTheme(pack, isPro: pro.isPro) {
-                                pro.openPaywall()
-                            } else {
-                                HapticFeedback.selection()
-                            }
-                        } label: {
-                            HStack(spacing: InpensoTheme.Space.sm) {
-                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                                    .fill(pack.mist)
-                                    .frame(width: 56, height: 56)
-                                    .overlay(alignment: .bottomTrailing) {
-                                        RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                            .fill(pack.accent)
-                                            .frame(width: 14, height: 14)
-                                            .padding(6)
-                                    }
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                                            .stroke(InpensoTheme.hairline, lineWidth: 1)
-                                    )
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 6) {
-                                        Text(pack.name)
-                                            .font(InpensoTheme.body(16, weight: .semibold))
-                                            .foregroundStyle(InpensoTheme.ink)
-                                        if pack.requiresPro {
-                                            Text("Pro")
-                                                .font(InpensoTheme.label(11, weight: .medium))
-                                                .foregroundStyle(InpensoTheme.muted)
-                                        }
-                                    }
-                                    Text(pack.tagline)
-                                        .font(InpensoTheme.label(12))
-                                        .foregroundStyle(InpensoTheme.muted)
-                                }
-                                Spacer()
-                                if store.selectedThemeID == pack.id {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(InpensoTheme.ink)
-                                }
-                            }
-                            .padding(InpensoTheme.Space.row)
-                            .background(
-                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                                    .fill(InpensoTheme.panelFill)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                                            .stroke(
-                                                store.selectedThemeID == pack.id ? InpensoTheme.ink : InpensoTheme.hairline,
-                                                lineWidth: store.selectedThemeID == pack.id ? 1.5 : 1
-                                            )
-                                    )
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-                        Text("App icon")
-                            .font(InpensoTheme.label(13, weight: .semibold))
-                            .foregroundStyle(InpensoTheme.slate)
-                        HStack(spacing: InpensoTheme.Space.sm) {
-                            ForEach(AppIconOption.allCases) { icon in
-                                Button {
-                                    if !store.selectIcon(icon, isPro: pro.isPro) {
-                                        pro.openPaywall()
-                                    }
-                                } label: {
-                                    VStack(spacing: 6) {
-                                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                                            .fill(icon == .copper ? InpensoTheme.ink : InpensoTheme.mist)
-                                            .frame(width: 52, height: 52)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                                                    .stroke(
-                                                        store.selectedIcon == icon ? InpensoTheme.ink : InpensoTheme.hairline,
-                                                        lineWidth: store.selectedIcon == icon ? 2 : 1
-                                                    )
-                                            )
-                                            .overlay {
-                                                if store.selectedIcon == icon {
-                                                    Image(systemName: "checkmark")
-                                                        .foregroundStyle(icon == .copper ? .white : InpensoTheme.ink)
-                                                }
-                                            }
-                                        Text(icon.displayName)
-                                            .font(InpensoTheme.label(11))
-                                            .foregroundStyle(InpensoTheme.slate)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .padding(.top, InpensoTheme.Space.xs)
-                }
-                .inpensoScreenPadding()
-                .padding(.vertical, InpensoTheme.Space.sm)
+            AtmosphereBackground()
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+                Text("North")
+                    .font(InpensoTheme.brandFont(22, weight: .bold))
+                    .foregroundStyle(InpensoTheme.ink)
+                Text("Inpenso uses one visual theme — navy type, cobalt accent, soft blue canvas.")
+                    .font(InpensoTheme.body(14))
+                    .foregroundStyle(InpensoTheme.muted)
             }
+            .padding(InpensoTheme.Space.screen)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .navigationTitle("Themes & icons")
-        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .navigationTitle("Appearance")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

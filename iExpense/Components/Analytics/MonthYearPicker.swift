@@ -114,14 +114,7 @@ struct MonthYearPicker: View {
         }
         .padding(.horizontal, InpensoTheme.Space.sm)
         .padding(.vertical, InpensoTheme.Space.xs)
-        .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                .fill(InpensoTheme.panelFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .stroke(InpensoTheme.hairline, lineWidth: 1)
-                )
-        )
+        .inpensoPanelBackground()
     }
 
     private func navButton(

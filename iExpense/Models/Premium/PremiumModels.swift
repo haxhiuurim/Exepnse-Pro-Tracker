@@ -168,7 +168,7 @@ struct HouseholdLedger: Codable, Equatable {
     }
 }
 
-// MARK: - Theme packs
+// MARK: - Single app theme (no pack picker)
 
 struct ThemePack: Identifiable, Hashable {
     let id: String
@@ -179,69 +179,25 @@ struct ThemePack: Identifiable, Hashable {
     let mist: Color
     let requiresPro: Bool
 
-    static let all: [ThemePack] = [
-        ThemePack(
-            id: "tide",
-            name: "Field Notes",
-            tagline: "Charcoal ink on paper white",
-            ink: Color(inpensoHex: "#171717"),
-            accent: Color(inpensoHex: "#171717"),
-            mist: Color(inpensoHex: "#F0F0EE"),
-            requiresPro: false
-        ),
-        ThemePack(
-            id: "midnight",
-            name: "Harbor Blue",
-            tagline: "Navy & trust blue",
-            ink: Color(inpensoHex: "#0B1F33"),
-            accent: Color(inpensoHex: "#2563EB"),
-            mist: Color(inpensoHex: "#E8EEF5"),
-            requiresPro: true
-        ),
-        ThemePack(
-            id: "ember",
-            name: "Ember Desk",
-            tagline: "Warm charcoal & amber",
-            ink: Color(inpensoHex: "#1C1917"),
-            accent: Color(inpensoHex: "#D97706"),
-            mist: Color(inpensoHex: "#F5F0EB"),
-            requiresPro: true
-        ),
-        ThemePack(
-            id: "forest",
-            name: "Pine Ledger",
-            tagline: "Deep green focus",
-            ink: Color(inpensoHex: "#14532D"),
-            accent: Color(inpensoHex: "#16A34A"),
-            mist: Color(inpensoHex: "#EAF5EE"),
-            requiresPro: true
-        )
-    ]
+    /// Only one visual theme ships with the app.
+    static let standard = ThemePack(
+        id: "north",
+        name: "North",
+        tagline: "Navy canvas, cobalt accent",
+        ink: Color(inpensoHex: "#0B1B33"),
+        accent: Color(inpensoHex: "#3B6EF5"),
+        mist: Color(inpensoHex: "#E4EAF3"),
+        requiresPro: false
+    )
+
+    static let all: [ThemePack] = [standard]
 }
 
 enum AppIconOption: String, CaseIterable, Identifiable {
-    case classic, tide, copper, ink
+    case classic
 
     var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .classic: return "Classic"
-        case .tide: return "Tide"
-        case .copper: return "Copper"
-        case .ink: return "Ink"
-        }
-    }
-
-    var requiresPro: Bool { self != .classic }
-
-    /// Alternate icon name in asset catalog (nil = primary).
-    var alternateIconName: String? {
-        switch self {
-        case .classic: return nil
-        case .tide: return "AppIconTide"
-        case .copper: return "AppIconCopper"
-        case .ink: return "AppIconInk"
-        }
-    }
+    var displayName: String { "Classic" }
+    var requiresPro: Bool { false }
+    var alternateIconName: String? { nil }
 }

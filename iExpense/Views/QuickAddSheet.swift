@@ -65,7 +65,7 @@ struct QuickAddSheet: View {
                                 .padding(.vertical, InpensoTheme.Space.sm + 2)
                                 .background(
                                     RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                                        .fill(InpensoTheme.panelFill)
+                                        .fill(InpensoTheme.mist)
                                 )
                         }
 
@@ -139,6 +139,8 @@ struct QuickAddSheet: View {
             }
             .padding(.vertical, InpensoTheme.Space.sm)
         }
+        .padding(InpensoTheme.Space.md)
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.xl)
     }
 
     private var categoryStrip: some View {
@@ -197,7 +199,7 @@ struct QuickAddSheet: View {
                                 .padding(.vertical, 10)
                                 .background(
                                     RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                                        .fill(InpensoTheme.panelFill)
+                                        .fill(InpensoTheme.mist)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -233,10 +235,7 @@ struct QuickAddSheet: View {
                     .foregroundStyle(InpensoTheme.muted)
             }
             .padding(InpensoTheme.Space.md)
-            .background(
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                    .fill(InpensoTheme.panelFill)
-            )
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
         }
         .buttonStyle(.plain)
     }

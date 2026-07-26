@@ -37,17 +37,14 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
                 appHeader
                 proSection
                 appearanceSection
                 securitySection
                 remindersSection
-                moneyToolsSection
                 currencySection
                 defaultSettingsSection
-                categoriesSection
                 dataManagementSection
                 aboutSection
             }
@@ -55,6 +52,7 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(AtmosphereBackground())
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
             .tint(InpensoTheme.ink)
             .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -96,7 +94,6 @@ struct SettingsView: View {
             } message: {
                 Text(biometricError ?? "")
             }
-        }
     }
 
     // MARK: - Sections
@@ -256,62 +253,6 @@ struct SettingsView: View {
         }
     }
 
-    private var moneyToolsSection: some View {
-        Section {
-            NavigationLink {
-                SharedTripsView()
-            } label: {
-                Label("Shared trips", systemImage: "person.3")
-            }
-
-            NavigationLink {
-                RecurringTransactionsView(expenseViewModel: expenseViewModel)
-            } label: {
-                Label("Recurring transactions", systemImage: "arrow.triangle.2.circlepath")
-            }
-
-            if pro.isPro {
-                NavigationLink {
-                    UpcomingRecurringCalendarView()
-                } label: {
-                    Label("Upcoming this month", systemImage: "calendar")
-                }
-            }
-
-            NavigationLink {
-                SavingsGoalsView()
-            } label: {
-                Label("Goals & envelopes", systemImage: "target")
-            }
-
-            NavigationLink {
-                AccountsNetWorthView()
-            } label: {
-                Label("Accounts & net worth", systemImage: "building.columns")
-            }
-
-            NavigationLink {
-                MerchantRulesView()
-            } label: {
-                Label("Merchant rules", systemImage: "bolt.horizontal")
-            }
-
-            NavigationLink {
-                HouseholdLedgerView()
-            } label: {
-                Label("Household ledger", systemImage: "person.2")
-            }
-
-            NavigationLink {
-                ThemePacksView()
-            } label: {
-                Label("Themes & icons", systemImage: "paintpalette")
-            }
-        } header: {
-            sectionHeader("Money tools")
-        }
-    }
-
     private var themePicker: some View {
         Picker("Theme", selection: $settingsManager.selectedTheme) {
             ForEach(AppTheme.allCases) { theme in
@@ -380,18 +321,6 @@ struct SettingsView: View {
         let preferredCategoryID = categoryStore.preferredCategoryID(for: settingsManager.defaultCategoryID)
         if preferredCategoryID != settingsManager.defaultCategoryID {
             settingsManager.defaultCategoryID = preferredCategoryID
-        }
-    }
-
-    private var categoriesSection: some View {
-        Section {
-            NavigationLink {
-                CategoryManagementView()
-            } label: {
-                Label("Manage categories", systemImage: "square.grid.2x2")
-            }
-        } header: {
-            sectionHeader("Categories")
         }
     }
 

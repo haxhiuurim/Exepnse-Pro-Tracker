@@ -153,14 +153,7 @@ struct AddExpenseView: View {
                     .foregroundStyle(InpensoTheme.muted)
             }
             .padding(InpensoTheme.Space.md)
-            .background(
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                    .fill(InpensoTheme.panelFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                            .stroke(InpensoTheme.hairline, lineWidth: 1)
-                    )
-            )
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
         }
         .buttonStyle(.plain)
     }
@@ -224,14 +217,7 @@ struct AddExpenseView: View {
                     .foregroundStyle(InpensoTheme.ink)
             }
             .padding(InpensoTheme.Space.xl)
-            .background(
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                    .fill(InpensoTheme.panelFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                            .stroke(InpensoTheme.hairline, lineWidth: 1)
-                    )
-            )
+            .inpensoPanelBackground()
             .scaleEffect(animateSuccess ? 1 : 0.85)
             .opacity(animateSuccess ? 1 : 0)
             .animation(InpensoTheme.Motion.gentle, value: animateSuccess)

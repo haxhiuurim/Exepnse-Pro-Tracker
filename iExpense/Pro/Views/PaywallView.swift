@@ -18,13 +18,13 @@ struct PaywallView: View {
     private let features: [(icon: String, title: String, detail: String)] = [
         ("doc.text.viewfinder", "Receipt scans", "OCR without a monthly cap"),
         ("icloud.fill", "iCloud sync", "Same ledger on every device"),
+        ("person.3.fill", "Shared trips", "Split trip spendings with friends"),
         ("chart.bar.doc.horizontal", "Widgets & Live Activities", "Spending on Home Screen and Lock Screen"),
         ("tag.fill", "Category budgets", "Set limits and get alerts"),
         ("arrow.triangle.2.circlepath", "Recurring & calendar", "See what's due this month"),
         ("square.and.arrow.up", "CSV / OFX export", "Export for your records"),
         ("target", "Savings goals", "Track targets and envelopes"),
         ("person.2.fill", "Household ledger", "Share categories with a partner"),
-        ("paintpalette.fill", "Themes & icons", "Alternate color packs and app icons"),
         ("bolt.horizontal.fill", "Merchant rules", "Auto-categorize by payee name"),
         ("building.columns.fill", "Accounts & net worth", "Cash, cards, and balances")
     ]
@@ -184,11 +184,11 @@ struct PaywallView: View {
     private func selectionIndicator(isSelected: Bool) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(isSelected ? InpensoTheme.ink : InpensoTheme.hairline, lineWidth: isSelected ? 2 : 1)
+                .stroke(isSelected ? InpensoTheme.tide : InpensoTheme.hairline, lineWidth: isSelected ? 2 : 1)
                 .frame(width: 22, height: 22)
             if isSelected {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(InpensoTheme.ink)
+                    .fill(InpensoTheme.tide)
                     .frame(width: 12, height: 12)
             }
         }
@@ -197,9 +197,10 @@ struct PaywallView: View {
     private func planCardBackground(isSelected: Bool) -> some View {
         RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
             .fill(InpensoTheme.panelFill)
+            .shadow(color: InpensoTheme.ink.opacity(isSelected ? 0.08 : 0.04), radius: 12, y: 4)
             .overlay(
                 RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                    .stroke(isSelected ? InpensoTheme.ink : InpensoTheme.hairline, lineWidth: isSelected ? 1.5 : 1)
+                    .stroke(isSelected ? InpensoTheme.tide : Color.clear, lineWidth: 1.5)
             )
     }
 
@@ -216,7 +217,7 @@ struct PaywallView: View {
                 Text(selected == .yearly ? "Subscribe yearly · \(pro.priceText(for: .yearly))" : "Subscribe monthly · \(pro.priceText(for: .monthly))")
             }
         }
-        .buttonStyle(InpensoPrimaryButtonStyle(enabled: !pro.purchaseInFlight))
+        .buttonStyle(InpensoPrimaryButtonStyle(enabled: !pro.purchaseInFlight, tint: InpensoTheme.tide))
         .disabled(pro.purchaseInFlight)
     }
 
@@ -261,14 +262,7 @@ struct PaywallView: View {
                 }
             }
             .padding(.horizontal, InpensoTheme.Space.md)
-            .background(
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                    .fill(InpensoTheme.panelFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                            .stroke(InpensoTheme.hairline, lineWidth: 1)
-                    )
-            )
+            .inpensoPanelBackground()
         }
     }
 
@@ -373,12 +367,7 @@ struct SpecialOfferPaywallView: View {
                 .padding(InpensoTheme.Space.lg)
                 .background(InpensoTheme.foam)
             }
-            .background(InpensoTheme.panelFill)
-            .clipShape(RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero, style: .continuous)
-                    .stroke(InpensoTheme.hairline, lineWidth: 1)
-            )
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
             .inpensoScreenPadding()
             .padding(.vertical, InpensoTheme.Space.xl)
         }
@@ -448,14 +437,7 @@ struct ProGateBanner: View {
                     .foregroundStyle(InpensoTheme.muted)
             }
             .padding(InpensoTheme.Space.md)
-            .background(
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                    .fill(InpensoTheme.panelFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                            .stroke(InpensoTheme.hairline, lineWidth: 1)
-                    )
-            )
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
         }
         .buttonStyle(.plain)
     }

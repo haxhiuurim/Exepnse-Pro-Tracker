@@ -2,8 +2,8 @@
 //  InpensoTheme.swift
 //  iExpense
 //
-//  Field Notes — stark utility finance UI.
-//  White canvas, charcoal type, vermillion actions. No orbs, no glow, no marketing fluff.
+//  North — new-app visual system for Inpenso.
+//  Soft blue canvas, navy type, cobalt accent. Quiet surfaces, clear money color.
 //
 
 import SwiftUI
@@ -11,34 +11,34 @@ import SwiftUI
 enum InpensoTheme {
     // MARK: - Palette
 
-    /// Charcoal — text, selected chrome
-    static let ink = Color(inpensoHex: "#171717")
-    static let inkSoft = Color(inpensoHex: "#262626")
-    /// Sky — charts / links only
-    static let tide = Color(inpensoHex: "#0284C7")
-    /// Deep teal — income
-    static let seafoam = Color(inpensoHex: "#0F766E")
-    /// Quiet section fill
-    static let mist = Color(inpensoHex: "#F0F0EE")
-    static let mistDeep = Color(inpensoHex: "#E4E4E1")
+    /// Deep navy — text & chrome
+    static let ink = Color(inpensoHex: "#0B1B33")
+    static let inkSoft = Color(inpensoHex: "#152A47")
+    /// Cobalt — links, charts, selected chrome
+    static let tide = Color(inpensoHex: "#3B6EF5")
+    /// Soft mint highlight
+    static let seafoam = Color(inpensoHex: "#34D399")
+    /// Chip / quiet fill
+    static let mist = Color(inpensoHex: "#E4EAF3")
+    static let mistDeep = Color(inpensoHex: "#D5DEEB")
     /// App canvas
-    static let foam = Color(inpensoHex: "#F7F7F5")
-    /// Primary solid action (matches charcoal — deliberate, not candy)
-    static let copper = Color(inpensoHex: "#171717")
-    static let copperSoft = Color(inpensoHex: "#404040")
-    static let slate = Color(inpensoHex: "#404040")
-    static let muted = Color(inpensoHex: "#737373")
-    /// Vermillion — expense / destructive
-    static let danger = Color(inpensoHex: "#E03E2F")
-    /// Income / positive
-    static let surplus = Color(inpensoHex: "#0F766E")
-    static let hairline = Color(inpensoHex: "#E5E5E5")
+    static let foam = Color(inpensoHex: "#EEF1F6")
+    /// Primary CTA (navy)
+    static let copper = Color(inpensoHex: "#0B1B33")
+    static let copperSoft = Color(inpensoHex: "#243B5C")
+    static let slate = Color(inpensoHex: "#3A4A63")
+    static let muted = Color(inpensoHex: "#6B7A90")
+    /// Rose — expense
+    static let danger = Color(inpensoHex: "#F0435D")
+    /// Green — income
+    static let surplus = Color(inpensoHex: "#12B981")
+    static let hairline = Color(inpensoHex: "#D7DEEA")
     static let panelFill = Color.white
 
     // MARK: - Semantic
 
     static var brand: Color { ink }
-    static var accent: Color { ink }
+    static var accent: Color { tide }
     static var positive: Color { surplus }
     static var negative: Color { danger }
     static var chart: Color { tide }
@@ -59,35 +59,34 @@ enum InpensoTheme {
         static let lg: CGFloat = 20
         static let xl: CGFloat = 24
         static let xxl: CGFloat = 32
-        /// Horizontal page gutter — always apply on screen content
-        static let screen: CGFloat = 24
-        static let section: CGFloat = 32
-        static let bottomClearance: CGFloat = 128
-        static let row: CGFloat = 16
+        static let screen: CGFloat = 20
+        static let section: CGFloat = 28
+        static let bottomClearance: CGFloat = 132
+        static let row: CGFloat = 14
     }
 
     enum Radius {
-        static let sm: CGFloat = 8
-        static let md: CGFloat = 10
-        static let lg: CGFloat = 12
-        static let xl: CGFloat = 14
-        static let hero: CGFloat = 16
+        static let sm: CGFloat = 12
+        static let md: CGFloat = 16
+        static let lg: CGFloat = 20
+        static let xl: CGFloat = 24
+        static let hero: CGFloat = 28
     }
 
     enum Motion {
-        static let snappy = Animation.easeOut(duration: 0.16)
-        static let gentle = Animation.easeInOut(duration: 0.24)
-        static let reveal = Animation.easeOut(duration: 0.28)
+        static let snappy = Animation.easeOut(duration: 0.18)
+        static let gentle = Animation.easeInOut(duration: 0.26)
+        static let reveal = Animation.easeOut(duration: 0.32)
     }
 
     // MARK: - Type
 
     static func brandFont(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight, design: .default)
+        .system(size: size, weight: weight, design: .rounded)
     }
 
     static func displayAmount(_ size: CGFloat) -> Font {
-        .system(size: size, weight: .semibold, design: .rounded)
+        .system(size: size, weight: .bold, design: .rounded)
     }
 
     static func body(_ size: CGFloat = 16, weight: Font.Weight = .regular) -> Font {
@@ -95,11 +94,11 @@ enum InpensoTheme {
     }
 
     static func label(_ size: CGFloat = 13, weight: Font.Weight = .medium) -> Font {
-        .system(size: size, weight: weight, design: .default)
+        .system(size: size, weight: weight, design: .rounded)
     }
 
     static func sectionLabel() -> Font {
-        .system(size: 15, weight: .semibold, design: .default)
+        .system(size: 14, weight: .bold, design: .rounded)
     }
 }
 
@@ -109,8 +108,15 @@ struct AtmosphereBackground: View {
     var intensity: Double = 1.0
 
     var body: some View {
-        InpensoTheme.foam
-            .ignoresSafeArea()
+        LinearGradient(
+            colors: [
+                InpensoTheme.foam,
+                Color(inpensoHex: "#E8EDF6")
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
     }
 }
 
@@ -129,14 +135,14 @@ struct InpensoSectionHeader: View {
             Spacer(minLength: InpensoTheme.Space.sm)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
-                    .font(InpensoTheme.label(14, weight: .semibold))
+                    .font(InpensoTheme.label(14, weight: .bold))
                     .foregroundStyle(InpensoTheme.tide)
             }
         }
     }
 }
 
-// MARK: - Surface (flat white block — use sparingly)
+// MARK: - Surface
 
 struct SurfacePanel<Content: View>: View {
     var padding: CGFloat = InpensoTheme.Space.md
@@ -150,6 +156,7 @@ struct SurfacePanel<Content: View>: View {
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(InpensoTheme.panelFill)
+                    .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 12, y: 4)
             )
     }
 }
@@ -162,32 +169,37 @@ struct InpensoPrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(InpensoTheme.body(16, weight: .semibold))
+            .font(InpensoTheme.label(16, weight: .bold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 52)
+            .frame(minHeight: 54)
             .padding(.horizontal, InpensoTheme.Space.md)
             .background(
                 RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
                     .fill(enabled ? tint : InpensoTheme.muted.opacity(0.35))
             )
-            .opacity(configuration.isPressed ? 0.86 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
 struct InpensoSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(InpensoTheme.body(16, weight: .semibold))
+            .font(InpensoTheme.label(16, weight: .bold))
             .foregroundStyle(InpensoTheme.ink)
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 52)
+            .frame(minHeight: 54)
             .padding(.horizontal, InpensoTheme.Space.md)
             .background(
                 RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                    .fill(InpensoTheme.mist)
+                    .fill(InpensoTheme.panelFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                            .stroke(InpensoTheme.hairline, lineWidth: 1.5)
+                    )
             )
-            .opacity(configuration.isPressed ? 0.82 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
     }
 }
 
@@ -197,10 +209,15 @@ struct TransactionTypePicker: View {
     @Binding var type: TransactionType
 
     var body: some View {
-        HStack(spacing: InpensoTheme.Space.xs) {
+        HStack(spacing: 0) {
             typeButton(.expense, title: "Expense", color: InpensoTheme.expenseTint)
             typeButton(.income, title: "Income", color: InpensoTheme.incomeTint)
         }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                .fill(InpensoTheme.mist)
+        )
     }
 
     private func typeButton(_ value: TransactionType, title: String, color: Color) -> some View {
@@ -210,13 +227,13 @@ struct TransactionTypePicker: View {
             withAnimation(InpensoTheme.Motion.snappy) { type = value }
         } label: {
             Text(title)
-                .font(InpensoTheme.body(15, weight: .semibold))
+                .font(InpensoTheme.label(14, weight: .bold))
                 .foregroundStyle(selected ? .white : InpensoTheme.slate)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 48)
+                .frame(minHeight: 44)
                 .background(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                        .fill(selected ? color : InpensoTheme.mist)
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                        .fill(selected ? color : Color.clear)
                 )
         }
         .buttonStyle(.plain)
@@ -224,7 +241,7 @@ struct TransactionTypePicker: View {
     }
 }
 
-// MARK: - Period
+// MARK: - Period (underline tabs)
 
 struct PeriodChip: View {
     let title: String
@@ -233,15 +250,15 @@ struct PeriodChip: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(InpensoTheme.label(14, weight: .semibold))
-                .foregroundStyle(isSelected ? .white : InpensoTheme.slate)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                        .fill(isSelected ? InpensoTheme.ink : InpensoTheme.mist)
-                )
+            VStack(spacing: 8) {
+                Text(title)
+                    .font(InpensoTheme.label(15, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? InpensoTheme.ink : InpensoTheme.muted)
+                Capsule()
+                    .fill(isSelected ? InpensoTheme.tide : Color.clear)
+                    .frame(height: 3)
+            }
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
     }
@@ -251,7 +268,7 @@ struct PeriodSelector: View {
     @Binding var period: SpendingPeriod
 
     var body: some View {
-        HStack(spacing: InpensoTheme.Space.xs) {
+        HStack(spacing: InpensoTheme.Space.md) {
             ForEach(SpendingPeriod.allCases) { item in
                 PeriodChip(title: item.shortTitle, isSelected: period == item) {
                     HapticFeedback.selection()
@@ -273,6 +290,14 @@ extension Color {
 extension View {
     func inpensoScreenPadding() -> some View {
         padding(.horizontal, InpensoTheme.Space.screen)
+    }
+
+    func inpensoPanelBackground(radius: CGFloat = InpensoTheme.Radius.lg) -> some View {
+        background(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(InpensoTheme.panelFill)
+                .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 12, y: 4)
+        )
     }
 
     func reveal(_ visible: Bool, delay: Double = 0) -> some View {

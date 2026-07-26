@@ -277,14 +277,7 @@ struct ReceiptScanView: View {
             .frame(width: 72)
         }
         .padding(InpensoTheme.Space.md)
-        .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                .fill(InpensoTheme.panelFill)
-                .overlay(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                        .stroke(InpensoTheme.hairline, lineWidth: 1)
-                )
-        )
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
         .opacity(item.isSelected ? 1 : 0.5)
     }
 
@@ -317,14 +310,7 @@ struct ReceiptScanView: View {
                     .foregroundStyle(InpensoTheme.ink)
             }
             .padding(InpensoTheme.Space.xl)
-            .background(
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                    .fill(InpensoTheme.panelFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                            .stroke(InpensoTheme.hairline, lineWidth: 1)
-                    )
-            )
+            .inpensoPanelBackground()
         }
     }
 

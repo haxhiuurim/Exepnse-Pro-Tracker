@@ -344,6 +344,7 @@ struct ExpensesListView: View {
             }
         }
         .padding(.vertical, InpensoTheme.Space.sm)
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
     }
 
     private var statDivider: some View {
@@ -504,14 +505,7 @@ struct ExpensesListView: View {
                     .foregroundStyle(InpensoTheme.tide)
                 }
                 .padding(InpensoTheme.Space.md)
-                .background(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                        .fill(InpensoTheme.panelFill)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                                .stroke(InpensoTheme.hairline, lineWidth: 1)
-                        )
-                )
+                .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
                 .inpensoScreenPadding()
                 .padding(.bottom, InpensoTheme.Space.xs)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
