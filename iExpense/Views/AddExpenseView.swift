@@ -2,14 +2,11 @@
 //  AddExpenseView.swift
 //  iExpense
 //
-//  Created by Dragomir Mindrescu on 27.04.2025.
-//
 
 import SwiftUI
 
 struct AddExpenseView: View {
     @Environment(\.dismiss) var dismiss
-    @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
     @ObservedObject var viewModel: ExpenseViewModel
@@ -17,7 +14,7 @@ struct AddExpenseView: View {
     @State private var title: String = ""
     @State private var price: String = ""
     @State private var selectedCategoryID: String
-    @State private var transactionType: TransactionType = .expense
+    @State private var transactionType: TransactionType
     @State private var selectedDate: Date = Date()
     @State private var notes: String = ""
     @State private var showDatePicker = false
@@ -34,8 +31,9 @@ struct AddExpenseView: View {
         return locale.localizedCurrencySymbol(forCurrencyCode: currencyCode) ?? currencyCode
     }
 
-    init(viewModel: ExpenseViewModel) {
+    init(viewModel: ExpenseViewModel, initialType: TransactionType = .expense) {
         self.viewModel = viewModel
+        _transactionType = State(initialValue: initialType)
         let defaultCategoryID = UserDefaults.standard.string(forKey: "defaultCategoryID") ?? Category.food.categoryID
         _selectedCategoryID = State(initialValue: defaultCategoryID)
     }
@@ -43,45 +41,19 @@ struct AddExpenseView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AtmosphereBackground(intensity: 0.65)
+                AtmosphereBackground()
 
                 ScrollView {
-                    VStack(spacing: 18) {
-                        Text("Inpenso")
-                            .font(InpensoTheme.brandFont(28, weight: .bold))
-                            .foregroundStyle(InpensoTheme.ink)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(spacing: InpensoTheme.Space.section) {
+                        TransactionTypePicker(type: $transactionType)
 
-                        Button {
-                            showReceiptScan = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "doc.text.viewfinder")
-                                    .foregroundStyle(InpensoTheme.tide)
-                                Text("Scan a receipt instead")
-                                    .font(InpensoTheme.body(15, weight: .semibold))
-                                    .foregroundStyle(InpensoTheme.ink)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(InpensoTheme.muted)
-                            }
-                            .padding(14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color.white.opacity(0.7))
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        amountSection
 
-                        mainDataCard
+                        detailsSection
 
-                        CardView(title: "Category") {
-                            CategoryGrid(
-                                selectedCategoryID: $selectedCategoryID,
-                                categories: categoryStore.allCategories
-                            )
-                            .padding(.horizontal)
+                        if transactionType == .expense {
+                            receiptScanLink
+                            categorySection
                         }
 
                         DatePickerCard(
@@ -90,41 +62,29 @@ struct AddExpenseView: View {
                             isExpanded: $showDatePicker
                         )
 
-                        notesCard
+                        notesSection
 
                         if transactionType == .expense {
-                            Toggle(isOn: $saveAsTemplate) {
-                                Text("Save as quick spend shortcut")
-                                    .font(InpensoTheme.body(14, weight: .medium))
-                            }
-                            .tint(InpensoTheme.tide)
-                            .padding(.horizontal, 4)
+                            templateToggle
                         }
 
-                        Button(action: saveExpense) {
-                            Text("Save transaction")
-                        }
-                        .buttonStyle(InpensoPrimaryButtonStyle(enabled: isFormValid()))
-                        .disabled(!isFormValid())
+                        saveButton
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 10)
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, InpensoTheme.Space.screen)
+                    .padding(.top, InpensoTheme.Space.sm)
+                    .padding(.bottom, InpensoTheme.Space.section)
                 }
                 .scrollDismissesKeyboard(.interactively)
 
-                if animateSuccess {
-                    successOverlay
-                }
+                if animateSuccess { successOverlay }
             }
-            .navigationTitle("New transaction")
+            .navigationTitle("New Transaction")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { dismiss() }
                         .foregroundStyle(InpensoTheme.slate)
                 }
-
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if keyboardVisible {
                         Button("Done") { hideKeyboard() }
@@ -150,79 +110,135 @@ struct AddExpenseView: View {
         }
     }
 
-    private var mainDataCard: some View {
-        CardView(title: "Details", showDivider: true) {
-            VStack(spacing: 16) {
-                Picker("Type", selection: $transactionType) {
-                    ForEach(TransactionType.allCases) { type in
-                        Text(type.displayName).tag(type)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
+    // MARK: - Sections
 
-                TextFormField(
-                    label: "Title",
-                    text: $title,
-                    placeholder: transactionType == .expense ? "What did you spend on?" : "Income source",
-                    leadingIcon: "pencil"
-                )
-                .padding(.horizontal)
+    private var amountSection: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
+            Text("Amount")
+                .font(InpensoTheme.label(11, weight: .semibold))
+                .foregroundStyle(InpensoTheme.muted)
 
-                CurrencyFormField(
-                    label: "Amount",
-                    amount: $price,
-                    currencySymbol: currencySymbol,
-                    clearAction: { price = "" }
-                )
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-            }
+            CurrencyFormField(
+                label: "",
+                amount: $price,
+                currencySymbol: currencySymbol,
+                clearAction: { price = "" }
+            )
         }
     }
 
-    private var notesCard: some View {
-        CardView(title: "Notes (optional)") {
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(0.65))
-                    .frame(minHeight: 100)
-
-                TextEditor(text: $notes)
-                    .font(InpensoTheme.body(15))
-                    .scrollContentBackground(.hidden)
-                    .background(Color.clear)
-                    .padding(8)
-                    .frame(minHeight: 100)
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
+    private var detailsSection: some View {
+        CardView(title: "Details") {
+            TextFormField(
+                label: "Title",
+                text: $title,
+                placeholder: transactionType == .expense ? "What did you spend on?" : "Income source"
+            )
+            .padding(.horizontal, InpensoTheme.Space.md)
         }
+    }
+
+    private var receiptScanLink: some View {
+        Button { showReceiptScan = true } label: {
+            HStack(spacing: InpensoTheme.Space.sm) {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
+                Text("Scan receipt")
+                    .font(InpensoTheme.body(15, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.ink)
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+            .padding(InpensoTheme.Space.md)
+            .background(
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                    .fill(InpensoTheme.panelFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                            .stroke(InpensoTheme.hairline, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var categorySection: some View {
+        CardView(title: "Category") {
+            CategoryGrid(
+                selectedCategoryID: $selectedCategoryID,
+                categories: categoryStore.allCategories
+            )
+        }
+    }
+
+    private var notesSection: some View {
+        CardView(title: "Notes") {
+            TextEditor(text: $notes)
+                .font(InpensoTheme.body(15))
+                .foregroundStyle(InpensoTheme.ink)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 88)
+                .padding(InpensoTheme.Space.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                        .fill(InpensoTheme.mist)
+                )
+                .padding(.horizontal, InpensoTheme.Space.md)
+        }
+    }
+
+    private var templateToggle: some View {
+        Toggle(isOn: $saveAsTemplate) {
+            Text("Save as shortcut")
+                .font(InpensoTheme.body(14, weight: .medium))
+                .foregroundStyle(InpensoTheme.ink)
+        }
+        .tint(InpensoTheme.ink)
+    }
+
+    private var saveButton: some View {
+        Button(action: saveExpense) {
+            Text(transactionType == .income ? "Save Income" : "Save Expense")
+        }
+        .buttonStyle(
+            InpensoPrimaryButtonStyle(
+                enabled: isFormValid(),
+                tint: transactionType == .income ? InpensoTheme.incomeTint : InpensoTheme.expenseTint
+            )
+        )
+        .disabled(!isFormValid())
     }
 
     private var successOverlay: some View {
         ZStack {
-            Color.black.opacity(0.35).ignoresSafeArea()
-
-            VStack(spacing: 16) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 72))
+            Color.black.opacity(0.3).ignoresSafeArea()
+            VStack(spacing: InpensoTheme.Space.sm) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(InpensoTheme.surplus)
-
                 Text("Saved")
-                    .font(InpensoTheme.brandFont(24, weight: .bold))
+                    .font(InpensoTheme.brandFont(20, weight: .semibold))
                     .foregroundStyle(InpensoTheme.ink)
             }
-            .padding(32)
+            .padding(InpensoTheme.Space.xl)
             .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(InpensoTheme.foam)
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                    .fill(InpensoTheme.panelFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                            .stroke(InpensoTheme.hairline, lineWidth: 1)
+                    )
             )
-            .scaleEffect(animateSuccess ? 1.0 : 0.5)
+            .scaleEffect(animateSuccess ? 1 : 0.85)
             .opacity(animateSuccess ? 1 : 0)
-            .animation(.spring(), value: animateSuccess)
+            .animation(InpensoTheme.Motion.gentle, value: animateSuccess)
         }
     }
+
+    // MARK: - Actions
 
     private func isFormValid() -> Bool {
         !title.isEmpty && !price.isEmpty
@@ -235,7 +251,6 @@ struct AddExpenseView: View {
             showValidationAlert("Please enter a title.")
             return
         }
-
         if price.isEmpty {
             showValidationAlert("Please enter an amount.")
             return
@@ -273,10 +288,7 @@ struct AddExpenseView: View {
         }
 
         HapticFeedback.success()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-            dismiss()
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { dismiss() }
     }
 
     private func showValidationAlert(_ message: String) {

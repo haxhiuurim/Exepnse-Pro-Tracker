@@ -2,7 +2,7 @@
 //  QuickAddSheet.swift
 //  iExpense
 //
-//  Fast path for logging spend — amount-first, templates, receipt scan.
+//  Amount-first entry. Expense / Income always at the top.
 //
 
 import SwiftUI
@@ -14,14 +14,12 @@ struct QuickAddSheet: View {
     @EnvironmentObject private var pro: ProEntitlementManager
     @ObservedObject var viewModel: ExpenseViewModel
 
+    @State private var transactionType: TransactionType
     @State private var amount: String = ""
     @State private var title: String = ""
     @State private var selectedCategoryID: String
     @State private var showFullForm = false
     @State private var showReceiptScan = false
-    @State private var showSaveAsTemplate = false
-    @State private var animateIn = false
-    @State private var showScanLimit = false
     @FocusState private var amountFocused: Bool
 
     private var currencySymbol: String {
@@ -29,8 +27,18 @@ struct QuickAddSheet: View {
             ?? settingsViewModel.selectedCurrency
     }
 
-    init(viewModel: ExpenseViewModel) {
+    private var accent: Color {
+        transactionType == .income ? InpensoTheme.incomeTint : InpensoTheme.expenseTint
+    }
+
+    private var isValid: Bool {
+        guard let value = Double(amount.replacingOccurrences(of: ",", with: ".")), value > 0 else { return false }
+        return !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    init(viewModel: ExpenseViewModel, initialType: TransactionType = .expense) {
         self.viewModel = viewModel
+        _transactionType = State(initialValue: initialType)
         let defaultID = UserDefaults.standard.string(forKey: "defaultCategoryID") ?? Category.food.categoryID
         _selectedCategoryID = State(initialValue: defaultID)
     }
@@ -38,60 +46,67 @@ struct QuickAddSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AtmosphereBackground(intensity: 0.7)
+                AtmosphereBackground()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: InpensoTheme.Space.xl) {
-                        brandHeader
-                        amountHero
-                        categoryStrip
-                        titleField
-                        templatesSection
-                        actionRow
-                        saveButton
+                        TransactionTypePicker(type: $transactionType)
+
+                        amountBlock
+
+                        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
+                            Text("What for?")
+                                .font(InpensoTheme.label(13))
+                                .foregroundStyle(InpensoTheme.muted)
+                            TextField(transactionType == .income ? "Payday, freelance…" : "Coffee, rent…", text: $title)
+                                .font(InpensoTheme.body(17, weight: .medium))
+                                .foregroundStyle(InpensoTheme.ink)
+                                .padding(.horizontal, InpensoTheme.Space.md)
+                                .padding(.vertical, InpensoTheme.Space.sm + 2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                                        .fill(InpensoTheme.panelFill)
+                                )
+                        }
+
+                        if transactionType == .expense {
+                            categoryStrip
+                            templatesSection
+                            scanRow
+                        }
+
+                        Button(action: saveQuick) {
+                            Text(transactionType == .income ? "Add income" : "Add expense")
+                        }
+                        .buttonStyle(InpensoPrimaryButtonStyle(enabled: isValid, tint: accent))
+                        .disabled(!isValid)
                     }
                     .padding(.horizontal, InpensoTheme.Space.screen)
-                    .padding(.top, InpensoTheme.Space.sm)
+                    .padding(.top, InpensoTheme.Space.md)
                     .padding(.bottom, InpensoTheme.Space.xxl)
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 16)
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
+            .navigationTitle(transactionType == .income ? "New income" : "New expense")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(InpensoTheme.slate)
+                    Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showFullForm = true
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .foregroundStyle(InpensoTheme.ink)
-                    }
-                    .accessibilityLabel("More options")
+                    Button("Full form") { showFullForm = true }
+                        .fontWeight(.semibold)
                 }
             }
             .sheet(isPresented: $showFullForm) {
-                AddExpenseView(viewModel: viewModel)
+                AddExpenseView(viewModel: viewModel, initialType: transactionType)
             }
             .sheet(isPresented: $showReceiptScan) {
                 ReceiptScanView(viewModel: viewModel)
             }
-            .alert("Free scans used up", isPresented: $showScanLimit) {
-                Button("Upgrade") { pro.openPaywall() }
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Free includes \(FreeTierLimits.receiptScansPerMonth) scans/month.")
-            }
             .onAppear {
                 selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
                 amountFocused = true
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.85).delay(0.05)) {
-                    animateIn = true
-                }
             }
             .onChange(of: title) { _, newValue in
                 applyMerchantRule(for: newValue)
@@ -101,66 +116,41 @@ struct QuickAddSheet: View {
         .presentationDragIndicator(.visible)
     }
 
-    // MARK: - Sections
-
-    private var brandHeader: some View {
+    private var amountBlock: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
-            Text("Inpenso")
-                .font(InpensoTheme.brandFont(32, weight: .bold))
-                .foregroundStyle(InpensoTheme.ink)
-            Text("Capture a spend in seconds.")
-                .font(InpensoTheme.body(15))
+            Text("Amount")
+                .font(InpensoTheme.label(13))
                 .foregroundStyle(InpensoTheme.muted)
-        }
-    }
-
-    private var amountHero: some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
-            Text("AMOUNT")
-                .font(InpensoTheme.label(11, weight: .bold))
-                .foregroundStyle(InpensoTheme.muted)
-                .tracking(1.3)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(currencySymbol)
-                    .font(InpensoTheme.displayAmount(32))
-                    .foregroundStyle(InpensoTheme.tide)
+                    .font(InpensoTheme.displayAmount(28))
+                    .foregroundStyle(InpensoTheme.muted)
 
                 TextField("0.00", text: $amount)
-                    .font(InpensoTheme.displayAmount(46))
+                    .font(InpensoTheme.displayAmount(40))
+                    .foregroundStyle(InpensoTheme.ink)
                     .keyboardType(.decimalPad)
                     .focused($amountFocused)
-                    .foregroundStyle(InpensoTheme.ink)
+                    .tint(accent)
+                    .onChange(of: amount) { _, newValue in
+                        amount = formatCurrencyInput(newValue)
+                    }
             }
-            .padding(.vertical, InpensoTheme.Space.xs)
+            .padding(.vertical, InpensoTheme.Space.sm)
         }
-        .padding(InpensoTheme.Space.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero - 4, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [InpensoTheme.foam, InpensoTheme.mist],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero - 4, style: .continuous)
-                        .stroke(InpensoTheme.tide.opacity(0.18), lineWidth: 1)
-                )
-        )
     }
 
     private var categoryStrip: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
             Text("Category")
-                .font(InpensoTheme.label(13, weight: .semibold))
-                .foregroundStyle(InpensoTheme.slate)
+                .font(InpensoTheme.label(13))
+                .foregroundStyle(InpensoTheme.muted)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: InpensoTheme.Space.xs + 2) {
-                    ForEach(categoryStore.allCategories) { category in
+                HStack(spacing: InpensoTheme.Space.xs) {
+                    ForEach(categoryStore.visibleCategories) { category in
+                        let selected = selectedCategoryID == category.id
                         Button {
                             HapticFeedback.selection()
                             selectedCategoryID = category.id
@@ -169,222 +159,152 @@ struct QuickAddSheet: View {
                                 Image(systemName: category.iconName)
                                     .font(.system(size: 12, weight: .semibold))
                                 Text(category.displayName)
-                                    .font(InpensoTheme.label(12, weight: .semibold))
+                                    .font(InpensoTheme.label(13, weight: .semibold))
                             }
-                            .foregroundStyle(selectedCategoryID == category.id ? .white : InpensoTheme.ink)
+                            .foregroundStyle(selected ? .white : InpensoTheme.slate)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
+                            .padding(.vertical, 10)
                             .background(
-                                Capsule(style: .continuous)
-                                    .fill(selectedCategoryID == category.id ? category.color : InpensoTheme.ink.opacity(0.06))
+                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                    .fill(selected ? category.color : InpensoTheme.mist)
                             )
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.vertical, 2)
             }
         }
     }
 
-    private var titleField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("What for?")
-                .font(InpensoTheme.label(13, weight: .semibold))
-                .foregroundStyle(InpensoTheme.slate)
-
-            TextField("Coffee, groceries, taxi…", text: $title)
-                .font(InpensoTheme.body(16, weight: .medium))
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.7))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(InpensoTheme.ink.opacity(0.08), lineWidth: 1)
-                        )
-                )
-
-            if pro.isPro, let rule = PremiumDataStore.shared.suggestedCategoryID(forTitle: title) {
-                Text("Rule matched → \(categoryStore.category(for: rule).displayName)")
-                    .font(InpensoTheme.label(11, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.tide)
-            }
-        }
-    }
-
+    @ViewBuilder
     private var templatesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Quick spends")
-                    .font(InpensoTheme.label(13, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.slate)
-                Spacer()
-                if canSaveCurrentAsTemplate {
-                    Button("Save shortcut") {
-                        saveCurrentAsTemplate()
-                    }
-                    .font(InpensoTheme.label(12, weight: .bold))
-                    .foregroundStyle(InpensoTheme.copper)
-                }
-            }
-
-            if viewModel.quickTemplates.isEmpty {
-                Text("Save frequent spends for one-tap logging.")
-                    .font(InpensoTheme.body(13))
+        let templates = viewModel.quickTemplates
+        if !templates.isEmpty {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+                Text("Shortcuts")
+                    .font(InpensoTheme.label(13))
                     .foregroundStyle(InpensoTheme.muted)
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    ForEach(viewModel.quickTemplates.prefix(6)) { template in
+
+                FlowWrap(spacing: InpensoTheme.Space.xs) {
+                    ForEach(templates) { template in
                         Button {
-                            useTemplate(template)
+                            applyTemplate(template)
                         } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(template.title)
-                                    .font(InpensoTheme.body(14, weight: .semibold))
-                                    .foregroundStyle(InpensoTheme.ink)
-                                    .lineLimit(1)
-                                Text(template.amount, format: .currency(code: settingsViewModel.selectedCurrency))
-                                    .font(InpensoTheme.displayAmount(18))
-                                    .foregroundStyle(InpensoTheme.tide)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color.white.opacity(0.75))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .stroke(InpensoTheme.ink.opacity(0.06), lineWidth: 1)
-                                    )
-                            )
+                            Text(template.title)
+                                .font(InpensoTheme.label(13, weight: .medium))
+                                .foregroundStyle(InpensoTheme.ink)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                        .fill(InpensoTheme.panelFill)
+                                )
                         }
                         .buttonStyle(.plain)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                viewModel.removeTemplate(template)
-                            } label: {
-                                Label("Remove", systemImage: "trash")
-                            }
-                        }
                     }
                 }
             }
         }
     }
 
-    private var actionRow: some View {
+    private var scanRow: some View {
         Button {
             if pro.canScanReceipt {
                 showReceiptScan = true
             } else {
-                showScanLimit = true
+                pro.openPaywall(plan: .yearly)
             }
         } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(InpensoTheme.tide.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "doc.text.viewfinder")
-                        .foregroundStyle(InpensoTheme.tide)
-                }
+            HStack(spacing: InpensoTheme.Space.sm) {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Scan receipt")
-                        .font(InpensoTheme.body(15, weight: .semibold))
+                    Text("Scan a receipt")
+                        .font(InpensoTheme.body(15, weight: .medium))
                         .foregroundStyle(InpensoTheme.ink)
-                    Text(
-                        pro.isPro
-                        ? "Unlimited on-device OCR"
-                        : "\(pro.receiptScansRemaining) free scans left this month"
-                    )
+                    Text(pro.isPro ? "Unlimited OCR" : "\(pro.receiptScansRemaining) free left")
                         .font(InpensoTheme.label(12))
                         .foregroundStyle(InpensoTheme.muted)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(InpensoTheme.muted)
             }
-            .padding(14)
+            .padding(InpensoTheme.Space.md)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.7))
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                    .fill(InpensoTheme.panelFill)
             )
         }
         .buttonStyle(.plain)
     }
 
-    private var saveButton: some View {
-        Button(action: saveQuick) {
-            Text("Add spend")
+    private func applyTemplate(_ template: QuickSpendTemplate) {
+        _ = viewModel.addFromTemplate(template)
+        HapticFeedback.success()
+        dismiss()
+    }
+
+    private func applyMerchantRule(for rawTitle: String) {
+        guard pro.isPro else { return }
+        if let categoryID = PremiumDataStore.shared.suggestedCategoryID(forTitle: rawTitle) {
+            selectedCategoryID = categoryID
         }
-        .buttonStyle(InpensoPrimaryButtonStyle(enabled: isValid))
-        .disabled(!isValid)
-    }
-
-    // MARK: - Logic
-
-    private var isValid: Bool {
-        parsedAmount != nil && parsedAmount! > 0 && !resolvedTitle.isEmpty
-    }
-
-    private var canSaveCurrentAsTemplate: Bool {
-        guard let amount = parsedAmount, amount > 0 else { return false }
-        return !resolvedTitle.isEmpty
-    }
-
-    private var parsedAmount: Double? {
-        Double(amount.replacingOccurrences(of: ",", with: "."))
-    }
-
-    private var resolvedTitle: String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty { return trimmed }
-        return categoryStore.category(for: selectedCategoryID).displayName
     }
 
     private func saveQuick() {
-        guard let price = parsedAmount, price > 0 else { return }
-        let category = categoryStore.category(for: selectedCategoryID)
+        guard isValid,
+              let price = Double(amount.replacingOccurrences(of: ",", with: ".")),
+              price > 0 else { return }
+
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let category = transactionType == .income
+            ? FinanceCategory.builtIn(for: .others)
+            : categoryStore.category(for: selectedCategoryID)
         let legacy = Category.category(from: category.id) ?? .others
 
         _ = viewModel.addExpense(
-            title: resolvedTitle,
+            title: cleanTitle,
             price: price,
             date: Date(),
             category: legacy,
-            type: .expense,
+            type: transactionType,
             categoryID: category.id
         )
         HapticFeedback.success()
         dismiss()
     }
 
-    private func useTemplate(_ template: QuickSpendTemplate) {
-        _ = viewModel.addFromTemplate(template)
-        HapticFeedback.success()
-        dismiss()
+    private func formatCurrencyInput(_ input: String) -> String {
+        var formatted = input.replacingOccurrences(of: ",", with: ".")
+        let parts = formatted.components(separatedBy: ".")
+        if parts.count > 2 {
+            formatted = parts[0] + "." + parts[1]
+        }
+        if let decimalIndex = formatted.firstIndex(of: ".") {
+            let maxLength = formatted.distance(from: formatted.startIndex, to: decimalIndex) + 3
+            if formatted.count > maxLength {
+                let end = formatted.index(formatted.startIndex, offsetBy: maxLength)
+                formatted = String(formatted[..<end])
+            }
+        }
+        return formatted
     }
+}
 
-    private func saveCurrentAsTemplate() {
-        guard let price = parsedAmount, price > 0 else { return }
-        let category = categoryStore.category(for: selectedCategoryID)
-        let legacy = Category.category(from: category.id) ?? .others
-        viewModel.saveTemplate(
-            title: resolvedTitle,
-            amount: price,
-            categoryID: category.id,
-            category: legacy
-        )
-        HapticFeedback.success()
-        showSaveAsTemplate = true
-    }
+/// Simple wrapping HStack for template chips.
+private struct FlowWrap<Content: View>: View {
+    var spacing: CGFloat = 8
+    @ViewBuilder var content: () -> Content
 
-    private func applyMerchantRule(for title: String) {
-        guard pro.isPro else { return }
-        if let categoryID = PremiumDataStore.shared.suggestedCategoryID(forTitle: title) {
-            selectedCategoryID = categoryID
+    var body: some View {
+        // Fallback: horizontal scroll if many chips — keeps layout simple & reliable
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: spacing) {
+                content()
+            }
         }
     }
 }

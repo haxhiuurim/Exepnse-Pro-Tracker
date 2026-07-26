@@ -2,8 +2,6 @@
 //  CategoryBudgetsView.swift
 //  iExpense
 //
-//  Set and track per-category monthly spending limits.
-//
 
 import SwiftUI
 
@@ -24,44 +22,41 @@ struct CategoryBudgetsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Category budgets")
-                .font(InpensoTheme.label(14, weight: .semibold))
-                .foregroundStyle(InpensoTheme.slate)
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+            InpensoSectionHeader(title: "Category Budgets")
 
             Text(pro.isPro
-                 ? "Set a monthly cap for each category. Progress uses this month’s spending."
+                 ? "Set a monthly cap per category. Progress reflects this month's spending."
                  : "Free includes \(FreeTierLimits.categoryBudgets) category budgets. Pro unlocks unlimited + alerts.")
                 .font(InpensoTheme.body(13))
                 .foregroundStyle(InpensoTheme.muted)
 
             if !pro.isPro {
-                ProGateBanner(message: "You’re using \(activeBudgetCount)/\(FreeTierLimits.categoryBudgets) free category budgets.") {
+                ProGateBanner(message: "You're using \(activeBudgetCount)/\(FreeTierLimits.categoryBudgets) free category budgets.") {
                     pro.openPaywall()
                 }
             }
 
-            VStack(spacing: 12) {
-                ForEach(categoryStore.allCategories) { category in
-                    categoryBudgetRow(category)
+            SurfacePanel(padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(categoryStore.allCategories.enumerated()), id: \.element.id) { index, category in
+                        categoryBudgetRow(category)
+                        if index < categoryStore.allCategories.count - 1 {
+                            Divider().overlay(InpensoTheme.hairline)
+                                .padding(.leading, InpensoTheme.Space.md)
+                        }
+                    }
                 }
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white.opacity(0.72))
-            )
 
             Button {
                 persistDrafts()
             } label: {
-                Text("Save category budgets")
+                Text("Save Category Budgets")
             }
             .buttonStyle(InpensoPrimaryButtonStyle())
         }
-        .onAppear {
-            hydrateDrafts()
-        }
+        .onAppear { hydrateDrafts() }
         .alert("Category budgets saved", isPresented: $showSaved) {
             Button("OK", role: .cancel) { }
         }
@@ -78,13 +73,16 @@ struct CategoryBudgetsView: View {
         let limit = Double(draftLimits[category.id] ?? "") ?? analyticsViewModel.categoryBudgets[category.id] ?? 0
         let progress = CategoryBudgetStore.progress(spent: spent, limit: limit)
 
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Image(systemName: category.iconName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(category.color)
-                    .frame(width: 30, height: 30)
-                    .background(category.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        return VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            HStack(spacing: InpensoTheme.Space.sm) {
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                    .fill(category.color.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                    .overlay {
+                        Image(systemName: category.iconName)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(category.color)
+                    }
 
                 Text(category.displayName)
                     .font(InpensoTheme.body(14, weight: .semibold))
@@ -99,25 +97,25 @@ struct CategoryBudgetsView: View {
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
                 .font(InpensoTheme.displayAmount(15))
-                .frame(width: 88)
-                .padding(.horizontal, 8)
+                .frame(width: 80)
+                .padding(.horizontal, InpensoTheme.Space.sm)
                 .padding(.vertical, 6)
                 .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(InpensoTheme.mist.opacity(0.8))
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                        .fill(InpensoTheme.mist)
                 )
             }
 
             if limit > 0 {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(InpensoTheme.ink.opacity(0.06))
+                        Capsule().fill(InpensoTheme.mist)
                         Capsule()
                             .fill(progressColor(progress))
                             .frame(width: geo.size.width * progress)
                     }
                 }
-                .frame(height: 5)
+                .frame(height: 4)
 
                 HStack {
                     Text(spent, format: .currency(code: currencyCode))
@@ -130,7 +128,7 @@ struct CategoryBudgetsView: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(InpensoTheme.Space.md)
     }
 
     private func progressColor(_ progress: Double) -> Color {
@@ -161,7 +159,6 @@ struct CategoryBudgetsView: View {
         }
 
         if !pro.canAddCategoryBudget(currentCount: budgets.count) {
-            // Keep only the first N free budgets by highest existing spend
             let allowed = budgets
                 .sorted { (analyticsViewModel.spendingByCategory[$0.key] ?? 0) > (analyticsViewModel.spendingByCategory[$1.key] ?? 0) }
                 .prefix(FreeTierLimits.categoryBudgets)
@@ -170,9 +167,7 @@ struct CategoryBudgetsView: View {
         }
 
         analyticsViewModel.saveCategoryBudgets(budgets)
-        if !showLimitAlert {
-            showSaved = true
-        }
+        if !showLimitAlert { showSaved = true }
         HapticFeedback.success()
     }
 }

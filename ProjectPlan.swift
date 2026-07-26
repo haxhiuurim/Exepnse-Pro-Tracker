@@ -7,7 +7,7 @@
 
 // MARK: Idea              | Description
 // Analytics               | See total spending, spending per category, weekly charts ✅
-// UI/UX Polish            | Tide Ledger redesign — brand-first home, mist atmosphere ✅
+// UI/UX Polish            | Field Notes redesign — charcoal, vermillion expense, teal income ✅
 // Period widgets          | Today / Week / Month spending widgets + quick add button ✅
 // Quick spend templates   | One-tap shortcuts for frequent spends ✅
 // Receipt OCR             | On-device Vision scan + free monthly cap / Pro unlimited ✅

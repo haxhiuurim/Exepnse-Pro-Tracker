@@ -128,7 +128,7 @@ final class PremiumDataStore: ObservableObject {
     }
 
     func addHouseholdMember(name: String) {
-        let colors = ["#2A8F87", "#C96A3D", "#3D8BFF", "#6B8F71", "#AF52DE"]
+        let colors = ["#059669", "#2563EB", "#D97706", "#16A34A", "#7C3AED"]
         let color = colors[household.members.count % colors.count]
         household.members.append(HouseholdMember(name: name, colorHex: color))
         saveHousehold()

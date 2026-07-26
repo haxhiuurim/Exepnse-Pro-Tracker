@@ -2,13 +2,10 @@
 //  DailySpendingChartView.swift
 //  iExpense
 //
-//  Created by Dragomir Mindrescu on 27.04.2025.
-//
 
 import SwiftUI
 import Charts
 
-/// A chart that displays daily spending data
 struct DailySpendingChartView: View {
     struct DailySpending: Identifiable {
         var id: Int { dayOfMonth }
@@ -16,63 +13,80 @@ struct DailySpendingChartView: View {
         let dayOfMonth: Int
         let amount: Double
     }
-    
+
     let dailySpending: [DailySpending]
     let averageDailySpend: Double
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Daily Spending")
-                .font(.headline)
-            
-            if dailySpending.isEmpty {
-                Text("No data available")
-                    .foregroundColor(.secondary)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else {
-                Chart {
-                    ForEach(dailySpending) { daily in
-                        BarMark(
-                            x: .value("Day", daily.dayOfMonth),
-                            y: .value("Amount", daily.amount)
-                        )
-                        .foregroundStyle(Color.blue.gradient)
-                        .cornerRadius(4)
+        SurfacePanel(padding: InpensoTheme.Space.md) {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+                InpensoSectionHeader(title: "Daily Spending")
+
+                if dailySpending.isEmpty {
+                    emptyState
+                } else {
+                    Chart {
+                        ForEach(dailySpending) { daily in
+                            BarMark(
+                                x: .value("Day", daily.dayOfMonth),
+                                y: .value("Amount", daily.amount)
+                            )
+                            .foregroundStyle(InpensoTheme.tide)
+                            .cornerRadius(2)
+                        }
+
+                        if averageDailySpend > 0 {
+                            RuleMark(y: .value("Average", averageDailySpend))
+                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                                .foregroundStyle(InpensoTheme.surplus)
+                                .annotation(position: .top, alignment: .trailing) {
+                                    Text("Avg")
+                                        .font(InpensoTheme.label(10, weight: .semibold))
+                                        .foregroundStyle(InpensoTheme.surplus)
+                                }
+                        }
                     }
-                    
+                    .frame(height: 180)
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: 5)) { _ in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                                .foregroundStyle(InpensoTheme.hairline)
+                            AxisValueLabel()
+                                .font(InpensoTheme.label(10))
+                                .foregroundStyle(InpensoTheme.muted)
+                        }
+                    }
+                    .chartYAxis {
+                        AxisMarks(position: .leading) { _ in
+                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                                .foregroundStyle(InpensoTheme.hairline)
+                            AxisValueLabel()
+                                .font(InpensoTheme.label(10))
+                                .foregroundStyle(InpensoTheme.muted)
+                        }
+                    }
+
                     if averageDailySpend > 0 {
-                        RuleMark(
-                            y: .value("Average", averageDailySpend)
-                        )
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
-                        .foregroundStyle(Color.green)
-                        .annotation(position: .top, alignment: .trailing) {
-                            Text("Avg")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                                .padding(4)
-                                .background(Color(.secondarySystemBackground))
-                                .cornerRadius(4)
+                        HStack(spacing: InpensoTheme.Space.xs) {
+                            Rectangle()
+                                .fill(InpensoTheme.surplus)
+                                .frame(width: 16, height: 1)
+                            Text("Daily average: \(averageDailySpend, format: .currency(code: SettingsViewModel.getAppCurrency()))")
+                                .font(InpensoTheme.label(11))
+                                .foregroundStyle(InpensoTheme.muted)
                         }
                     }
                 }
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: 5)) { value in
-                        AxisGridLine()
-                        AxisValueLabel()
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading)
-                }
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.secondarySystemBackground))
-        )
+    }
+
+    private var emptyState: some View {
+        Text("No spending data for this period")
+            .font(InpensoTheme.body(14))
+            .foregroundStyle(InpensoTheme.muted)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, InpensoTheme.Space.xl)
     }
 }
 
@@ -84,11 +98,11 @@ struct DailySpendingChartView: View {
             amount: Double.random(in: 0...100)
         )
     }
-    
+
     DailySpendingChartView(
         dailySpending: sampleData,
         averageDailySpend: sampleData.reduce(0) { $0 + $1.amount } / Double(sampleData.count)
     )
-    .frame(height: 220)
-    .padding()
-} 
+    .padding(InpensoTheme.Space.screen)
+    .background(InpensoTheme.foam)
+}

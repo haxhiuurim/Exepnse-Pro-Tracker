@@ -16,6 +16,7 @@ struct MainTabView: View {
     @ObservedObject private var pro = ProEntitlementManager.shared
     @State private var selectedTab = 0
     @State private var showQuickAdd = false
+    @State private var quickAddType: TransactionType = .expense
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -24,10 +25,13 @@ struct MainTabView: View {
                 HomeView(
                     viewModel: viewModel,
                     analyticsViewModel: analyticsViewModel,
-                    showQuickAdd: $showQuickAdd
+                    showQuickAdd: $showQuickAdd,
+                    onAddTransaction: { type in
+                        openQuickAdd(type)
+                    }
                 )
                 .tabItem {
-                    Label("Home", systemImage: "house.fill")
+                    Label("Money", systemImage: "house.fill")
                 }
                 .tag(0)
 
@@ -60,7 +64,7 @@ struct MainTabView: View {
                 }
             }
             .sheet(isPresented: $showQuickAdd) {
-                QuickAddSheet(viewModel: viewModel)
+                QuickAddSheet(viewModel: viewModel, initialType: quickAddType)
             }
             .sheet(isPresented: $pro.showPaywall) {
                 PaywallView(pro: pro, initialPlan: pro.selectedPaywallPlan)
@@ -105,7 +109,7 @@ struct MainTabView: View {
                 object: nil,
                 queue: .main
             ) { _ in
-                showQuickAdd = true
+                openQuickAdd(.expense)
             }
 
             NotificationCenter.default.addObserver(
@@ -152,6 +156,11 @@ struct MainTabView: View {
         .environmentObject(PremiumDataStore.shared)
     }
 
+    private func openQuickAdd(_ type: TransactionType) {
+        quickAddType = type
+        showQuickAdd = true
+    }
+
     private func processRecurring() {
         let created = RecurringTransactionService.shared.processDueTransactions(into: viewModel)
         if !created.isEmpty {
@@ -166,33 +175,34 @@ struct MainTabView: View {
             defaults?.synchronize()
             selectedTab = 0
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                showQuickAdd = true
+                openQuickAdd(.expense)
             }
         }
     }
 
     private var floatingAddButton: some View {
-        Button {
-            HapticFeedback.impact(style: .medium)
-            showQuickAdd = true
+        Menu {
+            Button {
+                openQuickAdd(.expense)
+            } label: {
+                Label("Add expense", systemImage: "minus.circle")
+            }
+            Button {
+                openQuickAdd(.income)
+            } label: {
+                Label("Add income", systemImage: "plus.circle")
+            }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 56, height: 56)
                 .background(
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [InpensoTheme.copper, InpensoTheme.copperSoft],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .shadow(color: InpensoTheme.copper.opacity(0.38), radius: 14, y: 6)
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                        .fill(InpensoTheme.copper)
                 )
         }
-        .accessibilityLabel("Add spend")
+        .accessibilityLabel("Add transaction")
         .padding(.bottom, 52)
     }
 
@@ -200,8 +210,34 @@ struct MainTabView: View {
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(InpensoTheme.foam)
+        appearance.shadowColor = UIColor(InpensoTheme.hairline)
+
+        let normalAttributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: UIColor(InpensoTheme.muted)
+        ]
+        let selectedAttributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: UIColor(InpensoTheme.ink)
+        ]
+
+        appearance.stackedLayoutAppearance.normal.iconColor = UIColor(InpensoTheme.muted)
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes = normalAttributes
+        appearance.stackedLayoutAppearance.selected.iconColor = UIColor(InpensoTheme.ink)
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttributes
+
+        appearance.inlineLayoutAppearance.normal.iconColor = UIColor(InpensoTheme.muted)
+        appearance.inlineLayoutAppearance.normal.titleTextAttributes = normalAttributes
+        appearance.inlineLayoutAppearance.selected.iconColor = UIColor(InpensoTheme.ink)
+        appearance.inlineLayoutAppearance.selected.titleTextAttributes = selectedAttributes
+
+        appearance.compactInlineLayoutAppearance.normal.iconColor = UIColor(InpensoTheme.muted)
+        appearance.compactInlineLayoutAppearance.normal.titleTextAttributes = normalAttributes
+        appearance.compactInlineLayoutAppearance.selected.iconColor = UIColor(InpensoTheme.ink)
+        appearance.compactInlineLayoutAppearance.selected.titleTextAttributes = selectedAttributes
+
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
+        UITabBar.appearance().tintColor = UIColor(InpensoTheme.ink)
+        UITabBar.appearance().unselectedItemTintColor = UIColor(InpensoTheme.muted)
     }
 }
 

@@ -2,8 +2,6 @@
 //  ReceiptScanView.swift
 //  iExpense
 //
-//  Capture or pick a receipt photo, OCR with Vision, review items, save spends.
-//
 
 import SwiftUI
 import PhotosUI
@@ -29,7 +27,7 @@ struct ReceiptScanView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AtmosphereBackground(intensity: 0.6)
+                AtmosphereBackground()
 
                 if let result {
                     reviewContent(result)
@@ -37,19 +35,15 @@ struct ReceiptScanView: View {
                     captureContent
                 }
 
-                if isScanning {
-                    scanningOverlay
-                }
-
-                if animateSuccess {
-                    successOverlay
-                }
+                if isScanning { scanningOverlay }
+                if animateSuccess { successOverlay }
             }
             .navigationTitle("Scan Receipt")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(InpensoTheme.slate)
                 }
             }
             .alert("Scan issue", isPresented: Binding(
@@ -69,9 +63,7 @@ struct ReceiptScanView: View {
             .fullScreenCover(isPresented: $showCamera) {
                 CameraPicker { image in
                     showCamera = false
-                    if let image {
-                        Task { await process(image: image) }
-                    }
+                    if let image { Task { await process(image: image) } }
                 }
                 .ignoresSafeArea()
             }
@@ -90,58 +82,51 @@ struct ReceiptScanView: View {
     // MARK: - Capture
 
     private var captureContent: some View {
-        VStack(spacing: 28) {
+        VStack(spacing: InpensoTheme.Space.section) {
             Spacer()
 
-            VStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(InpensoTheme.tide.opacity(0.12))
-                        .frame(width: 120, height: 120)
-                    Image(systemName: "doc.text.viewfinder")
-                        .font(.system(size: 44, weight: .medium))
-                        .foregroundStyle(InpensoTheme.tide)
-                }
-
-                Text("Photograph your receipt")
-                    .font(InpensoTheme.brandFont(26, weight: .bold))
+            VStack(spacing: InpensoTheme.Space.md) {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 40, weight: .medium))
                     .foregroundStyle(InpensoTheme.ink)
-                    .multilineTextAlignment(.center)
 
-                Text("Inpenso reads items, prices, and totals on-device — nothing leaves your phone.")
-                    .font(InpensoTheme.body(15))
-                    .foregroundStyle(InpensoTheme.muted)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+                VStack(spacing: InpensoTheme.Space.xs) {
+                    Text("Photograph your receipt")
+                        .font(InpensoTheme.brandFont(22, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                        .multilineTextAlignment(.center)
+
+                    Text("Reads items, prices, and totals on-device. Nothing leaves your phone.")
+                        .font(InpensoTheme.body(14))
+                        .foregroundStyle(InpensoTheme.muted)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, InpensoTheme.Space.screen)
 
                 if !pro.isPro {
-                    Text("\(pro.receiptScansRemaining) of \(FreeTierLimits.receiptScansPerMonth) free scans left this month")
-                        .font(InpensoTheme.label(12, weight: .bold))
-                        .foregroundStyle(InpensoTheme.copper)
+                    Text("\(pro.receiptScansRemaining) of \(FreeTierLimits.receiptScansPerMonth) free scans left")
+                        .font(InpensoTheme.label(12, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.muted)
                 }
             }
 
-            VStack(spacing: 12) {
-                Button {
-                    beginCapture { showCamera = true }
-                } label: {
-                    Label("Take photo", systemImage: "camera.fill")
+            VStack(spacing: InpensoTheme.Space.sm) {
+                Button { beginCapture { showCamera = true } } label: {
+                    Text("Take Photo")
                 }
                 .buttonStyle(InpensoPrimaryButtonStyle())
 
                 PhotosPicker(selection: $pickerItem, matching: .images) {
-                    Label("Choose from library", systemImage: "photo.on.rectangle")
+                    Text("Choose from Library")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(InpensoSecondaryButtonStyle())
                 .disabled(!pro.canScanReceipt)
                 .simultaneousGesture(TapGesture().onEnded {
-                    if !pro.canScanReceipt {
-                        showLimitPaywall = true
-                    }
+                    if !pro.canScanReceipt { showLimitPaywall = true }
                 })
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, InpensoTheme.Space.screen)
 
             Spacer()
         }
@@ -160,19 +145,21 @@ struct ReceiptScanView: View {
     private func reviewContent(_ result: ReceiptScanResult) -> some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
                     SurfacePanel {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Merchant")
-                                .font(InpensoTheme.label(12, weight: .bold))
+                        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+                            Text("MERCHANT")
+                                .font(InpensoTheme.label(10, weight: .semibold))
                                 .foregroundStyle(InpensoTheme.muted)
                             TextField("Store name", text: $merchantOverride)
                                 .font(InpensoTheme.body(18, weight: .semibold))
                                 .foregroundStyle(InpensoTheme.ink)
 
+                            Divider().overlay(InpensoTheme.hairline)
+
                             HStack {
                                 Text("Detected total")
-                                    .font(InpensoTheme.label(13))
+                                    .font(InpensoTheme.label(12))
                                     .foregroundStyle(InpensoTheme.muted)
                                 Spacer()
                                 Text(result.total ?? result.selectedTotal, format: .currency(code: settingsViewModel.selectedCurrency))
@@ -182,31 +169,39 @@ struct ReceiptScanView: View {
                         }
                     }
 
-                    Picker("Save mode", selection: $saveAsSingle) {
-                        Text("One spend").tag(true)
-                        Text("Each item").tag(false)
+                    VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
+                        Text("SAVE MODE")
+                            .font(InpensoTheme.label(10, weight: .semibold))
+                            .foregroundStyle(InpensoTheme.muted)
+
+                        Picker("Save mode", selection: $saveAsSingle) {
+                            Text("One spend").tag(true)
+                            Text("Each item").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+
+                        Text(saveAsSingle
+                             ? "Saves one transaction with the selected total."
+                             : "Creates a separate transaction for each checked item.")
+                            .font(InpensoTheme.body(13))
+                            .foregroundStyle(InpensoTheme.muted)
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 2)
 
-                    Text(saveAsSingle
-                         ? "Saves one grocery spend with the selected total."
-                         : "Creates a separate transaction for every checked item.")
-                        .font(InpensoTheme.body(13))
-                        .foregroundStyle(InpensoTheme.muted)
-
-                    ForEach(Array(result.items.enumerated()), id: \.element.id) { index, item in
-                        itemRow(index: index, item: item)
+                    VStack(spacing: InpensoTheme.Space.sm) {
+                        ForEach(Array(result.items.enumerated()), id: \.element.id) { index, item in
+                            itemRow(index: index, item: item)
+                        }
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, InpensoTheme.Space.screen)
+                .padding(.vertical, InpensoTheme.Space.md)
                 .padding(.bottom, 100)
             }
 
-            VStack(spacing: 10) {
+            VStack(spacing: InpensoTheme.Space.sm) {
                 HStack {
                     Text("Selected")
-                        .font(InpensoTheme.label(13, weight: .semibold))
+                        .font(InpensoTheme.label(12, weight: .semibold))
                         .foregroundStyle(InpensoTheme.muted)
                     Spacer()
                     Text(result.selectedTotal, format: .currency(code: settingsViewModel.selectedCurrency))
@@ -215,15 +210,17 @@ struct ReceiptScanView: View {
                 }
 
                 Button(action: saveSelected) {
-                    Text(saveAsSingle ? "Save spending" : "Save \(result.items.filter(\.isSelected).count) items")
+                    Text(saveAsSingle ? "Save Spending" : "Save \(result.items.filter(\.isSelected).count) Items")
                 }
                 .buttonStyle(InpensoPrimaryButtonStyle(enabled: result.selectedTotal > 0))
                 .disabled(result.selectedTotal <= 0)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 20)
-            .background(.ultraThinMaterial)
+            .padding(.horizontal, InpensoTheme.Space.screen)
+            .padding(.vertical, InpensoTheme.Space.md)
+            .background(InpensoTheme.panelFill)
+            .overlay(alignment: .top) {
+                Rectangle().fill(InpensoTheme.hairline).frame(height: 1)
+            }
         }
         .onAppear {
             if merchantOverride.isEmpty {
@@ -233,18 +230,19 @@ struct ReceiptScanView: View {
     }
 
     private func itemRow(index: Int, item: ReceiptLineItem) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: InpensoTheme.Space.sm) {
             Button {
                 guard var current = result else { return }
                 current.items[index].isSelected.toggle()
                 result = current
             } label: {
-                Image(systemName: item.isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(item.isSelected ? InpensoTheme.tide : InpensoTheme.muted)
+                Image(systemName: item.isSelected ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 20))
+                    .foregroundStyle(item.isSelected ? InpensoTheme.ink : InpensoTheme.muted)
             }
+            .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 TextField("Item", text: Binding(
                     get: { result?.items[index].name ?? item.name },
                     set: { newValue in
@@ -253,19 +251,17 @@ struct ReceiptScanView: View {
                         result = current
                     }
                 ))
-                .font(InpensoTheme.body(15, weight: .semibold))
+                .font(InpensoTheme.body(14, weight: .semibold))
 
                 Text(categoryStore.category(for: item.suggestedCategoryID).displayName)
-                    .font(InpensoTheme.label(11))
+                    .font(InpensoTheme.label(10))
                     .foregroundStyle(InpensoTheme.muted)
             }
 
             TextField(
                 "0.00",
                 text: Binding(
-                    get: {
-                        String(format: "%.2f", result?.items[index].price ?? item.price)
-                    },
+                    get: { String(format: "%.2f", result?.items[index].price ?? item.price) },
                     set: { newValue in
                         guard var current = result, current.items.indices.contains(index) else { return }
                         if let value = Double(newValue.replacingOccurrences(of: ",", with: ".")) {
@@ -277,46 +273,58 @@ struct ReceiptScanView: View {
             )
             .keyboardType(.decimalPad)
             .multilineTextAlignment(.trailing)
-            .font(InpensoTheme.displayAmount(16))
+            .font(InpensoTheme.displayAmount(15))
             .frame(width: 72)
         }
-        .padding(12)
+        .padding(InpensoTheme.Space.md)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(item.isSelected ? 0.85 : 0.45))
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                .fill(InpensoTheme.panelFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                        .stroke(InpensoTheme.hairline, lineWidth: 1)
+                )
         )
-        .opacity(item.isSelected ? 1 : 0.55)
+        .opacity(item.isSelected ? 1 : 0.5)
     }
 
     private var scanningOverlay: some View {
         ZStack {
-            Color.black.opacity(0.35).ignoresSafeArea()
-            VStack(spacing: 16) {
-                ProgressView()
-                    .tint(InpensoTheme.tide)
-                    .scaleEffect(1.3)
+            Color.black.opacity(0.3).ignoresSafeArea()
+            VStack(spacing: InpensoTheme.Space.md) {
+                ProgressView().tint(InpensoTheme.ink).scaleEffect(1.2)
                 Text("Reading receipt…")
-                    .font(InpensoTheme.body(16, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(InpensoTheme.body(15, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.ink)
             }
-            .padding(28)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .padding(InpensoTheme.Space.xl)
+            .background(
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                    .fill(InpensoTheme.panelFill)
+            )
         }
     }
 
     private var successOverlay: some View {
         ZStack {
-            Color.black.opacity(0.35).ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 64))
+            Color.black.opacity(0.3).ignoresSafeArea()
+            VStack(spacing: InpensoTheme.Space.sm) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(InpensoTheme.surplus)
                 Text("Saved")
-                    .font(InpensoTheme.brandFont(24))
+                    .font(InpensoTheme.brandFont(20, weight: .semibold))
                     .foregroundStyle(InpensoTheme.ink)
             }
-            .padding(32)
-            .background(InpensoTheme.foam, in: RoundedRectangle(cornerRadius: 24))
+            .padding(InpensoTheme.Space.xl)
+            .background(
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                    .fill(InpensoTheme.panelFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                            .stroke(InpensoTheme.hairline, lineWidth: 1)
+                    )
+            )
         }
     }
 
@@ -385,11 +393,7 @@ struct ReceiptScanView: View {
 
         HapticFeedback.success()
         withAnimation { animateSuccess = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-            dismiss()
-        }
-
-        // silence unused mutation warning by touching current
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { dismiss() }
         _ = current
     }
 }

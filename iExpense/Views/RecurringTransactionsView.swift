@@ -18,88 +18,39 @@ struct RecurringTransactionsView: View {
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
 
+    private let listRowInsets = EdgeInsets(
+        top: InpensoTheme.Space.sm,
+        leading: InpensoTheme.Space.screen,
+        bottom: InpensoTheme.Space.sm,
+        trailing: InpensoTheme.Space.screen
+    )
+
     var body: some View {
-        ZStack {
-            AtmosphereBackground(intensity: 0.55)
+        List {
+            introSection
 
-            List {
-                Section {
-                    Text(pro.isPro
-                         ? "Rent, subscriptions, and paychecks can post automatically on schedule."
-                         : "Free includes \(FreeTierLimits.recurringItems) recurring items. Pro unlocks unlimited + a 30-day calendar.")
-                        .font(InpensoTheme.body(13))
-                        .foregroundStyle(InpensoTheme.muted)
-                        .listRowBackground(Color.clear)
-                }
-
-                if !pro.isPro {
-                    Section {
-                        ProGateBanner(message: "\(service.items.count)/\(FreeTierLimits.recurringItems) free recurring slots used.") {
-                            pro.openPaywall()
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
-                    }
-                }
-
-                if pro.isPro {
-                    Section {
-                        NavigationLink {
-                            UpcomingRecurringCalendarView()
-                        } label: {
-                            Label("Upcoming this month", systemImage: "calendar")
-                        }
-                    }
-                }
-
-                if service.items.isEmpty {
-                    Section {
-                        VStack(spacing: 12) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 36))
-                                .foregroundStyle(InpensoTheme.tide)
-                            Text("No recurring items yet")
-                                .font(InpensoTheme.body(15, weight: .semibold))
-                                .foregroundStyle(InpensoTheme.ink)
-                            Text("Add rent, Netflix, salary — anything that repeats.")
-                                .font(InpensoTheme.body(13))
-                                .foregroundStyle(InpensoTheme.muted)
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 24)
-                        .listRowBackground(Color.white.opacity(0.55))
-                    }
-                } else {
-                    Section("Active & upcoming") {
-                        ForEach(service.items) { item in
-                            Button {
-                                editingItem = item
-                                showingEditor = true
-                            } label: {
-                                recurringRow(item)
-                            }
-                            .buttonStyle(.plain)
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    service.delete(item)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                                Button {
-                                    service.toggleActive(item)
-                                } label: {
-                                    Label(item.isActive ? "Pause" : "Resume", systemImage: item.isActive ? "pause.fill" : "play.fill")
-                                }
-                                .tint(InpensoTheme.tide)
-                            }
-                        }
-                    }
-                }
+            if !pro.isPro {
+                proLimitSection
             }
-            .scrollContentBackground(.hidden)
+
+            if pro.isPro {
+                calendarSection
+            }
+
+            if service.items.isEmpty {
+                emptySection
+            } else {
+                itemsSection
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(AtmosphereBackground())
+        .listRowSeparatorTint(InpensoTheme.hairline)
         .navigationTitle("Recurring")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .tint(InpensoTheme.ink)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -111,7 +62,7 @@ struct RecurringTransactionsView: View {
                     showingEditor = true
                 } label: {
                     Image(systemName: "plus")
-                        .foregroundStyle(InpensoTheme.copper)
+                        .foregroundStyle(InpensoTheme.ink)
                 }
             }
         }
@@ -142,38 +93,162 @@ struct RecurringTransactionsView: View {
         }
     }
 
+    // MARK: - Sections
+
+    private var introSection: some View {
+        Section {
+            Text(pro.isPro
+                 ? "Automatic posting for rent, subscriptions, and paychecks."
+                 : "Free plan: \(FreeTierLimits.recurringItems) items. Pro adds unlimited items and a calendar view.")
+                .font(InpensoTheme.body(13))
+                .foregroundStyle(InpensoTheme.muted)
+                .listRowInsets(EdgeInsets(
+                    top: InpensoTheme.Space.sm,
+                    leading: InpensoTheme.Space.screen,
+                    bottom: InpensoTheme.Space.sm,
+                    trailing: InpensoTheme.Space.screen
+                ))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
+    }
+
+    private var proLimitSection: some View {
+        Section {
+            ProGateBanner(message: "\(service.items.count)/\(FreeTierLimits.recurringItems) free slots used.") {
+                pro.openPaywall()
+            }
+            .listRowInsets(EdgeInsets(
+                top: 0,
+                leading: InpensoTheme.Space.screen,
+                bottom: InpensoTheme.Space.sm,
+                trailing: InpensoTheme.Space.screen
+            ))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+        }
+    }
+
+    private var calendarSection: some View {
+        Section {
+            NavigationLink {
+                UpcomingRecurringCalendarView()
+            } label: {
+                Label("Upcoming this month", systemImage: "calendar")
+            }
+            .listRowInsets(listRowInsets)
+            .listRowBackground(InpensoTheme.panelFill)
+        } header: {
+            sectionHeader("Calendar")
+        }
+    }
+
+    private var emptySection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
+                Text("No recurring items")
+                    .font(InpensoTheme.sectionLabel())
+                    .foregroundStyle(InpensoTheme.ink)
+                Text("Add rent, subscriptions, salary, or any repeating transaction.")
+                    .font(InpensoTheme.body(13))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, InpensoTheme.Space.lg)
+            .listRowInsets(EdgeInsets(
+                top: InpensoTheme.Space.sm,
+                leading: InpensoTheme.Space.screen,
+                bottom: InpensoTheme.Space.sm,
+                trailing: InpensoTheme.Space.screen
+            ))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+        }
+    }
+
+    private var itemsSection: some View {
+        Section {
+            ForEach(service.items) { item in
+                Button {
+                    editingItem = item
+                    showingEditor = true
+                } label: {
+                    recurringRow(item)
+                }
+                .buttonStyle(.plain)
+                .listRowInsets(listRowInsets)
+                .listRowBackground(InpensoTheme.panelFill)
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        service.delete(item)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    Button {
+                        service.toggleActive(item)
+                    } label: {
+                        Label(item.isActive ? "Pause" : "Resume", systemImage: item.isActive ? "pause.fill" : "play.fill")
+                    }
+                    .tint(InpensoTheme.tide)
+                }
+            }
+        } header: {
+            sectionHeader("Items")
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(InpensoTheme.sectionLabel())
+            .foregroundStyle(InpensoTheme.muted)
+            .padding(.horizontal, InpensoTheme.Space.screen)
+            .padding(.vertical, InpensoTheme.Space.xs)
+            .textCase(.none)
+            .listRowInsets(EdgeInsets())
+            .background(InpensoTheme.foam)
+    }
+
     private func recurringRow(_ item: RecurringTransaction) -> some View {
         let category = categoryStore.category(for: item.categoryID)
-        return HStack(spacing: 12) {
+        let amountFormatted = item.amount.formatted(.currency(code: currencyCode))
+        let signedAmount = item.type == .income ? "+\(amountFormatted)" : "−\(amountFormatted)"
+
+        return HStack(spacing: InpensoTheme.Space.sm) {
             Image(systemName: category.iconName)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(category.color)
-                .frame(width: 36, height: 36)
-                .background(category.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(width: 40, height: 40)
+                .background(
+                    category.color.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
-                    .font(InpensoTheme.body(15, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.ink)
+                    .font(InpensoTheme.body(15, weight: .medium))
+                    .foregroundStyle(item.isActive ? InpensoTheme.ink : InpensoTheme.muted)
+                    .lineLimit(1)
+
                 Text("\(item.frequency.displayName) · next \(item.nextDueDate.formatted(date: .abbreviated, time: .omitted))")
                     .font(InpensoTheme.label(12))
-                    .foregroundStyle(item.isActive ? InpensoTheme.muted : InpensoTheme.danger)
+                    .foregroundStyle(InpensoTheme.muted)
             }
 
-            Spacer()
+            Spacer(minLength: InpensoTheme.Space.xs)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(item.amount, format: .currency(code: currencyCode))
+                Text(signedAmount)
                     .font(InpensoTheme.displayAmount(15))
-                    .foregroundStyle(item.type == .income ? InpensoTheme.positive : InpensoTheme.ink)
+                    .foregroundStyle(item.type == .income ? InpensoTheme.incomeTint : InpensoTheme.ink)
+
                 if !item.isActive {
                     Text("Paused")
-                        .font(InpensoTheme.label(10, weight: .bold))
-                        .foregroundStyle(InpensoTheme.danger)
+                        .font(InpensoTheme.label(10, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.expenseTint)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
@@ -202,62 +277,80 @@ struct RecurringEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                AtmosphereBackground(intensity: 0.5)
-                Form {
-                    Section("Details") {
-                        TextField("Title", text: $title)
-                        HStack {
-                            Text(currencySymbol)
-                                .foregroundStyle(InpensoTheme.tide)
-                            TextField("Amount", text: $amount)
-                                .keyboardType(.decimalPad)
-                        }
-                        Picker("Type", selection: $type) {
-                            ForEach(TransactionType.allCases) { item in
-                                Text(item.displayName).tag(item)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+            List {
+                Section {
+                    TextField("Title", text: $title)
+
+                    HStack(spacing: InpensoTheme.Space.xs) {
+                        Text(currencySymbol)
+                            .font(InpensoTheme.body(16, weight: .medium))
+                            .foregroundStyle(InpensoTheme.muted)
+                        TextField("Amount", text: $amount)
+                            .keyboardType(.decimalPad)
                     }
 
-                    Section("Schedule") {
-                        Picker("Repeats", selection: $frequency) {
-                            ForEach(RecurrenceFrequency.allCases) { freq in
-                                Text(freq.displayName).tag(freq)
-                            }
-                        }
-                        DatePicker("Starts", selection: $startDate, displayedComponents: .date)
-                        Toggle("End date", isOn: $hasEndDate)
-                        if hasEndDate {
-                            DatePicker("Ends", selection: $endDate, displayedComponents: .date)
-                        }
-                    }
-
-                    Section("Category") {
-                        Picker("Category", selection: $categoryID) {
-                            ForEach(categoryStore.allCategories) { category in
-                                Text(category.displayName).tag(category.id)
-                            }
-                        }
-                    }
-
-                    Section("Notes") {
-                        TextField("Optional", text: $notes)
-                    }
+                    TransactionTypePicker(type: $type)
+                        .listRowInsets(EdgeInsets(
+                            top: InpensoTheme.Space.sm,
+                            leading: InpensoTheme.Space.screen,
+                            bottom: InpensoTheme.Space.sm,
+                            trailing: InpensoTheme.Space.screen
+                        ))
+                } header: {
+                    editorHeader("Details")
                 }
-                .scrollContentBackground(.hidden)
+
+                Section {
+                    Picker("Repeats", selection: $frequency) {
+                        ForEach(RecurrenceFrequency.allCases) { freq in
+                            Text(freq.displayName).tag(freq)
+                        }
+                    }
+                    DatePicker("Starts", selection: $startDate, displayedComponents: .date)
+                    Toggle("End date", isOn: $hasEndDate)
+                    if hasEndDate {
+                        DatePicker("Ends", selection: $endDate, displayedComponents: .date)
+                    }
+                } header: {
+                    editorHeader("Schedule")
+                }
+
+                Section {
+                    Picker("Category", selection: $categoryID) {
+                        ForEach(categoryStore.allCategories) { category in
+                            Text(category.displayName).tag(category.id)
+                        }
+                    }
+                } header: {
+                    editorHeader("Category")
+                }
+
+                Section {
+                    TextField("Optional", text: $notes)
+                } header: {
+                    editorHeader("Notes")
+                }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(AtmosphereBackground())
+            .listRowBackground(InpensoTheme.panelFill)
+            .listRowSeparatorTint(InpensoTheme.hairline)
             .navigationTitle(existing == nil ? "New recurring" : "Edit recurring")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .tint(InpensoTheme.ink)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(InpensoTheme.muted)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .disabled(!isValid)
-                        .foregroundStyle(InpensoTheme.copper)
+                        .font(InpensoTheme.label(15, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
                 }
             }
             .onAppear {
@@ -276,6 +369,13 @@ struct RecurringEditorSheet: View {
                 }
             }
         }
+    }
+
+    private func editorHeader(_ title: String) -> some View {
+        Text(title)
+            .font(InpensoTheme.sectionLabel())
+            .foregroundStyle(InpensoTheme.muted)
+            .textCase(nil)
     }
 
     private var isValid: Bool {

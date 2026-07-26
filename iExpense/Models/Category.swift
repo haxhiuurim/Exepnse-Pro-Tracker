@@ -27,9 +27,9 @@ enum TransactionType: String, CaseIterable, Codable, Identifiable {
     var amountColor: Color {
         switch self {
         case .expense:
-            return .primary
+            return Color(hex: "#0F172A") ?? .primary
         case .income:
-            return .green
+            return Color(hex: "#059669") ?? .green
         }
     }
 }

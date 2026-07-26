@@ -11,24 +11,24 @@ struct TransactionRowView: View {
     let category: FinanceCategory
 
     var body: some View {
-        HStack(spacing: InpensoTheme.Space.sm + 2) {
-            ZStack {
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm + 2, style: .continuous)
-                    .fill(category.color.opacity(0.16))
-                    .frame(width: 42, height: 42)
-                Image(systemName: category.iconName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(category.color)
-            }
+        HStack(spacing: InpensoTheme.Space.sm) {
+            Image(systemName: category.iconName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(category.color)
+                .frame(width: 40, height: 40)
+                .background(
+                    category.color.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(expense.title)
-                    .font(InpensoTheme.body(15, weight: .semibold))
+                    .font(InpensoTheme.body(15, weight: .medium))
                     .foregroundStyle(InpensoTheme.ink)
                     .lineLimit(1)
 
-                Text(expense.date, format: .dateTime.month(.abbreviated).day().hour().minute())
-                    .font(InpensoTheme.label(11, weight: .medium))
+                Text(expense.date, format: .dateTime.month(.abbreviated).day())
+                    .font(InpensoTheme.label(12))
                     .foregroundStyle(InpensoTheme.muted)
             }
 
@@ -36,7 +36,7 @@ struct TransactionRowView: View {
 
             Text(amountText)
                 .font(InpensoTheme.displayAmount(15))
-                .foregroundStyle(expense.type == .income ? InpensoTheme.positive : InpensoTheme.ink)
+                .foregroundStyle(expense.type == .income ? InpensoTheme.incomeTint : InpensoTheme.ink)
                 .layoutPriority(1)
         }
         .contentShape(Rectangle())

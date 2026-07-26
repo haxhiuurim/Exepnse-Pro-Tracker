@@ -1,0 +1,5 @@
+RewriteEngine On
+
+# Shared hosting: point document root to public/ and keep this file one level up.
+RewriteRule ^$ public/ [L]
+RewriteRule (.*) public/$1 [L]

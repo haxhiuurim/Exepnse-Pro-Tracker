@@ -27,10 +27,19 @@ struct SettingsView: View {
 
     private enum ExportFormat { case csv, ofx }
 
+    private var settingsRowInsets: EdgeInsets {
+        EdgeInsets(
+            top: InpensoTheme.Space.sm,
+            leading: InpensoTheme.Space.screen,
+            bottom: InpensoTheme.Space.sm,
+            trailing: InpensoTheme.Space.screen
+        )
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                brandHeader
+            List {
+                appHeader
                 proSection
                 appearanceSection
                 securitySection
@@ -42,10 +51,17 @@ struct SettingsView: View {
                 dataManagementSection
                 aboutSection
             }
+            .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
-            .background(AtmosphereBackground(intensity: 0.5))
+            .background(AtmosphereBackground())
             .navigationTitle("Settings")
             .tint(InpensoTheme.ink)
+            .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .listRowBackground(InpensoTheme.panelFill)
+            .listRowInsets(settingsRowInsets)
+            .listRowSeparatorTint(InpensoTheme.hairline)
+            .listSectionSpacing(InpensoTheme.Space.section)
             .sheet(isPresented: $showingImportFilePicker) {
                 documentPicker
             }
@@ -85,17 +101,17 @@ struct SettingsView: View {
 
     // MARK: - Sections
 
-    private var brandHeader: some View {
+    private var appHeader: some View {
         Section {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
                 Text("Inpenso")
-                    .font(InpensoTheme.brandFont(28, weight: .bold))
+                    .font(InpensoTheme.brandFont(24, weight: .bold))
                     .foregroundStyle(InpensoTheme.ink)
-                Text("Tide Ledger · private on-device finance · no ads")
+                Text("On-device expense tracking")
                     .font(InpensoTheme.body(13))
                     .foregroundStyle(InpensoTheme.muted)
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, InpensoTheme.Space.xs)
             .listRowBackground(Color.clear)
         }
     }
@@ -104,12 +120,12 @@ struct SettingsView: View {
         Section {
             if pro.isPro {
                 HStack {
-                    Label("Inpenso Pro", systemImage: "sparkles")
+                    Label("Inpenso Pro", systemImage: "checkmark.seal")
                         .foregroundStyle(InpensoTheme.ink)
                     Spacer()
                     Text("Active")
-                        .font(InpensoTheme.label(12, weight: .bold))
-                        .foregroundStyle(InpensoTheme.tide)
+                        .font(InpensoTheme.label(12, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.incomeTint)
                 }
                 #if DEBUG
                 Button("Debug: remove Pro") { pro.debugTogglePro() }
@@ -120,16 +136,17 @@ struct SettingsView: View {
                     pro.openPaywall(plan: .yearly)
                 } label: {
                     HStack {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
                             Text("Upgrade to Pro")
-                                .font(InpensoTheme.body(16, weight: .bold))
+                                .font(InpensoTheme.body(16, weight: .semibold))
                                 .foregroundStyle(InpensoTheme.ink)
-                            Text("Yearly from \(ProPlan.yearly.displayPrice) · Monthly \(ProPlan.monthly.displayPrice)")
+                            Text("Yearly \(ProPlan.yearly.displayPrice) · Monthly \(ProPlan.monthly.displayPrice)")
                                 .font(InpensoTheme.label(12))
                                 .foregroundStyle(InpensoTheme.muted)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(InpensoTheme.muted)
                     }
                 }
@@ -146,17 +163,21 @@ struct SettingsView: View {
                 }
             ))
         } header: {
-            Text("Inpenso Pro")
+            sectionHeader("Pro")
         } footer: {
             Text(pro.isPro
-                  ? "Thank you — every Pro tool is unlocked. Still zero ads."
-                  : "Free includes core tracking. Pro unlocks OCR, sync, goals, exports & more.")
+                 ? "All Pro features are enabled."
+                 : "Pro adds OCR, sync, goals, exports, and unlimited recurring items.")
+                .font(InpensoTheme.body(12))
+                .foregroundStyle(InpensoTheme.muted)
         }
     }
 
     private var appearanceSection: some View {
-        Section(header: Text("Appearance")) {
+        Section {
             themePicker
+        } header: {
+            sectionHeader("Appearance")
         }
     }
 
@@ -182,13 +203,15 @@ struct SettingsView: View {
             }
             .disabled(!biometricLock.canUseBiometrics && !biometricLock.isEnabled)
         } header: {
-            Text("Security")
+            sectionHeader("Security")
         } footer: {
             Text(
                 biometricLock.canUseBiometrics
-                ? "When enabled, Inpenso asks for \(biometricLock.biometryLabel) every time you open or return to the app."
-                : "Biometrics aren’t available on this device. You can still use the app without a lock."
+                ? "Requires \(biometricLock.biometryLabel) when opening or returning to the app."
+                : "Biometrics are not available on this device."
             )
+            .font(InpensoTheme.body(12))
+            .foregroundStyle(InpensoTheme.muted)
         }
     }
 
@@ -221,18 +244,26 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("Reminders")
+            sectionHeader("Reminders")
         } footer: {
             Text(
                 reminderService.isEnabled
                 ? reminderService.frequency.footerHint
-                : "Get nudged to log spending on a schedule you choose."
+                : "Schedule reminders to log spending."
             )
+            .font(InpensoTheme.body(12))
+            .foregroundStyle(InpensoTheme.muted)
         }
     }
 
     private var moneyToolsSection: some View {
-        Section(header: Text("Money tools")) {
+        Section {
+            NavigationLink {
+                SharedTripsView()
+            } label: {
+                Label("Shared trips", systemImage: "person.3")
+            }
+
             NavigationLink {
                 RecurringTransactionsView(expenseViewModel: expenseViewModel)
             } label: {
@@ -276,6 +307,8 @@ struct SettingsView: View {
             } label: {
                 Label("Themes & icons", systemImage: "paintpalette")
             }
+        } header: {
+            sectionHeader("Money tools")
         }
     }
 
@@ -289,8 +322,10 @@ struct SettingsView: View {
     }
 
     private var currencySection: some View {
-        Section(header: Text("Currency")) {
+        Section {
             currencyPicker
+        } header: {
+            sectionHeader("Currency")
         }
     }
 
@@ -309,13 +344,15 @@ struct SettingsView: View {
     }
 
     private var defaultSettingsSection: some View {
-        Section(header: Text("Default Settings")) {
+        Section {
             categoryPicker
+        } header: {
+            sectionHeader("Defaults")
         }
     }
 
     private var categoryPicker: some View {
-        Picker("Default Category", selection: $settingsManager.defaultCategoryID) {
+        Picker("Default category", selection: $settingsManager.defaultCategoryID) {
             ForEach(categoryStore.allCategories) { category in
                 categoryRow(for: category)
             }
@@ -333,7 +370,7 @@ struct SettingsView: View {
         HStack {
             Circle()
                 .fill(category.color)
-                .frame(width: 12, height: 12)
+                .frame(width: 10, height: 10)
             Text(category.displayName)
         }
         .tag(category.id)
@@ -347,17 +384,19 @@ struct SettingsView: View {
     }
 
     private var categoriesSection: some View {
-        Section(header: Text("Categories")) {
+        Section {
             NavigationLink {
                 CategoryManagementView()
             } label: {
-                Label("Manage Categories", systemImage: "square.grid.2x2")
+                Label("Manage categories", systemImage: "square.grid.2x2")
             }
+        } header: {
+            sectionHeader("Categories")
         }
     }
 
     private var dataManagementSection: some View {
-        Section(header: Text("Data Management")) {
+        Section {
             exportButton
             Button {
                 guard pro.isPro else { pro.openPaywall(); return }
@@ -375,6 +414,8 @@ struct SettingsView: View {
             }
             importButton
             resetButton
+        } header: {
+            sectionHeader("Data")
         }
     }
 
@@ -395,42 +436,53 @@ struct SettingsView: View {
 
     private var exportButton: some View {
         Button(action: exportData) {
-            Label("Export Data", systemImage: "square.and.arrow.up")
+            Label("Export data", systemImage: "square.and.arrow.up")
         }
     }
 
     private var importButton: some View {
         Button(action: { showingImportFilePicker = true }) {
-            Label("Import Data", systemImage: "square.and.arrow.down")
+            Label("Import data", systemImage: "square.and.arrow.down")
         }
     }
 
     private var resetButton: some View {
         Button(role: .destructive, action: { showingResetConfirmation = true }) {
-            Label("Reset All Data", systemImage: "trash")
+            Label("Reset all data", systemImage: "trash")
         }
-        .foregroundColor(.red)
+        .foregroundStyle(InpensoTheme.danger)
     }
 
     private var aboutSection: some View {
-        Section(header: Text("About")) {
+        Section {
             versionRow
             HStack {
-                Text("Theme")
+                Text("Build")
+                    .foregroundStyle(InpensoTheme.ink)
                 Spacer()
-                Text("Tide Ledger")
+                Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
                     .foregroundStyle(InpensoTheme.muted)
             }
+        } header: {
+            sectionHeader("About")
         }
     }
 
     private var versionRow: some View {
         HStack {
             Text("Version")
+                .foregroundStyle(InpensoTheme.ink)
             Spacer()
             Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
-                .foregroundColor(.secondary)
+                .foregroundStyle(InpensoTheme.muted)
         }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(InpensoTheme.sectionLabel())
+            .foregroundStyle(InpensoTheme.muted)
+            .textCase(nil)
     }
 
     private var documentPicker: some View {

@@ -7,24 +7,32 @@ import ActivityKit
 import WidgetKit
 import SwiftUI
 
+private enum LiveActivityColor {
+    static let ink = Color(red: 0.090, green: 0.090, blue: 0.090)
+    static let foam = Color(red: 0.969, green: 0.969, blue: 0.961)
+    static let tide = Color(red: 0.008, green: 0.518, blue: 0.780)
+    static let muted = Color(red: 0.451, green: 0.451, blue: 0.451)
+}
+
 struct SpentTodayLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: SpentTodayAttributes.self) { context in
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("SPENT TODAY")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10, weight: .semibold, design: .default))
+                        .foregroundStyle(LiveActivityColor.muted)
                     Text(context.state.amountSpent, format: .currency(code: context.state.currencyCode))
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .foregroundStyle(LiveActivityColor.ink)
                 }
                 Spacer()
-                Image(systemName: "wave.3.right")
-                    .foregroundStyle(Color(red: 0.48, green: 0.77, blue: 0.72))
+                Image(systemName: "chart.bar.fill")
+                    .foregroundStyle(LiveActivityColor.tide)
             }
             .padding()
-            .activityBackgroundTint(Color(red: 0.05, green: 0.23, blue: 0.23).opacity(0.92))
-            .activitySystemActionForegroundColor(.white)
+            .activityBackgroundTint(LiveActivityColor.foam)
+            .activitySystemActionForegroundColor(LiveActivityColor.ink)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {

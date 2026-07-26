@@ -2,14 +2,11 @@
 //  EditExpenseView.swift
 //  iExpense
 //
-//  Created by Dragomir Mindrescu on 27.04.2025.
-//
 
 import SwiftUI
 
 struct EditExpenseView: View {
     @Environment(\.dismiss) var dismiss
-    @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
     @ObservedObject var viewModel: ExpenseViewModel
@@ -36,7 +33,6 @@ struct EditExpenseView: View {
         _notes = State(initialValue: expense.notes ?? "")
     }
 
-    // Current currency symbol
     private var currencySymbol: String {
         let locale = Locale.current
         let currencyCode = settingsViewModel.selectedCurrency
@@ -46,109 +42,90 @@ struct EditExpenseView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AtmosphereBackground(intensity: 0.6)
-                
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Title and price card
-                        CardView(title: "Transaction Details", showDivider: true) {
-                            VStack(spacing: 16) {
-                                Picker("Type", selection: $transactionType) {
-                                    ForEach(TransactionType.allCases) { type in
-                                        Text(type.displayName).tag(type)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                                .padding(.horizontal)
+                AtmosphereBackground()
 
-                                TextFormField(
-                                    label: "Title",
-                                    text: $title,
-                                    placeholder: transactionType == .expense ? "Expense title" : "Income title"
-                                )
-                                .padding(.horizontal)
-                                
-                                CurrencyFormField(
-                                    label: "Amount",
-                                    amount: $price,
-                                    currencySymbol: currencySymbol
-                                )
-                                .padding(.horizontal)
-                                .padding(.bottom, 8)
-                            }
+                ScrollView {
+                    VStack(spacing: InpensoTheme.Space.section) {
+                        TransactionTypePicker(type: $transactionType)
+
+                        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
+                            Text("Amount")
+                                .font(InpensoTheme.label(11, weight: .semibold))
+                                .foregroundStyle(InpensoTheme.muted)
+                            CurrencyFormField(
+                                label: "",
+                                amount: $price,
+                                currencySymbol: currencySymbol
+                            )
                         }
-                        
-                        // Date picker
+
+                        CardView(title: "Details") {
+                            TextFormField(
+                                label: "Title",
+                                text: $title,
+                                placeholder: transactionType == .expense ? "Expense title" : "Income title"
+                            )
+                            .padding(.horizontal, InpensoTheme.Space.md)
+                        }
+
                         DatePickerCard(
                             title: "Date",
                             selectedDate: $selectedDate,
                             isExpanded: $showDatePicker
                         )
-                        
-                        // Category selection
-                        CardView(title: "Category") {
-                            CategoryGrid(
-                                selectedCategoryID: $selectedCategoryID,
-                                categories: categoryStore.categoriesForPicker(including: selectedCategoryID)
-                            )
-                                .padding(.horizontal)
-                        }
-                        
-                        // Notes section with improved appearance
-                        CardView(title: "Notes (Optional)") {
-                            ZStack(alignment: .topLeading) {
-                                // Background that adapts to color scheme
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(colorScheme == .dark ? Color(.systemGray6) : Color(.systemBackground))
-                                    .frame(minHeight: 100)
-                                
-                                // Text editor
-                                TextEditor(text: $notes)
-                                    .font(.body)
-                                    .scrollContentBackground(.hidden) // Hide the default background
-                                    .background(Color.clear) // Use transparent background
-                                    .padding(8)
-                                    .frame(minHeight: 100)
-                                
+
+                        if transactionType == .expense {
+                            CardView(title: "Category") {
+                                CategoryGrid(
+                                    selectedCategoryID: $selectedCategoryID,
+                                    categories: categoryStore.categoriesForPicker(including: selectedCategoryID)
+                                )
                             }
-                            .padding(.horizontal)
-                            .padding(.bottom, 8)
                         }
-                        
-                        // Action buttons
-                        VStack(spacing: 12) {
-                            Button(action: {
+
+                        CardView(title: "Notes") {
+                            TextEditor(text: $notes)
+                                .font(InpensoTheme.body(15))
+                                .foregroundStyle(InpensoTheme.ink)
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 88)
+                                .padding(InpensoTheme.Space.sm)
+                                .background(
+                                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                                        .fill(InpensoTheme.mist)
+                                )
+                                .padding(.horizontal, InpensoTheme.Space.md)
+                        }
+
+                        VStack(spacing: InpensoTheme.Space.sm) {
+                            Button {
                                 hideKeyboard()
                                 saveChanges()
                                 HapticFeedback.success()
                                 dismiss()
-                            }) {
-                                Label("Save changes", systemImage: "checkmark.circle.fill")
+                            } label: {
+                                Text("Save Changes")
                             }
-                            .buttonStyle(InpensoPrimaryButtonStyle())
+                            .buttonStyle(
+                                InpensoPrimaryButtonStyle(
+                                    tint: transactionType == .income ? InpensoTheme.incomeTint : InpensoTheme.ink
+                                )
+                            )
 
-                            Button(action: {
+                            Button {
                                 hideKeyboard()
                                 deleteExpense()
                                 HapticFeedback.impact(style: .medium)
                                 dismiss()
-                            }) {
-                                Label("Delete transaction", systemImage: "trash.fill")
-                                    .font(InpensoTheme.label(15, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .fill(InpensoTheme.danger)
-                                    )
+                            } label: {
+                                Text("Delete Transaction")
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(InpensoSecondaryButtonStyle())
+                            .foregroundStyle(InpensoTheme.danger)
                         }
-                        .padding(.top, 10)
                     }
-                    .padding()
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, InpensoTheme.Space.screen)
+                    .padding(.bottom, InpensoTheme.Space.section)
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
@@ -156,34 +133,23 @@ struct EditExpenseView: View {
             .navigationTitle("Edit Transaction")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // Cancel button
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(InpensoTheme.slate)
                 }
-                
-                // Done button only shows when keyboard is visible
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if keyboardVisible {
-                        Button("Done") {
-                            hideKeyboard()
-                        }
+                        Button("Done") { hideKeyboard() }
+                            .foregroundStyle(InpensoTheme.copper)
                     }
                 }
             }
-            .onAppear {
-                viewID = UUID()
-            }
+            .onAppear { viewID = UUID() }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-                withAnimation {
-                    keyboardVisible = true
-                }
+                withAnimation { keyboardVisible = true }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                withAnimation {
-                    keyboardVisible = false
-                }
+                withAnimation { keyboardVisible = false }
             }
         }
     }
@@ -194,7 +160,7 @@ struct EditExpenseView: View {
 
     private func saveChanges() {
         guard let priceValue = Double(price.replacingOccurrences(of: ",", with: ".")) else { return }
-        
+
         if let index = viewModel.expenses.firstIndex(where: { $0.id == expense.id }) {
             let selectedCategory = categoryStore.category(for: selectedCategoryID)
             viewModel.expenses[index].title = title
@@ -218,7 +184,10 @@ struct EditExpenseView: View {
 }
 
 #Preview {
-    EditExpenseView(viewModel: ExpenseViewModel(), expense: Expense(title: "Sample", price: 10, date: Date(), category: .food))
-        .environmentObject(SettingsViewModel())
-        .environmentObject(CategoryStore())
+    EditExpenseView(
+        viewModel: ExpenseViewModel(),
+        expense: Expense(title: "Sample", price: 10, date: Date(), category: .food)
+    )
+    .environmentObject(SettingsViewModel())
+    .environmentObject(CategoryStore())
 }

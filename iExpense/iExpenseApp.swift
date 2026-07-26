@@ -48,8 +48,9 @@ struct iExpenseApp: App {
 
     private func configureGlobalAppearance() {
         let nav = UINavigationBarAppearance()
-        nav.configureWithTransparentBackground()
-        nav.backgroundColor = .clear
+        nav.configureWithOpaqueBackground()
+        nav.backgroundColor = UIColor(InpensoTheme.foam)
+        nav.shadowColor = .clear
         nav.titleTextAttributes = [
             .foregroundColor: UIColor(InpensoTheme.ink),
             .font: UIFont.systemFont(ofSize: 17, weight: .semibold)
@@ -60,6 +61,7 @@ struct iExpenseApp: App {
         ]
         UINavigationBar.appearance().standardAppearance = nav
         UINavigationBar.appearance().scrollEdgeAppearance = nav
-        UINavigationBar.appearance().tintColor = UIColor(InpensoTheme.copper)
+        UINavigationBar.appearance().compactAppearance = nav
+        UINavigationBar.appearance().tintColor = UIColor(InpensoTheme.ink)
     }
 }

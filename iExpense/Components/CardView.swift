@@ -2,12 +2,9 @@
 //  CardView.swift
 //  iExpense
 //
-//  Created by Dragomir Mindrescu on 27.04.2025.
-//
 
 import SwiftUI
 
-/// Soft surface panel used in forms — Tide Ledger styling.
 struct CardView<Content: View>: View {
     let title: String
     let content: Content
@@ -27,27 +24,28 @@ struct CardView<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: titleAlignment, spacing: 12) {
-            Text(title)
-                .font(InpensoTheme.label(14, weight: .semibold))
-                .foregroundStyle(InpensoTheme.slate)
-                .padding(.horizontal)
+        VStack(alignment: titleAlignment, spacing: InpensoTheme.Space.md) {
+            Text(title.uppercased())
+                .font(InpensoTheme.label(11, weight: .semibold))
+                .foregroundStyle(InpensoTheme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, InpensoTheme.Space.md)
 
             if showDivider {
                 Divider()
-                    .opacity(0.4)
-                    .padding(.horizontal)
+                    .overlay(InpensoTheme.hairline)
+                    .padding(.horizontal, InpensoTheme.Space.md)
             }
 
             content
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, InpensoTheme.Space.md)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.72))
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                .fill(InpensoTheme.panelFill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(InpensoTheme.ink.opacity(0.06), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                        .stroke(InpensoTheme.hairline, lineWidth: 1)
                 )
         )
     }
@@ -57,8 +55,8 @@ struct SectionHeaderText: View {
     let text: String
 
     var body: some View {
-        Text(text)
-            .font(InpensoTheme.label(13, weight: .semibold))
+        Text(text.uppercased())
+            .font(InpensoTheme.label(11, weight: .semibold))
             .foregroundStyle(InpensoTheme.muted)
     }
 }
@@ -66,12 +64,12 @@ struct SectionHeaderText: View {
 #Preview {
     ZStack {
         AtmosphereBackground()
-        VStack(spacing: 20) {
-            CardView(title: "Basic Card") {
-                Text("This is the content of the card")
-                    .padding()
-            }
+        CardView(title: "Details") {
+            Text("Form content goes here")
+                .font(InpensoTheme.body(15))
+                .foregroundStyle(InpensoTheme.ink)
+                .padding(.horizontal, InpensoTheme.Space.md)
         }
-        .padding()
+        .padding(InpensoTheme.Space.screen)
     }
 }

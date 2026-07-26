@@ -14,21 +14,29 @@ struct CategoryManagementView: View {
     @State private var targetedCategoryID: String?
     @State private var draggedCategoryID: String?
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
+    private let listRowInsets = EdgeInsets(
+        top: InpensoTheme.Space.sm,
+        leading: InpensoTheme.Space.screen,
+        bottom: InpensoTheme.Space.sm,
+        trailing: InpensoTheme.Space.screen
+    )
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                categorySection(title: "Visible", categories: categoryStore.visibleCategories, isHiddenSection: false)
+        List {
+            visibleSection
 
-                if !categoryStore.hiddenCategories.isEmpty {
-                    categorySection(title: "Hidden", categories: categoryStore.hiddenCategories, isHiddenSection: true)
-                }
+            if !categoryStore.hiddenCategories.isEmpty {
+                hiddenSection
             }
-            .padding()
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(AtmosphereBackground())
+        .listRowSeparatorTint(InpensoTheme.hairline)
         .navigationTitle("Categories")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .tint(InpensoTheme.ink)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -36,6 +44,7 @@ struct CategoryManagementView: View {
                     showingEditor = true
                 } label: {
                     Image(systemName: "plus")
+                        .foregroundStyle(InpensoTheme.ink)
                 }
             }
         }
@@ -46,70 +55,168 @@ struct CategoryManagementView: View {
         }
     }
 
-    private func categorySection(title: String, categories: [FinanceCategory], isHiddenSection: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
+    // MARK: - Sections
 
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(categories) { category in
-                    if isHiddenSection {
-                        managementTile(for: category, isHiddenSection: true)
-                    } else {
-                        managementTile(for: category, isHiddenSection: false)
-                            .onDrag {
-                                draggedCategoryID = category.id
-                                return NSItemProvider(object: category.id as NSString)
-                            } preview: {
-                                CategoryDragPreview(category: category)
-                            }
-                            .onDrop(
-                                of: [UTType.text],
-                                delegate: CategoryReorderDropDelegate(
-                                    destinationCategoryID: category.id,
-                                    draggedCategoryID: $draggedCategoryID,
-                                    targetedCategoryID: $targetedCategoryID,
-                                    moveCategory: { sourceID, destinationID in
-                                        categoryStore.moveCategory(sourceID, to: destinationID)
-                                    },
-                                    clearDragState: {
-                                        clearDragState()
-                                    }
-                                )
-                            )
-                            .animation(.spring(response: 0.28, dampingFraction: 0.82), value: categoryStore.visibleCategories.map(\.id))
-                            .onDisappear {
-                                if draggedCategoryID == category.id {
-                                    clearDragState()
-                                } else {
-                                    targetedCategoryID = nil
-                                }
-                            }
+    private var visibleSection: some View {
+        Section {
+            ForEach(categoryStore.visibleCategories) { category in
+                categoryRow(
+                    category,
+                    isHidden: false,
+                    canReset: !category.isCustom && categoryStore.hasBuiltInOverride(for: category.id)
+                )
+                .listRowInsets(listRowInsets)
+                .listRowBackground(InpensoTheme.panelFill)
+                .overlay(alignment: .leading) {
+                    if draggedCategoryID != nil && targetedCategoryID == category.id {
+                        Rectangle()
+                            .fill(InpensoTheme.ink)
+                            .frame(height: 2)
+                            .padding(.horizontal, InpensoTheme.Space.screen)
+                    }
+                }
+                .onDrag {
+                    draggedCategoryID = category.id
+                    return NSItemProvider(object: category.id as NSString)
+                }
+                .onDrop(
+                    of: [UTType.text],
+                    delegate: CategoryReorderDropDelegate(
+                        destinationCategoryID: category.id,
+                        draggedCategoryID: $draggedCategoryID,
+                        targetedCategoryID: $targetedCategoryID,
+                        moveCategory: { sourceID, destinationID in
+                            categoryStore.moveCategory(sourceID, to: destinationID)
+                        },
+                        clearDragState: clearDragState
+                    )
+                )
+                .onDisappear {
+                    if draggedCategoryID == category.id {
+                        clearDragState()
                     }
                 }
             }
+        } header: {
+            sectionHeader("Visible", subtitle: "Drag to reorder")
         }
     }
 
-    private func managementTile(for category: FinanceCategory, isHiddenSection: Bool) -> CategoryManagementTile {
-        CategoryManagementTile(
-            category: category,
-            isTargeted: draggedCategoryID != nil && targetedCategoryID == category.id,
-            isHidden: isHiddenSection,
-            canReset: !category.isCustom && categoryStore.hasBuiltInOverride(for: category.id),
-            onEdit: {
-                edit(category)
-            },
-            onHide: {
-                hide(category)
-            },
-            onRestore: {
-                restore(category)
-            },
-            onReset: {
-                categoryStore.resetBuiltInOverride(for: category.id)
+    private var hiddenSection: some View {
+        Section {
+            ForEach(categoryStore.hiddenCategories) { category in
+                categoryRow(
+                    category,
+                    isHidden: true,
+                    canReset: !category.isCustom && categoryStore.hasBuiltInOverride(for: category.id)
+                )
+                .listRowInsets(listRowInsets)
+                .listRowBackground(InpensoTheme.panelFill)
+                .opacity(0.72)
             }
-        )
+        } header: {
+            sectionHeader("Hidden", subtitle: nil)
+        }
+    }
+
+    private func sectionHeader(_ title: String, subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
+            Text(title)
+                .font(InpensoTheme.sectionLabel())
+                .foregroundStyle(InpensoTheme.ink)
+            if let subtitle {
+                Text(subtitle)
+                    .font(InpensoTheme.label(12))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+        }
+        .padding(.horizontal, InpensoTheme.Space.screen)
+        .padding(.vertical, InpensoTheme.Space.xs)
+        .textCase(.none)
+        .listRowInsets(EdgeInsets())
+        .background(InpensoTheme.foam)
+    }
+
+    private func categoryRow(_ category: FinanceCategory, isHidden: Bool, canReset: Bool) -> some View {
+        HStack(spacing: InpensoTheme.Space.sm) {
+            Image(systemName: category.iconName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(category.color)
+                .frame(width: 36, height: 36)
+                .background(
+                    category.color.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                )
+
+            Text(category.displayName)
+                .font(InpensoTheme.body(15, weight: .medium))
+                .foregroundStyle(isHidden ? InpensoTheme.muted : InpensoTheme.ink)
+
+            Spacer(minLength: InpensoTheme.Space.xs)
+
+            if isHidden {
+                Button("Restore") {
+                    restore(category)
+                }
+                .font(InpensoTheme.label(13, weight: .semibold))
+                .foregroundStyle(InpensoTheme.tide)
+                .buttonStyle(.plain)
+            } else {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(InpensoTheme.muted)
+
+                categoryMenu(category: category, isHidden: isHidden, canReset: canReset)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            edit(category)
+        }
+    }
+
+    private func categoryMenu(category: FinanceCategory, isHidden: Bool, canReset: Bool) -> some View {
+        Menu {
+            Button {
+                edit(category)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+
+            if isHidden {
+                Button {
+                    restore(category)
+                } label: {
+                    Label("Restore", systemImage: "eye")
+                }
+            } else {
+                Button(role: .destructive) {
+                    hide(category)
+                } label: {
+                    Label("Hide", systemImage: "eye.slash")
+                }
+            }
+
+            if canReset {
+                Divider()
+                Button(role: .destructive) {
+                    categoryStore.resetBuiltInOverride(for: category.id)
+                } label: {
+                    Label("Reset defaults", systemImage: "arrow.counterclockwise")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(InpensoTheme.muted)
+                .frame(width: 32, height: 32)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func clearDragState() {
+        draggedCategoryID = nil
+        targetedCategoryID = nil
     }
 
     private func edit(_ category: FinanceCategory) {
@@ -132,12 +239,9 @@ struct CategoryManagementView: View {
             settingsViewModel.defaultCategoryID = preferredCategoryID
         }
     }
-
-    private func clearDragState() {
-        draggedCategoryID = nil
-        targetedCategoryID = nil
-    }
 }
+
+// MARK: - Editor
 
 private struct CategoryEditorView: View {
     @Environment(\.dismiss) private var dismiss
@@ -173,62 +277,82 @@ private struct CategoryEditorView: View {
     }
 
     var body: some View {
-        NavigationView {
-            Form {
-                Section("Details") {
+        NavigationStack {
+            List {
+                Section {
                     TextField("Name", text: $name)
+                } header: {
+                    editorHeader("Details")
                 }
 
-                Section("Icon") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 12) {
+                Section {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: InpensoTheme.Space.sm) {
                         ForEach(icons, id: \.self) { icon in
                             Button {
                                 iconName = icon
                             } label: {
                                 Image(systemName: icon)
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(iconName == icon ? .white : .primary)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(iconName == icon ? .white : InpensoTheme.ink)
                                     .frame(width: 44, height: 44)
-                                    .background(iconName == icon ? Color.accentColor : Color(.tertiarySystemBackground))
-                                    .clipShape(Circle())
+                                    .background(
+                                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                            .fill(iconName == icon ? InpensoTheme.ink : InpensoTheme.mist)
+                                    )
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.vertical, 6)
+                    .padding(.vertical, InpensoTheme.Space.xs)
+                    .listRowInsets(EdgeInsets(
+                        top: InpensoTheme.Space.sm,
+                        leading: InpensoTheme.Space.screen,
+                        bottom: InpensoTheme.Space.sm,
+                        trailing: InpensoTheme.Space.screen
+                    ))
+                } header: {
+                    editorHeader("Icon")
                 }
 
-                Section("Color") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                Section {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: InpensoTheme.Space.sm) {
                         ForEach(colors, id: \.self) { color in
                             Button {
                                 colorHex = color
                             } label: {
-                                Circle()
-                                    .fill(Color(hex: color) ?? .gray)
+                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                    .fill(Color(hex: color) ?? InpensoTheme.muted)
                                     .frame(width: 36, height: 36)
                                     .overlay {
                                         if colorHex == color {
                                             Image(systemName: "checkmark")
                                                 .font(.caption.weight(.bold))
-                                                .foregroundColor(.white)
+                                                .foregroundStyle(.white)
                                         }
                                     }
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.vertical, 6)
+                    .padding(.vertical, InpensoTheme.Space.xs)
+                    .listRowInsets(EdgeInsets(
+                        top: InpensoTheme.Space.sm,
+                        leading: InpensoTheme.Space.screen,
+                        bottom: InpensoTheme.Space.sm,
+                        trailing: InpensoTheme.Space.screen
+                    ))
+                } header: {
+                    editorHeader("Color")
                 }
 
                 if let category {
-                    Section("Actions") {
+                    Section {
                         if categoryStore.isHidden(category.id) {
                             Button {
                                 categoryStore.restoreCategory(category)
                                 dismiss()
                             } label: {
-                                Label("Restore Category", systemImage: "eye")
+                                Label("Restore category", systemImage: "eye")
                             }
                         } else {
                             Button(role: .destructive) {
@@ -236,7 +360,7 @@ private struct CategoryEditorView: View {
                                 normalizeDefaultCategory()
                                 dismiss()
                             } label: {
-                                Label("Remove from Pickers", systemImage: "eye.slash")
+                                Label("Hide from pickers", systemImage: "eye.slash")
                             }
                         }
 
@@ -245,31 +369,51 @@ private struct CategoryEditorView: View {
                                 categoryStore.resetBuiltInOverride(for: category.id)
                                 dismiss()
                             } label: {
-                                Label("Reset to Defaults", systemImage: "arrow.counterclockwise")
+                                Label("Reset to defaults", systemImage: "arrow.counterclockwise")
                             }
                         }
+                    } header: {
+                        editorHeader("Actions")
                     }
                 }
             }
-            .navigationTitle(category == nil ? "New Category" : "Edit Category")
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(AtmosphereBackground())
+            .listRowBackground(InpensoTheme.panelFill)
+            .listRowSeparatorTint(InpensoTheme.hairline)
+            .navigationTitle(category == nil ? "New category" : "Edit category")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .tint(InpensoTheme.ink)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .foregroundStyle(InpensoTheme.muted)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         save()
                     }
+                    .font(InpensoTheme.label(15, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.ink)
                 }
             }
             .alert("Category name is required", isPresented: $showingValidation) {
                 Button("OK", role: .cancel) { }
             }
         }
+    }
+
+    private func editorHeader(_ title: String) -> some View {
+        Text(title)
+            .font(InpensoTheme.sectionLabel())
+            .foregroundStyle(InpensoTheme.muted)
+            .textCase(nil)
     }
 
     private func save() {
@@ -299,133 +443,6 @@ private struct CategoryEditorView: View {
     }
 }
 
-private struct CategoryManagementTile: View {
-    let category: FinanceCategory
-    let isTargeted: Bool
-    let isHidden: Bool
-    let canReset: Bool
-    let onEdit: () -> Void
-    let onHide: () -> Void
-    let onRestore: () -> Void
-    let onReset: () -> Void
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ZStack(alignment: .topTrailing) {
-                Circle()
-                    .fill(category.color)
-                    .frame(width: 56, height: 56)
-
-                Image(systemName: category.iconName)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 56, height: 56)
-
-                menu
-                    .offset(x: 10, y: -10)
-            }
-
-            Text(category.displayName)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(isHidden ? .secondary : .primary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .frame(height: 32)
-
-            if isHidden {
-                Button(action: onRestore) {
-                    Label("Restore", systemImage: "eye")
-                        .font(.caption2.weight(.semibold))
-                }
-                .buttonStyle(.borderless)
-            } else {
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 124)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(isTargeted ? Color.accentColor : Color.clear, lineWidth: 2)
-        )
-        .opacity(isHidden ? 0.65 : 1)
-        .scaleEffect(isTargeted ? 1.03 : 1)
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .onTapGesture(perform: onEdit)
-        .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isTargeted)
-    }
-
-    private var menu: some View {
-        Menu {
-            Button(action: onEdit) {
-                Label("Edit", systemImage: "pencil")
-            }
-
-            if isHidden {
-                Button(action: onRestore) {
-                    Label("Restore", systemImage: "eye")
-                }
-            } else {
-                Button(role: .destructive, action: onHide) {
-                    Label("Remove", systemImage: "eye.slash")
-                }
-            }
-
-            if canReset {
-                Divider()
-
-                Button(role: .destructive, action: onReset) {
-                    Label("Reset", systemImage: "arrow.counterclockwise")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(Color.secondary, Color(.systemBackground))
-                .padding(6)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct CategoryDragPreview: View {
-    let category: FinanceCategory
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Circle()
-                .fill(category.color)
-                .frame(width: 52, height: 52)
-                .overlay {
-                    Image(systemName: category.iconName)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-
-            Text(category.displayName)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .lineLimit(1)
-        }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-    }
-}
-
 private struct CategoryReorderDropDelegate: DropDelegate {
     let destinationCategoryID: String
     @Binding var draggedCategoryID: String?
@@ -441,7 +458,7 @@ private struct CategoryReorderDropDelegate: DropDelegate {
 
         targetedCategoryID = destinationCategoryID
 
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+        withAnimation(InpensoTheme.Motion.snappy) {
             moveCategory(sourceCategoryID, destinationCategoryID)
         }
     }

@@ -2,8 +2,6 @@
 //  CategoryButton.swift
 //  iExpense
 //
-//  Created by Dragomir Mindrescu on 27.04.2025.
-//
 
 import SwiftUI
 
@@ -11,52 +9,41 @@ struct CategoryButton: View {
     let category: FinanceCategory
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                // Icon with circle background
+            VStack(spacing: InpensoTheme.Space.xs) {
                 ZStack {
-                    // Base shape
-                    Circle()
-                        .fill(category.color)
-                        .frame(width: 56, height: 56)
-                    
-                    // Icon
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                        .fill(isSelected ? category.color : InpensoTheme.mist)
+                        .frame(width: 48, height: 48)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                                .stroke(isSelected ? category.color : InpensoTheme.hairline, lineWidth: 1)
+                        )
+
                     Image(systemName: category.iconName)
-                        .font(.system(size: 22))
-                        .foregroundColor(.white)
-                    
-                    // Selection indicator
-                    if isSelected {
-                        Circle()
-                            .stroke(Color.white, lineWidth: 3)
-                            .frame(width: 56, height: 56)
-                    }
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(isSelected ? .white : category.color)
                 }
-                .shadow(color: isSelected ? category.color.opacity(0.6) : Color.clear, radius: isSelected ? 5 : 0)
-                
-                // Category name in fixed-height container
+
                 Text(category.displayName)
-                    .font(.caption)
-                    .fontWeight(isSelected ? .bold : .medium)
-                    .foregroundColor(isSelected ? .primary : .secondary)
+                    .font(InpensoTheme.label(10, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? InpensoTheme.ink : InpensoTheme.muted)
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(2)
-                    .frame(height: 32)
+                    .frame(height: 26)
                     .minimumScaleFactor(0.8)
             }
-            .frame(width: 80)
-            .scaleEffect(isSelected ? 1.05 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+            .frame(width: 72)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
 #Preview(traits: .sizeThatFitsLayout) {
-    HStack(spacing: 20) {
+    HStack(spacing: InpensoTheme.Space.lg) {
         CategoryButton(
             category: FinanceCategory.builtIn(for: .food),
             isSelected: true,
@@ -68,5 +55,6 @@ struct CategoryButton: View {
             action: {}
         )
     }
-    .padding()
-} 
+    .padding(InpensoTheme.Space.screen)
+    .background(InpensoTheme.foam)
+}

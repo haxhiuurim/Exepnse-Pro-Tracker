@@ -293,7 +293,7 @@ class AnalyticsViewModel: ObservableObject {
                     title: "Budget Alert",
                     description: "You've used \(Int(percentOfBudgetUsed))% of your monthly budget.",
                     icon: "exclamationmark.triangle",
-                    color: .red
+                    color: InpensoTheme.danger
                 ))
             } else if percentOfBudgetUsed >= 75 {
                 newInsights.append(SpendingInsight(
@@ -301,7 +301,7 @@ class AnalyticsViewModel: ObservableObject {
                     title: "Budget Notice",
                     description: "You've used \(Int(percentOfBudgetUsed))% of your monthly budget.",
                     icon: "bell",
-                    color: .orange
+                    color: InpensoTheme.copperSoft
                 ))
             } else if daysRemainingInMonth < 7 && percentOfBudgetUsed < 60 {
                 newInsights.append(SpendingInsight(
@@ -309,7 +309,7 @@ class AnalyticsViewModel: ObservableObject {
                     title: "Under Budget",
                     description: "Great job! You're under budget this month.",
                     icon: "checkmark.circle",
-                    color: .green
+                    color: InpensoTheme.surplus
                 ))
             }
         }
@@ -320,7 +320,7 @@ class AnalyticsViewModel: ObservableObject {
                 title: "Spending Increase",
                 description: "\(categoryName(for: fastestGrowing.0)) spending increased by \(Int(fastestGrowing.1))% from last month.",
                 icon: "arrow.up.right",
-                color: .red
+                color: InpensoTheme.danger
             ))
         }
 
@@ -336,7 +336,7 @@ class AnalyticsViewModel: ObservableObject {
                 title: "Spending Decrease",
                 description: "You reduced \(categoryName(for: bestReduction.categoryID)) spending by \(Int(abs(bestReduction.percentChange)))%.",
                 icon: "arrow.down.right",
-                color: .green
+                color: InpensoTheme.surplus
             ))
         }
 
@@ -352,7 +352,7 @@ class AnalyticsViewModel: ObservableObject {
                 title: "Projected Overspending",
                 description: "At this rate, you might exceed your budget by \(formattedOverage).",
                 icon: "chart.line.uptrend.xyaxis",
-                color: .red
+                color: InpensoTheme.danger
             ))
         }
 
@@ -362,7 +362,7 @@ class AnalyticsViewModel: ObservableObject {
                 title: status.progress >= 1 ? "Category over budget" : "Category nearly maxed",
                 description: "\(categoryName(for: status.categoryID)) is at \(Int(status.progress * 100))% of its monthly limit.",
                 icon: "tag.fill",
-                color: status.progress >= 1 ? .red : .orange
+                color: status.progress >= 1 ? InpensoTheme.danger : InpensoTheme.copperSoft
             ))
         }
 

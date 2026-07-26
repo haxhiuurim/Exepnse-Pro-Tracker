@@ -1,0 +1,80 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Run database migrations.
+ *
+ * Usage:
+ *   php scripts/migrate.php
+ *   php scripts/migrate.php --fresh   # drop all tables first (SQLite only)
+ */
+
+$config = require dirname(__DIR__) . '/config.php';
+
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'Inpenso\\';
+    if (!str_starts_with($class, $prefix)) {
+        return;
+    }
+
+    $relative = substr($class, strlen($prefix));
+    $path = dirname(__DIR__) . '/src/' . str_replace('\\', '/', $relative) . '.php';
+
+    if (is_readable($path)) {
+        require $path;
+    }
+});
+
+use Inpenso\Database;
+
+$driver = $config['db_driver'] ?? 'sqlite';
+$fresh = in_array('--fresh', $argv ?? [], true);
+
+echo "Inpenso migrate\n";
+echo "Driver: {$driver}\n";
+
+$db = Database::connection($config);
+
+if ($fresh && $driver === 'sqlite') {
+    echo "Dropping existing SQLite tables...\n";
+    $tables = ['expense_splits', 'expenses', 'trip_members', 'trips', 'users'];
+    foreach ($tables as $table) {
+        $db->exec("DROP TABLE IF EXISTS {$table}");
+    }
+}
+
+$schemaFile = $driver === 'mysql'
+    ? dirname(__DIR__) . '/database/schema.mysql.sql'
+    : dirname(__DIR__) . '/database/schema.sql';
+
+if (!is_readable($schemaFile)) {
+    fwrite(STDERR, "Schema file not found: {$schemaFile}\n");
+    exit(1);
+}
+
+$sql = file_get_contents($schemaFile);
+if ($sql === false) {
+    fwrite(STDERR, "Could not read schema file.\n");
+    exit(1);
+}
+
+$statements = array_filter(array_map('trim', explode(';', $sql)));
+
+try {
+    foreach ($statements as $statement) {
+        if ($statement === '' || str_starts_with($statement, '--')) {
+            continue;
+        }
+        $db->exec($statement);
+    }
+} catch (Throwable $e) {
+    fwrite(STDERR, 'Migration failed: ' . $e->getMessage() . PHP_EOL);
+    exit(1);
+}
+
+echo "Migration complete.\n";
+
+if ($driver === 'sqlite') {
+    echo 'Database file: ' . $config['sqlite_path'] . PHP_EOL;
+}

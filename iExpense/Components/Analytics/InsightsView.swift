@@ -2,18 +2,13 @@
 //  InsightsView.swift
 //  iExpense
 //
-//  Created by Dragomir Mindrescu on 27.04.2025.
-//
-
 
 import SwiftUI
 
-// Add Identifiable conformance to SpendingInsight from AnalyticsViewModel
 extension SpendingInsight: Identifiable {
     public var id: String { title }
 }
 
-/// A component that displays key spending statistics
 struct KeyStatisticsView: View {
     @EnvironmentObject private var categoryStore: CategoryStore
 
@@ -21,7 +16,7 @@ struct KeyStatisticsView: View {
     let totalSpent: Double
     let mostActiveSpendingPeriod: String?
     let currencyCode: String
-    
+
     init(
         biggestExpenseCategory: (categoryID: String, amount: Double)?,
         totalSpent: Double,
@@ -33,134 +28,141 @@ struct KeyStatisticsView: View {
         self.mostActiveSpendingPeriod = mostActiveSpendingPeriod
         self.currencyCode = currencyCode ?? SettingsViewModel.getAppCurrency()
     }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Key Statistics")
-                .font(.headline)
-            
-            // Biggest expense category
-            if let (categoryID, amount) = biggestExpenseCategory {
-                let category = categoryStore.category(for: categoryID)
 
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Top Spending Category")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        HStack {
-                            Circle()
-                                .fill(category.color)
-                                .frame(width: 10, height: 10)
-                            
-                            Text(category.displayName)
-                                .font(.system(size: 18, weight: .bold))
+    var body: some View {
+        SurfacePanel(padding: InpensoTheme.Space.md) {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+                InpensoSectionHeader(title: "Key Statistics")
+
+                if biggestExpenseCategory == nil && mostActiveSpendingPeriod == nil {
+                    Text("Not enough data yet")
+                        .font(InpensoTheme.body(14))
+                        .foregroundStyle(InpensoTheme.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, InpensoTheme.Space.md)
+                } else {
+                    VStack(spacing: 0) {
+                        if let (categoryID, amount) = biggestExpenseCategory {
+                            topCategoryRow(categoryID: categoryID, amount: amount)
+                            if mostActiveSpendingPeriod != nil {
+                                Divider().overlay(InpensoTheme.hairline)
+                            }
+                        }
+                        if let period = mostActiveSpendingPeriod {
+                            activeDayRow(period: period)
                         }
                     }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        if totalSpent > 0 {
-                            Text("\(Int((amount / totalSpent) * 100))% of total")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Text(amount, format: .currency(code: currencyCode))
-                            .font(.system(size: 18, weight: .bold))
-                    }
                 }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.secondarySystemBackground))
-                )
-            }
-            
-            // Most active spending period
-            if let period = mostActiveSpendingPeriod {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Most Active Days")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Text(period)
-                            .font(.system(size: 18, weight: .bold))
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 24))
-                        .foregroundColor(.blue)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.secondarySystemBackground))
-                )
             }
         }
     }
+
+    private func topCategoryRow(categoryID: String, amount: Double) -> some View {
+        let category = categoryStore.category(for: categoryID)
+        return HStack(spacing: InpensoTheme.Space.sm) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Top category")
+                    .font(InpensoTheme.label(11, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.muted)
+                HStack(spacing: InpensoTheme.Space.xs) {
+                    Circle().fill(category.color).frame(width: 8, height: 8)
+                    Text(category.displayName)
+                        .font(InpensoTheme.body(16, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(amount, format: .currency(code: currencyCode))
+                    .font(InpensoTheme.displayAmount(18))
+                    .foregroundStyle(InpensoTheme.ink)
+                if totalSpent > 0 {
+                    Text("\(Int((amount / totalSpent) * 100))% of total")
+                        .font(InpensoTheme.label(10))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+            }
+        }
+        .padding(.vertical, InpensoTheme.Space.sm)
+    }
+
+    private func activeDayRow(period: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Most active day")
+                    .font(InpensoTheme.label(11, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.muted)
+                Text(period)
+                    .font(InpensoTheme.body(16, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.ink)
+            }
+            Spacer()
+        }
+        .padding(.vertical, InpensoTheme.Space.sm)
+    }
 }
 
-/// A component that displays a collection of spending insights
 struct InsightsCardView: View {
     let insights: [SpendingInsight]
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Smart Insights")
-                .font(.headline)
-            
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            InpensoSectionHeader(title: "Smart Insights")
+
             if insights.isEmpty {
-                Text("No insights available yet")
-                    .foregroundColor(.secondary)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.secondarySystemBackground))
-                    )
+                SurfacePanel(padding: InpensoTheme.Space.md) {
+                    Text("Insights appear as you track more spending")
+                        .font(InpensoTheme.body(14))
+                        .foregroundStyle(InpensoTheme.muted)
+                        .frame(maxWidth: .infinity)
+                }
             } else {
-                ForEach(insights) { insight in
-                    insightCard(insight: insight)
+                VStack(spacing: InpensoTheme.Space.sm) {
+                    ForEach(insights) { insight in
+                        insightRow(insight: insight)
+                    }
                 }
             }
         }
     }
-    
-    private func insightCard(insight: SpendingInsight) -> some View {
-        HStack(spacing: 16) {
-            // Icon
-            Image(systemName: insight.icon)
-                .font(.system(size: 28))
-                .foregroundColor(insight.color)
-                .frame(width: 36)
-            
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
+
+    private func insightRow(insight: SpendingInsight) -> some View {
+        HStack(alignment: .top, spacing: InpensoTheme.Space.md) {
+            Rectangle()
+                .fill(insightThemeColor(for: insight))
+                .frame(width: 3)
+
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
                 Text(insight.title)
-                    .font(.headline)
-                
+                    .font(InpensoTheme.body(15, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.ink)
                 Text(insight.description)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(InpensoTheme.body(13))
+                    .foregroundStyle(InpensoTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(InpensoTheme.Space.md)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.secondarySystemBackground))
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                .fill(InpensoTheme.panelFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                        .stroke(InpensoTheme.hairline, lineWidth: 1)
+                )
         )
+    }
+
+    private func insightThemeColor(for insight: SpendingInsight) -> Color {
+        switch insight.type {
+        case .positive: return InpensoTheme.surplus
+        case .negative: return InpensoTheme.danger
+        case .neutral: return InpensoTheme.tide
+        }
     }
 }
 
-/// A component that displays spending pattern analysis
 struct SpendingPatternView: View {
     struct PatternAnalysis {
         let title: String
@@ -168,131 +170,90 @@ struct SpendingPatternView: View {
         let icon: String
         let color: Color
     }
-    
+
     let weekdayVsWeekendAnalysis: PatternAnalysis?
     let monthlyPatternAnalysis: PatternAnalysis?
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Spending Patterns")
-                .font(.headline)
-            
-            if weekdayVsWeekendAnalysis == nil && monthlyPatternAnalysis == nil {
-                Text("Not enough data")
-                    .foregroundColor(.secondary)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else {
-                // Analyze weekdays vs weekends
-                if let analysis = weekdayVsWeekendAnalysis {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Weekday vs Weekend")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            Text(analysis.title)
-                                .font(.system(size: 16, weight: .semibold))
-                            
-                            Text(analysis.description)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+        SurfacePanel(padding: InpensoTheme.Space.md) {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+                InpensoSectionHeader(title: "Spending Patterns")
+
+                if weekdayVsWeekendAnalysis == nil && monthlyPatternAnalysis == nil {
+                    Text("Not enough data")
+                        .font(InpensoTheme.body(14))
+                        .foregroundStyle(InpensoTheme.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, InpensoTheme.Space.md)
+                } else {
+                    VStack(spacing: 0) {
+                        if let analysis = weekdayVsWeekendAnalysis {
+                            patternRow(analysis: analysis, label: "Weekday vs weekend")
+                            if monthlyPatternAnalysis != nil {
+                                Divider().overlay(InpensoTheme.hairline)
+                            }
                         }
-                        
-                        Spacer()
-                        
-                        Image(systemName: analysis.icon)
-                            .font(.system(size: 24))
-                            .foregroundColor(analysis.color)
-                    }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.tertiarySystemBackground))
-                    )
-                }
-                
-                // Analyze beginning vs end of month
-                if let analysis = monthlyPatternAnalysis {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Monthly Pattern")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            Text(analysis.title)
-                                .font(.system(size: 16, weight: .semibold))
-                            
-                            Text(analysis.description)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        if let analysis = monthlyPatternAnalysis {
+                            patternRow(analysis: analysis, label: "Monthly rhythm")
                         }
-                        
-                        Spacer()
-                        
-                        Image(systemName: analysis.icon)
-                            .font(.system(size: 24))
-                            .foregroundColor(analysis.color)
                     }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.tertiarySystemBackground))
-                    )
                 }
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.secondarySystemBackground))
-        )
+    }
+
+    private func patternRow(analysis: PatternAnalysis, label: String) -> some View {
+        HStack(alignment: .top, spacing: InpensoTheme.Space.md) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label.uppercased())
+                    .font(InpensoTheme.label(10, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.muted)
+                Text(analysis.title)
+                    .font(InpensoTheme.body(15, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.ink)
+                Text(analysis.description)
+                    .font(InpensoTheme.body(13))
+                    .foregroundStyle(InpensoTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: InpensoTheme.Space.sm)
+            Image(systemName: analysis.icon)
+                .font(InpensoTheme.body(18))
+                .foregroundStyle(analysis.color)
+        }
+        .padding(.vertical, InpensoTheme.Space.sm)
     }
 }
 
 #Preview {
-    VStack(spacing: 20) {
-        // Key Statistics preview
+    VStack(spacing: InpensoTheme.Space.lg) {
         KeyStatisticsView(
             biggestExpenseCategory: (Category.food.categoryID, 450.50),
             totalSpent: 1850.25,
             mostActiveSpendingPeriod: "Wednesday"
         )
         .environmentObject(CategoryStore())
-        
-        // Insights preview
+
         InsightsCardView(insights: [
             SpendingInsight(
                 type: .positive,
                 title: "Weekend Spending Trend",
                 description: "You tend to spend 45% more on weekends compared to weekdays",
                 icon: "calendar.badge.exclamationmark",
-                color: .orange
-            ),
-            SpendingInsight(
-                type: .negative,
-                title: "Food Spending Increasing",
-                description: "Your food spending has increased by 20% compared to last month",
-                icon: "fork.knife",
-                color: .red
+                color: InpensoTheme.copperSoft
             )
         ])
-        
-        // Patterns preview
+
         SpendingPatternView(
             weekdayVsWeekendAnalysis: SpendingPatternView.PatternAnalysis(
                 title: "Weekend Spender",
                 description: "You spend 145% more on weekends compared to weekdays",
                 icon: "party.popper",
-                color: .orange
+                color: InpensoTheme.copperSoft
             ),
-            monthlyPatternAnalysis: SpendingPatternView.PatternAnalysis(
-                title: "End of Month Spender",
-                description: "Your spending increases toward the end of the month",
-                icon: "calendar.badge.exclamationmark",
-                color: .red
-            )
+            monthlyPatternAnalysis: nil
         )
     }
-    .padding()
-} 
+    .padding(InpensoTheme.Space.screen)
+    .background(InpensoTheme.foam)
+}

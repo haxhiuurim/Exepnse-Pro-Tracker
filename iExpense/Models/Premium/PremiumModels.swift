@@ -182,38 +182,38 @@ struct ThemePack: Identifiable, Hashable {
     static let all: [ThemePack] = [
         ThemePack(
             id: "tide",
-            name: "Tide Ledger",
-            tagline: "Default calm teal",
-            ink: Color(inpensoHex: "#0C3B3A"),
-            accent: Color(inpensoHex: "#C96A3D"),
-            mist: Color(inpensoHex: "#E8F1EF"),
+            name: "Field Notes",
+            tagline: "Charcoal ink on paper white",
+            ink: Color(inpensoHex: "#171717"),
+            accent: Color(inpensoHex: "#171717"),
+            mist: Color(inpensoHex: "#F0F0EE"),
             requiresPro: false
         ),
         ThemePack(
             id: "midnight",
-            name: "Midnight Harbor",
-            tagline: "Deep navy focus",
+            name: "Harbor Blue",
+            tagline: "Navy & trust blue",
             ink: Color(inpensoHex: "#0B1F33"),
-            accent: Color(inpensoHex: "#3D8BFF"),
+            accent: Color(inpensoHex: "#2563EB"),
             mist: Color(inpensoHex: "#E8EEF5"),
             requiresPro: true
         ),
         ThemePack(
             id: "ember",
             name: "Ember Desk",
-            tagline: "Warm charcoal & ember",
-            ink: Color(inpensoHex: "#2A1F1A"),
-            accent: Color(inpensoHex: "#E07A3D"),
-            mist: Color(inpensoHex: "#F3EDE7"),
+            tagline: "Warm charcoal & amber",
+            ink: Color(inpensoHex: "#1C1917"),
+            accent: Color(inpensoHex: "#D97706"),
+            mist: Color(inpensoHex: "#F5F0EB"),
             requiresPro: true
         ),
         ThemePack(
             id: "forest",
-            name: "Forest Quill",
-            tagline: "Moss & parchment",
-            ink: Color(inpensoHex: "#1B3A2A"),
-            accent: Color(inpensoHex: "#6B8F71"),
-            mist: Color(inpensoHex: "#E9F0E8"),
+            name: "Pine Ledger",
+            tagline: "Deep green focus",
+            ink: Color(inpensoHex: "#14532D"),
+            accent: Color(inpensoHex: "#16A34A"),
+            mist: Color(inpensoHex: "#EAF5EE"),
             requiresPro: true
         )
     ]

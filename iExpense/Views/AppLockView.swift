@@ -8,73 +8,59 @@ import SwiftUI
 struct AppLockView: View {
     @ObservedObject var lockService: BiometricLockService
     @State private var isAuthenticating = false
-    @State private var appeared = false
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [InpensoTheme.ink, InpensoTheme.inkSoft, InpensoTheme.tide.opacity(0.9)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            AtmosphereBackground()
 
-            VStack(spacing: 28) {
+            VStack(spacing: 0) {
                 Spacer()
 
-                VStack(spacing: 12) {
+                VStack(spacing: InpensoTheme.Space.md) {
                     Text("Inpenso")
-                        .font(InpensoTheme.brandFont(44, weight: .bold))
-                        .foregroundStyle(.white)
-                        .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 12)
+                        .font(InpensoTheme.brandFont(32, weight: .bold))
+                        .foregroundStyle(InpensoTheme.ink)
 
-                    Text("Your ledger is locked")
+                    Text("Locked")
                         .font(InpensoTheme.body(16))
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(InpensoTheme.muted)
                 }
 
                 Image(systemName: lockService.biometrySymbol)
-                    .font(.system(size: 56, weight: .medium))
-                    .foregroundStyle(InpensoTheme.seafoam)
-                    .padding(.vertical, 8)
+                    .font(.system(size: 48, weight: .regular))
+                    .foregroundStyle(InpensoTheme.ink)
+                    .padding(.top, InpensoTheme.Space.section)
+                    .padding(.bottom, InpensoTheme.Space.xl)
 
                 if let message = lockService.lastErrorMessage {
                     Text(message)
                         .font(InpensoTheme.label(13))
-                        .foregroundStyle(InpensoTheme.copperSoft)
+                        .foregroundStyle(InpensoTheme.danger)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
+                        .inpensoScreenPadding()
+                        .padding(.bottom, InpensoTheme.Space.md)
                 }
 
                 Button {
                     Task { await unlock() }
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: InpensoTheme.Space.xs) {
                         if isAuthenticating {
-                            ProgressView().tint(.white)
+                            ProgressView()
+                                .tint(.white)
                         }
                         Text("Unlock with \(lockService.biometryLabel)")
                     }
-                    .font(InpensoTheme.label(16, weight: .bold))
-                    .foregroundStyle(InpensoTheme.ink)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(.white)
-                    )
                 }
+                .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.copper))
                 .disabled(isAuthenticating)
-                .padding(.horizontal, 28)
+                .inpensoScreenPadding()
 
+                Spacer()
                 Spacer()
             }
         }
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-                appeared = true
-            }
             Task { await unlock() }
         }
     }

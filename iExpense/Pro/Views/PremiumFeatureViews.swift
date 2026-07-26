@@ -7,6 +7,24 @@
 
 import SwiftUI
 
+// MARK: - Shared list chrome
+
+private struct PremiumListChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .listRowBackground(InpensoTheme.panelFill)
+            .listRowSeparatorTint(InpensoTheme.hairline)
+            .listSectionSpacing(InpensoTheme.Space.section)
+    }
+}
+
+private extension View {
+    func premiumListChrome() -> some View {
+        modifier(PremiumListChrome())
+    }
+}
+
 // MARK: - Savings goals
 
 struct SavingsGoalsView: View {
@@ -32,7 +50,8 @@ struct SavingsGoalsView: View {
 
                 Section {
                     if store.goals.isEmpty {
-                        Text(pro.isPro ? "Create a goal or envelope to give money a job." : "Upgrade to start tracking goals.")
+                        Text(pro.isPro ? "Create a goal or envelope to track a target amount." : "Upgrade to start tracking goals.")
+                            .font(InpensoTheme.body(14))
                             .foregroundStyle(InpensoTheme.muted)
                     } else {
                         ForEach(store.goals) { goal in
@@ -52,9 +71,11 @@ struct SavingsGoalsView: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .premiumListChrome()
         }
         .navigationTitle("Goals & envelopes")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -62,7 +83,7 @@ struct SavingsGoalsView: View {
                     editing = nil
                     showEditor = true
                 } label: {
-                    Image(systemName: "plus").foregroundStyle(InpensoTheme.copper)
+                    Image(systemName: "plus").foregroundStyle(InpensoTheme.ink)
                 }
             }
         }
@@ -82,7 +103,7 @@ struct SavingsGoalsView: View {
                     .foregroundStyle(InpensoTheme.ink)
                 Spacer()
                 Text(goal.isEnvelope ? "Envelope" : "Goal")
-                    .font(InpensoTheme.label(11, weight: .bold))
+                    .font(InpensoTheme.label(11, weight: .medium))
                     .foregroundStyle(InpensoTheme.muted)
             }
             ProgressView(value: goal.progress)
@@ -131,7 +152,7 @@ struct GoalEditorSheet: View {
                             name: name,
                             targetAmount: t,
                             currentAmount: c,
-                            accentHex: existing?.accentHex ?? "#2A8F87",
+                            accentHex: existing?.accentHex ?? "#059669",
                             iconName: isEnvelope ? "tray.full" : "target",
                             isEnvelope: isEnvelope
                         ))
@@ -167,14 +188,13 @@ struct AccountsNetWorthView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Net worth")
-                            .font(InpensoTheme.label(12, weight: .bold))
+                            .font(InpensoTheme.label(12, weight: .semibold))
                             .foregroundStyle(InpensoTheme.muted)
                         Text(store.netWorth, format: .currency(code: settings.selectedCurrency))
                             .font(InpensoTheme.displayAmount(32))
                             .foregroundStyle(store.netWorth >= 0 ? InpensoTheme.ink : InpensoTheme.danger)
                     }
                     .padding(.vertical, 4)
-                    .listRowBackground(Color.white.opacity(0.65))
                 }
 
                 if !pro.isPro {
@@ -218,9 +238,11 @@ struct AccountsNetWorthView: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .premiumListChrome()
         }
         .navigationTitle("Accounts")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -228,7 +250,7 @@ struct AccountsNetWorthView: View {
                     editing = nil
                     showEditor = true
                 } label: {
-                    Image(systemName: "plus").foregroundStyle(InpensoTheme.copper)
+                    Image(systemName: "plus").foregroundStyle(InpensoTheme.ink)
                 }
             }
         }
@@ -336,7 +358,7 @@ struct MerchantRulesView: View {
                                 }
                                 Spacer()
                                 Image(systemName: rule.isEnabled ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(rule.isEnabled ? InpensoTheme.tide : InpensoTheme.muted)
+                                    .foregroundStyle(rule.isEnabled ? InpensoTheme.surplus : InpensoTheme.muted)
                             }
                         }
                         .buttonStyle(.plain)
@@ -347,9 +369,11 @@ struct MerchantRulesView: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .premiumListChrome()
         }
         .navigationTitle("Merchant rules")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -357,7 +381,7 @@ struct MerchantRulesView: View {
                     editing = nil
                     showEditor = true
                 } label: {
-                    Image(systemName: "plus").foregroundStyle(InpensoTheme.copper)
+                    Image(systemName: "plus").foregroundStyle(InpensoTheme.ink)
                 }
             }
         }
@@ -452,8 +476,8 @@ struct HouseholdLedgerView: View {
                         Text("Invite code")
                         Spacer()
                         Text(store.household.inviteCode)
-                            .font(InpensoTheme.label(14, weight: .bold))
-                            .foregroundStyle(InpensoTheme.tide)
+                            .font(InpensoTheme.label(14, weight: .semibold))
+                            .foregroundStyle(InpensoTheme.ink)
                         Button {
                             UIPasteboard.general.string = store.household.inviteCode
                             showCopied = true
@@ -472,13 +496,13 @@ struct HouseholdLedgerView: View {
                 Section("Members") {
                     ForEach(store.household.members) { member in
                         HStack {
-                            Circle()
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
                                 .fill(Color(hex: member.colorHex) ?? InpensoTheme.tide)
-                                .frame(width: 10, height: 10)
+                                .frame(width: 4, height: 16)
                             Text(member.name)
                             if member.isOwner {
                                 Text("Owner")
-                                    .font(InpensoTheme.label(10, weight: .bold))
+                                    .font(InpensoTheme.label(10, weight: .medium))
                                     .foregroundStyle(InpensoTheme.muted)
                             }
                         }
@@ -514,9 +538,11 @@ struct HouseholdLedgerView: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .premiumListChrome()
         }
         .navigationTitle("Household")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .alert("Copied", isPresented: $showCopied) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -535,7 +561,7 @@ struct ThemePacksView: View {
         ZStack {
             AtmosphereBackground(intensity: 0.55)
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: InpensoTheme.Space.sm) {
                     ForEach(ThemePack.all) { pack in
                         Button {
                             if !store.selectTheme(pack, isPro: pro.isPro) {
@@ -544,28 +570,30 @@ struct ThemePacksView: View {
                                 HapticFeedback.selection()
                             }
                         } label: {
-                            HStack(spacing: 14) {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(
-                                        LinearGradient(colors: [pack.mist, pack.ink.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                    )
+                            HStack(spacing: InpensoTheme.Space.sm) {
+                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                                    .fill(pack.mist)
                                     .frame(width: 56, height: 56)
+                                    .overlay(alignment: .bottomTrailing) {
+                                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                            .fill(pack.accent)
+                                            .frame(width: 14, height: 14)
+                                            .padding(6)
+                                    }
                                     .overlay(
-                                        Circle().fill(pack.accent).frame(width: 16, height: 16)
+                                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                                            .stroke(InpensoTheme.hairline, lineWidth: 1)
                                     )
 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
+                                    HStack(spacing: 6) {
                                         Text(pack.name)
-                                            .font(InpensoTheme.body(16, weight: .bold))
+                                            .font(InpensoTheme.body(16, weight: .semibold))
                                             .foregroundStyle(InpensoTheme.ink)
                                         if pack.requiresPro {
-                                            Text("PRO")
-                                                .font(InpensoTheme.label(10, weight: .bold))
-                                                .foregroundStyle(InpensoTheme.copper)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(InpensoTheme.copper.opacity(0.12), in: Capsule())
+                                            Text("Pro")
+                                                .font(InpensoTheme.label(11, weight: .medium))
+                                                .foregroundStyle(InpensoTheme.muted)
                                         }
                                     }
                                     Text(pack.tagline)
@@ -574,21 +602,32 @@ struct ThemePacksView: View {
                                 }
                                 Spacer()
                                 if store.selectedThemeID == pack.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(InpensoTheme.tide)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(InpensoTheme.ink)
                                 }
                             }
-                            .padding(14)
-                            .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .padding(InpensoTheme.Space.row)
+                            .background(
+                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                                    .fill(InpensoTheme.panelFill)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                                            .stroke(
+                                                store.selectedThemeID == pack.id ? InpensoTheme.ink : InpensoTheme.hairline,
+                                                lineWidth: store.selectedThemeID == pack.id ? 1.5 : 1
+                                            )
+                                    )
+                            )
                         }
                         .buttonStyle(.plain)
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
                         Text("App icon")
                             .font(InpensoTheme.label(13, weight: .semibold))
                             .foregroundStyle(InpensoTheme.slate)
-                        HStack(spacing: 10) {
+                        HStack(spacing: InpensoTheme.Space.sm) {
                             ForEach(AppIconOption.allCases) { icon in
                                 Button {
                                     if !store.selectIcon(icon, isPro: pro.isPro) {
@@ -596,13 +635,20 @@ struct ThemePacksView: View {
                                     }
                                 } label: {
                                     VStack(spacing: 6) {
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(icon == .copper ? InpensoTheme.copper : InpensoTheme.ink)
+                                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                                            .fill(icon == .copper ? InpensoTheme.ink : InpensoTheme.mist)
                                             .frame(width: 52, height: 52)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                                                    .stroke(
+                                                        store.selectedIcon == icon ? InpensoTheme.ink : InpensoTheme.hairline,
+                                                        lineWidth: store.selectedIcon == icon ? 2 : 1
+                                                    )
+                                            )
                                             .overlay {
                                                 if store.selectedIcon == icon {
                                                     Image(systemName: "checkmark")
-                                                        .foregroundStyle(.white)
+                                                        .foregroundStyle(icon == .copper ? .white : InpensoTheme.ink)
                                                 }
                                             }
                                         Text(icon.displayName)
@@ -614,12 +660,15 @@ struct ThemePacksView: View {
                             }
                         }
                     }
-                    .padding(.top, 8)
+                    .padding(.top, InpensoTheme.Space.xs)
                 }
-                .padding(20)
+                .inpensoScreenPadding()
+                .padding(.vertical, InpensoTheme.Space.sm)
             }
         }
         .navigationTitle("Themes & icons")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
     }
 }
 
@@ -649,35 +698,42 @@ struct UpcomingRecurringCalendarView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                Text("Next 30 days of recurring charges & income.")
-                    .font(InpensoTheme.body(13))
-                    .foregroundStyle(InpensoTheme.muted)
-                    .listRowBackground(Color.clear)
-            }
-            Section("Upcoming") {
-                if upcoming.isEmpty {
-                    Text("Nothing due in the next month.")
+        ZStack {
+            AtmosphereBackground(intensity: 0.5)
+            List {
+                Section {
+                    Text("Next 30 days of recurring charges and income.")
+                        .font(InpensoTheme.body(13))
                         .foregroundStyle(InpensoTheme.muted)
-                } else {
-                    ForEach(Array(upcoming.enumerated()), id: \.offset) { _, pair in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(pair.1.title)
-                                    .font(InpensoTheme.body(15, weight: .semibold))
-                                Text(pair.0, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                                    .font(InpensoTheme.label(12))
-                                    .foregroundStyle(InpensoTheme.muted)
+                        .listRowBackground(Color.clear)
+                }
+                Section("Upcoming") {
+                    if upcoming.isEmpty {
+                        Text("Nothing due in the next month.")
+                            .foregroundStyle(InpensoTheme.muted)
+                    } else {
+                        ForEach(Array(upcoming.enumerated()), id: \.offset) { _, pair in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(pair.1.title)
+                                        .font(InpensoTheme.body(15, weight: .semibold))
+                                        .foregroundStyle(InpensoTheme.ink)
+                                    Text(pair.0, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                                        .font(InpensoTheme.label(12))
+                                        .foregroundStyle(InpensoTheme.muted)
+                                }
+                                Spacer()
+                                Text(pair.1.amount, format: .currency(code: settings.selectedCurrency))
+                                    .foregroundStyle(pair.1.type == .income ? InpensoTheme.surplus : InpensoTheme.ink)
                             }
-                            Spacer()
-                            Text(pair.1.amount, format: .currency(code: settings.selectedCurrency))
-                                .foregroundStyle(pair.1.type == .income ? InpensoTheme.positive : InpensoTheme.ink)
                         }
                     }
                 }
             }
+            .premiumListChrome()
         }
         .navigationTitle("This month")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
     }
 }
