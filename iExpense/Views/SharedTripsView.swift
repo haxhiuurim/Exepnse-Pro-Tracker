@@ -10,7 +10,12 @@ import SwiftUI
 struct SharedTripsView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @StateObject private var model = SharedTripsViewModel()
-    @State private var showConnection = false
+    @FocusState private var nameFieldFocused: Bool
+
+    @State private var nameDraft = SharedTripAPI.shared.displayName
+    @State private var urlDraft = SharedTripAPI.shared.baseURLString
+    @State private var requiresNameSetup =
+        SharedTripAPI.shared.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
     private let screenInset = InpensoTheme.Space.screen
 
@@ -18,48 +23,22 @@ struct SharedTripsView: View {
         ZStack {
             AtmosphereBackground()
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
-                    tripsBrandHeader
-                    primaryActions
-                    tripsList
-                    if let error = model.errorMessage {
-                        errorBanner(error)
-                    }
-                }
-                .padding(.horizontal, screenInset)
-                .padding(.top, InpensoTheme.Space.sm)
-                .padding(.bottom, InpensoTheme.Space.bottomClearance)
+            if requiresNameSetup {
+                displayNameGate
+            } else {
+                tripsContent
             }
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showConnection = true
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(InpensoTheme.ink)
-                        .frame(width: 44, height: 44)
-                        .background(
-                            InpensoTheme.mist,
-                            in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                        )
-                }
-                .accessibilityLabel("Trip connection settings")
-            }
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            guard !requiresNameSetup else { return }
+            await model.refresh()
         }
-        .task { await model.refresh() }
-        .refreshable { await model.refresh() }
-        .sheet(isPresented: $showConnection) {
-            NavigationStack {
-                TripConnectionSheet(model: model)
-            }
-            .presentationDetents([.medium])
+        .refreshable {
+            guard !requiresNameSetup else { return }
+            await model.refresh()
         }
         .alert("Create trip", isPresented: $model.showCreate) {
             TextField("Trip name", text: $model.newTripName)
@@ -80,23 +59,130 @@ struct SharedTripsView: View {
         }
     }
 
+    // MARK: - Display name gate
+
+    private var displayNameGate: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Trips")
+                        .font(InpensoTheme.brandFont(28, weight: .heavy))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text("Set how friends see you")
+                        .font(InpensoTheme.label(13))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+
+                VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+                    Text("Display name required")
+                        .font(InpensoTheme.brandFont(22, weight: .bold))
+                        .foregroundStyle(InpensoTheme.ink)
+
+                    Text("Choose a name before creating or joining trips. Friends will see this on balances and expenses.")
+                        .font(InpensoTheme.body(14))
+                        .foregroundStyle(InpensoTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    TextField("Your name", text: $nameDraft)
+                        .font(InpensoTheme.body(17, weight: .medium))
+                        .padding(InpensoTheme.Space.md)
+                        .background(InpensoTheme.mist, in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous))
+                        .focused($nameFieldFocused)
+                        .submitLabel(.continue)
+                        .onSubmit { continueWithName() }
+
+                    TextField("API base URL (optional)", text: $urlDraft)
+                        .font(InpensoTheme.body(14))
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                        .padding(InpensoTheme.Space.md)
+                        .background(InpensoTheme.mist, in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous))
+
+                    Button(action: continueWithName) {
+                        Text("Continue")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.tide))
+                    .disabled(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding(InpensoTheme.Space.lg)
+                .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
+            }
+            .padding(.horizontal, screenInset)
+            .padding(.top, InpensoTheme.Space.sm)
+            .padding(.bottom, InpensoTheme.Space.bottomClearance)
+        }
+        .onAppear { nameFieldFocused = true }
+    }
+
+    private func continueWithName() {
+        let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        nameDraft = trimmed
+        model.displayName = trimmed
+        model.baseURL = urlDraft
+        SharedTripAPI.shared.displayName = trimmed
+        SharedTripAPI.shared.baseURLString = urlDraft
+        requiresNameSetup = false
+        Task { await model.refresh() }
+    }
+
+    private func editDisplayName() {
+        nameDraft = model.displayName
+        urlDraft = model.baseURL
+        requiresNameSetup = true
+    }
+
+    // MARK: - Main content
+
+    private var tripsContent: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
+                tripsBrandHeader
+                primaryActions
+                tripsList
+                if let error = model.errorMessage {
+                    errorBanner(error)
+                }
+            }
+            .padding(.horizontal, screenInset)
+            .padding(.top, InpensoTheme.Space.sm)
+            .padding(.bottom, InpensoTheme.Space.bottomClearance)
+        }
+    }
+
     // MARK: - Header
 
     private var tripsBrandHeader: some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
-            Text("Trips")
-                .font(InpensoTheme.brandFont(34, weight: .heavy))
-                .foregroundStyle(InpensoTheme.ink)
+        HStack(alignment: .center, spacing: InpensoTheme.Space.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Trips")
+                    .font(InpensoTheme.brandFont(28, weight: .heavy))
+                    .foregroundStyle(InpensoTheme.ink)
+                Text("Split spendings with friends")
+                    .font(InpensoTheme.label(13))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
 
-            Text("Split spendings with friends")
-                .font(InpensoTheme.label(14, weight: .semibold))
-                .foregroundStyle(InpensoTheme.muted)
+            Spacer(minLength: 8)
 
-            Text("Create a trip, share the invite code, and track who paid what.")
-                .font(InpensoTheme.body(14))
-                .foregroundStyle(InpensoTheme.slate)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
+            Menu {
+                Button("Edit display name") {
+                    editDisplayName()
+                }
+            } label: {
+                Text(model.displayName)
+                    .font(InpensoTheme.label(12, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        InpensoTheme.tide.opacity(0.12),
+                        in: Capsule()
+                    )
+                    .lineLimit(1)
+            }
         }
     }
 
@@ -271,52 +357,6 @@ struct SharedTripsView: View {
                         .stroke(InpensoTheme.expenseTint.opacity(0.2), lineWidth: 1)
                 )
         )
-    }
-}
-
-// MARK: - Connection sheet
-
-private struct TripConnectionSheet: View {
-    @ObservedObject var model: SharedTripsViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        Form {
-            Section {
-                TextField("Your display name", text: $model.displayName)
-                TextField("API base URL", text: $model.baseURL)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
-            } header: {
-                Text("Connection")
-            } footer: {
-                Text("Host the PHP backend from /backend, then paste its public URL here.")
-            }
-
-            Section {
-                Button("Save & refresh") {
-                    Task {
-                        await model.refresh()
-                        dismiss()
-                    }
-                }
-                .font(InpensoTheme.body(16, weight: .semibold))
-                .foregroundStyle(InpensoTheme.tide)
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .background(AtmosphereBackground())
-        .navigationTitle("Connection")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { dismiss() }
-                    .foregroundStyle(InpensoTheme.muted)
-            }
-        }
     }
 }
 

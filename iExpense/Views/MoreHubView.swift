@@ -29,13 +29,24 @@ struct MoreHubView: View {
                         }
 
                         hubGroup(title: "Understand") {
-                            hubRow("Insights", "Charts, trends, budgets", "chart.xyaxis.line", InpensoTheme.tide) {
-                                AnalyticsView(analyticsViewModel: analyticsViewModel)
+                            if pro.isPro {
+                                hubRow("Insights", "Charts, trends, budgets", "chart.xyaxis.line", InpensoTheme.tide) {
+                                    AnalyticsView(analyticsViewModel: analyticsViewModel)
+                                }
+                            } else {
+                                hubActionRow(
+                                    "Insights",
+                                    "Pro · charts, trends, budgets",
+                                    "chart.xyaxis.line",
+                                    InpensoTheme.tide
+                                ) {
+                                    pro.openPaywall(plan: .yearly)
+                                }
                             }
                         }
 
                         hubGroup(title: "Plan") {
-                            hubRow("Recurring", "Bills & subscriptions", "arrow.triangle.2.circlepath", InpensoTheme.ink) {
+                            hubRow("Recurring", "Bills, income & subscriptions", "arrow.triangle.2.circlepath", InpensoTheme.ink) {
                                 RecurringTransactionsView(expenseViewModel: expenseViewModel)
                             }
                             if pro.isPro {
@@ -46,7 +57,7 @@ struct MoreHubView: View {
                             hubRow("Goals", "Targets & envelopes", "target", InpensoTheme.incomeTint) {
                                 SavingsGoalsView()
                             }
-                            hubRow("Accounts", "Net worth", "building.columns", InpensoTheme.ink) {
+                            hubRow("Accounts", "Balances & net worth", "building.columns", InpensoTheme.ink) {
                                 AccountsNetWorthView()
                             }
                         }
@@ -165,6 +176,51 @@ struct MoreHubView: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+            .padding(.horizontal, InpensoTheme.Space.md)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func hubActionRow(
+        _ title: String,
+        _ subtitle: String,
+        _ systemImage: String,
+        _ tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: InpensoTheme.Space.sm) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        tint.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(title)
+                            .font(InpensoTheme.body(16, weight: .semibold))
+                            .foregroundStyle(InpensoTheme.ink)
+                        Text("PRO")
+                            .font(InpensoTheme.label(9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(InpensoTheme.tide, in: Capsule())
+                    }
+                    Text(subtitle)
+                        .font(InpensoTheme.label(12))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+                Spacer()
+                Image(systemName: "lock.fill")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(InpensoTheme.muted)
             }

@@ -2,7 +2,7 @@
 //  iExpenseWidgetExtension.swift
 //  iExpenseWidgetExtension
 //
-//  Period widgets (today / week / month) with one-tap add.
+//  North-styled period widgets with expense / income quick actions.
 //
 
 import WidgetKit
@@ -32,6 +32,14 @@ func getMonthlyBudget() -> Double {
     return budgets[dateFormatter.string(from: Date())] ?? 0
 }
 
+struct WidgetHistoryItem: Identifiable {
+    let id: UUID
+    let title: String
+    let amount: Double
+    let isIncome: Bool
+    let date: Date
+}
+
 struct ExpenseEntry: TimelineEntry {
     let date: Date
     let period: SpendingPeriod
@@ -41,6 +49,7 @@ struct ExpenseEntry: TimelineEntry {
     let todaySpent: Double
     let weekSpent: Double
     let monthSpent: Double
+    let recentItems: [WidgetHistoryItem]
     let topTemplates: [QuickSpendTemplate]
 
     var netCashflow: Double { totalIncome - totalSpent }
@@ -66,11 +75,15 @@ struct ExpenseQuickAddProvider: AppIntentTimelineProvider {
             date: Date(),
             period: .month,
             totalSpent: 120,
-            totalIncome: 0,
+            totalIncome: 2400,
             monthlyBudget: 1000,
             todaySpent: 24,
             weekSpent: 180,
             monthSpent: 640,
+            recentItems: [
+                WidgetHistoryItem(id: UUID(), title: "Coffee", amount: 4.5, isIncome: false, date: Date()),
+                WidgetHistoryItem(id: UUID(), title: "Paycheck", amount: 1200, isIncome: true, date: Date())
+            ],
             topTemplates: Array(QuickSpendTemplate.starterTemplates.prefix(2))
         )
     }
@@ -89,6 +102,21 @@ struct ExpenseQuickAddProvider: AppIntentTimelineProvider {
         let templates = StorageService.loadQuickTemplates()
             .sorted { ($0.lastUsed ?? .distantPast) > ($1.lastUsed ?? .distantPast) }
 
+        let interval = period.dateInterval(relativeTo: Date())
+        let recent = expenses
+            .filter { interval.contains($0.date) }
+            .sorted { $0.date > $1.date }
+            .prefix(5)
+            .map {
+                WidgetHistoryItem(
+                    id: $0.id,
+                    title: $0.title.isEmpty ? ($0.type == .income ? "Income" : "Expense") : $0.title,
+                    amount: $0.price,
+                    isIncome: $0.type == .income,
+                    date: $0.date
+                )
+            }
+
         StorageService.saveWidgetPeriod(period)
 
         return ExpenseEntry(
@@ -100,6 +128,7 @@ struct ExpenseQuickAddProvider: AppIntentTimelineProvider {
             todaySpent: PeriodTotals.spent(from: expenses, period: .today),
             weekSpent: PeriodTotals.spent(from: expenses, period: .week),
             monthSpent: PeriodTotals.spent(from: expenses, period: .month),
+            recentItems: Array(recent),
             topTemplates: Array(templates.prefix(3))
         )
     }
@@ -114,7 +143,7 @@ private enum NorthWidgetColor {
     static let income = Color(red: 0.071, green: 0.725, blue: 0.506)
     static let foam = Color(red: 0.933, green: 0.945, blue: 0.965)
     static let mist = Color(red: 0.894, green: 0.918, blue: 0.953)
-    static let hairline = Color(red: 0.843, green: 0.867, blue: 0.918)
+    static let muted = Color(red: 0.420, green: 0.475, blue: 0.565)
 }
 
 struct iExpenseWidgetEntryView: View {
@@ -135,161 +164,212 @@ struct iExpenseWidgetEntryView: View {
         }
     }
 
-    // MARK: Small — single period + add
+    // MARK: Small
 
     private var smallWidget: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(AppBrand.name)
-                    .font(.system(size: 12, weight: .bold, design: .default))
+                    .font(.system(size: 13, weight: .heavy))
                     .foregroundStyle(NorthWidgetColor.ink)
                 Spacer()
                 Text(entry.period.shortTitle.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(NorthWidgetColor.tide)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(NorthWidgetColor.tide.opacity(0.12), in: Capsule())
             }
 
             Spacer(minLength: 0)
 
             Text(entry.totalSpent, format: .currency(code: currencyCode))
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(NorthWidgetColor.ink)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.55)
                 .lineLimit(1)
 
             Text(entry.period.spentLabel)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(NorthWidgetColor.muted)
 
             Spacer(minLength: 0)
 
-            Button(intent: OpenQuickAddIntent()) {
-                Label("Add", systemImage: "plus")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: 6) {
+                Button(intent: OpenQuickAddIntent(transactionType: "expense")) {
+                    Image(systemName: "minus")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .tint(NorthWidgetColor.expense)
+
+                Button(intent: OpenQuickAddIntent(transactionType: "income")) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .tint(NorthWidgetColor.income)
             }
-            .tint(NorthWidgetColor.tide)
         }
         .containerBackground(for: .widget) {
             widgetAtmosphere
         }
     }
 
-    // MARK: Medium — today/week/month + add
+    // MARK: Medium
 
     private var mediumWidget: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(AppBrand.name)
-                    .font(.system(size: 14, weight: .bold, design: .default))
-                    .foregroundStyle(NorthWidgetColor.ink)
-
-                Text(entry.totalSpent, format: .currency(code: currencyCode))
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundStyle(NorthWidgetColor.ink)
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-
-                Text(entry.period.displayTitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Button(intent: OpenQuickAddIntent()) {
-                    Label("Add spend", systemImage: "plus.circle.fill")
-                        .font(.system(size: 13, weight: .semibold))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(AppBrand.name)
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundStyle(NorthWidgetColor.ink)
+                    Text(entry.period.displayTitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(NorthWidgetColor.muted)
                 }
-                .tint(NorthWidgetColor.tide)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer()
+                HStack(spacing: 6) {
+                    Button(intent: OpenQuickAddIntent(transactionType: "expense")) {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(NorthWidgetColor.expense)
+                    }
+                    .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 8) {
-                periodLine(title: "Today", amount: entry.todaySpent)
-                periodLine(title: "Week", amount: entry.weekSpent)
-                periodLine(title: "Month", amount: entry.monthSpent)
+                    Button(intent: OpenQuickAddIntent(transactionType: "income")) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(NorthWidgetColor.income)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 10) {
+                summaryBlock(title: "Spent", amount: entry.totalSpent, tint: NorthWidgetColor.expense)
+                summaryBlock(title: "Income", amount: entry.totalIncome, tint: NorthWidgetColor.income)
+                summaryBlock(
+                    title: "Net",
+                    amount: entry.netCashflow,
+                    tint: entry.netCashflow >= 0 ? NorthWidgetColor.income : NorthWidgetColor.expense
+                )
+            }
         }
         .containerBackground(for: .widget) {
             widgetAtmosphere
         }
     }
 
-    // MARK: Large — periods + templates + budget
+    // MARK: Large — summary + history
 
     private var largeWidget: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(AppBrand.name)
-                        .font(.system(size: 18, weight: .bold, design: .default))
+                        .font(.system(size: 18, weight: .heavy))
                         .foregroundStyle(NorthWidgetColor.ink)
                     Text(entry.period.displayTitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(NorthWidgetColor.muted)
                 }
                 Spacer()
-                Button(intent: OpenQuickAddIntent()) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
-                        .background(NorthWidgetColor.tide, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                HStack(spacing: 8) {
+                    Button(intent: OpenQuickAddIntent(transactionType: "expense")) {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(NorthWidgetColor.expense)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(intent: OpenQuickAddIntent(transactionType: "income")) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(NorthWidgetColor.income)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
 
-            Text(entry.totalSpent, format: .currency(code: currencyCode))
-                .font(.system(size: 36, weight: .bold, design: .rounded))
-                .foregroundStyle(NorthWidgetColor.ink)
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-
             HStack(spacing: 8) {
-                miniStat(title: "Today", amount: entry.todaySpent)
-                miniStat(title: "Week", amount: entry.weekSpent)
-                miniStat(title: "Month", amount: entry.monthSpent)
+                summaryBlock(title: "Spent", amount: entry.totalSpent, tint: NorthWidgetColor.expense)
+                summaryBlock(title: "Income", amount: entry.totalIncome, tint: NorthWidgetColor.income)
+                summaryBlock(
+                    title: "Net",
+                    amount: entry.netCashflow,
+                    tint: entry.netCashflow >= 0 ? NorthWidgetColor.income : NorthWidgetColor.expense
+                )
             }
 
             if entry.monthlyBudget > 0 {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(entry.overBudget ? "Over budget" : "Budget left")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(entry.overBudget ? NorthWidgetColor.expense : .secondary)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(entry.overBudget ? NorthWidgetColor.expense : NorthWidgetColor.muted)
                         Spacer()
-                        Text(entry.overBudget ? entry.monthSpent - entry.monthlyBudget : entry.budgetRemaining, format: .currency(code: currencyCode))
-                            .font(.caption.weight(.bold))
+                        Text(
+                            entry.overBudget ? entry.monthSpent - entry.monthlyBudget : entry.budgetRemaining,
+                            format: .currency(code: currencyCode)
+                        )
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                     }
-                    Gauge(value: entry.budgetProgress) {
-                        EmptyView()
-                    }
-                    .gaugeStyle(.linearCapacity)
-                    .tint(entry.overBudget ? NorthWidgetColor.expense : NorthWidgetColor.income)
+                    Gauge(value: entry.budgetProgress) { EmptyView() }
+                        .gaugeStyle(.linearCapacity)
+                        .tint(entry.overBudget ? NorthWidgetColor.expense : NorthWidgetColor.income)
                 }
             }
 
-            if !entry.topTemplates.isEmpty {
-                Text("Quick spends")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            Text("Recent")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(NorthWidgetColor.muted)
+                .textCase(.uppercase)
 
-                HStack(spacing: 8) {
-                    ForEach(entry.topTemplates.prefix(3), id: \.id) { template in
-                        Button(intent: AddTemplateExpenseIntent(templateID: template.id.uuidString)) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(template.title)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .lineLimit(1)
-                                Text(template.amount, format: .currency(code: currencyCode))
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
-                            .background(NorthWidgetColor.mist, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            if entry.recentItems.isEmpty {
+                Text("No transactions in this period")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(NorthWidgetColor.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(NorthWidgetColor.mist, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(entry.recentItems.enumerated()), id: \.element.id) { index, item in
+                        HStack {
+                            Circle()
+                                .fill(item.isIncome ? NorthWidgetColor.income.opacity(0.15) : NorthWidgetColor.expense.opacity(0.15))
+                                .frame(width: 28, height: 28)
+                                .overlay(
+                                    Image(systemName: item.isIncome ? "arrow.down.left" : "arrow.up.right")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(item.isIncome ? NorthWidgetColor.income : NorthWidgetColor.expense)
+                                )
+
+                            Text(item.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(NorthWidgetColor.ink)
+                                .lineLimit(1)
+
+                            Spacer()
+
+                            Text(item.isIncome ? item.amount : -item.amount, format: .currency(code: currencyCode))
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(item.isIncome ? NorthWidgetColor.income : NorthWidgetColor.expense)
                         }
-                        .buttonStyle(.plain)
+                        .padding(.vertical, 6)
+
+                        if index < entry.recentItems.count - 1 {
+                            Divider().opacity(0.35)
+                        }
                     }
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(NorthWidgetColor.mist, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
             Spacer(minLength: 0)
@@ -299,25 +379,14 @@ struct iExpenseWidgetEntryView: View {
         }
     }
 
-    private func periodLine(title: String, amount: Double) -> some View {
-        HStack {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(amount, format: .currency(code: currencyCode))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(NorthWidgetColor.ink)
-        }
-    }
-
-    private func miniStat(title: String, amount: Double) -> some View {
+    private func summaryBlock(title: String, amount: Double, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(NorthWidgetColor.muted)
             Text(amount, format: .currency(code: currencyCode))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
@@ -343,8 +412,8 @@ struct iExpenseWidgetExtension: Widget {
             iExpenseWidgetEntryView(entry: entry)
         }
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
-        .configurationDisplayName("Expense Spending")
-        .description("See today, week, or month spending — and add a spend with one tap.")
+        .configurationDisplayName("Expense")
+        .description("Summary, history, and quick add for expense or income.")
         .contentMarginsDisabled()
     }
 }
@@ -361,7 +430,8 @@ struct iExpenseWidgetExtension: Widget {
         todaySpent: 42.50,
         weekSpent: 210,
         monthSpent: 780,
-        topTemplates: Array(QuickSpendTemplate.starterTemplates.prefix(2))
+        recentItems: [],
+        topTemplates: []
     )
 }
 
@@ -377,7 +447,8 @@ struct iExpenseWidgetExtension: Widget {
         todaySpent: 42.50,
         weekSpent: 210,
         monthSpent: 780,
-        topTemplates: Array(QuickSpendTemplate.starterTemplates.prefix(2))
+        recentItems: [],
+        topTemplates: []
     )
 }
 
@@ -393,6 +464,10 @@ struct iExpenseWidgetExtension: Widget {
         todaySpent: 42.50,
         weekSpent: 210,
         monthSpent: 780.50,
-        topTemplates: Array(QuickSpendTemplate.starterTemplates.prefix(3))
+        recentItems: [
+            WidgetHistoryItem(id: UUID(), title: "Groceries", amount: 64, isIncome: false, date: .now),
+            WidgetHistoryItem(id: UUID(), title: "Salary", amount: 2400, isIncome: true, date: .now)
+        ],
+        topTemplates: []
     )
 }

@@ -175,7 +175,6 @@ struct GoalEditorSheet: View {
 // MARK: - Accounts
 
 struct AccountsNetWorthView: View {
-    @EnvironmentObject private var pro: ProEntitlementManager
     @EnvironmentObject private var settings: SettingsViewModel
     @ObservedObject private var store = PremiumDataStore.shared
     @State private var editing: FinanceAccount?
@@ -197,20 +196,9 @@ struct AccountsNetWorthView: View {
                     .padding(.vertical, 4)
                 }
 
-                if !pro.isPro {
-                    Section {
-                        ProGateBanner(message: "Accounts & net worth unlock with Pro.") {
-                            pro.openPaywall()
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
-                    }
-                }
-
                 Section("Accounts") {
                     ForEach(store.accounts) { account in
                         Button {
-                            guard pro.isPro else { pro.openPaywall(); return }
                             editing = account
                             showEditor = true
                         } label: {
@@ -233,7 +221,6 @@ struct AccountsNetWorthView: View {
                         .buttonStyle(.plain)
                     }
                     .onDelete { offsets in
-                        guard pro.isPro else { return }
                         offsets.map { store.accounts[$0] }.forEach(store.deleteAccount)
                     }
                 }
@@ -246,7 +233,6 @@ struct AccountsNetWorthView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    guard pro.isPro else { pro.openPaywall(); return }
                     editing = nil
                     showEditor = true
                 } label: {

@@ -26,9 +26,7 @@ struct MainTabView: View {
     @State private var quickAddType: TransactionType = .expense
     @Environment(\.scenePhase) private var scenePhase
 
-    private var showsFloatingAdd: Bool {
-        selectedTab == AppTab.activity.rawValue
-    }
+    private var showsFloatingAdd: Bool { false }
 
     var body: some View {
         ZStack {
@@ -130,8 +128,10 @@ struct MainTabView: View {
                 forName: NSNotification.Name("OpenQuickAdd"),
                 object: nil,
                 queue: .main
-            ) { _ in
-                openQuickAdd(.expense)
+            ) { notification in
+                let raw = notification.userInfo?["type"] as? String
+                let type = raw.flatMap(TransactionType.init(rawValue:)) ?? .expense
+                openQuickAdd(type)
             }
 
             NotificationCenter.default.addObserver(
@@ -194,10 +194,13 @@ struct MainTabView: View {
         let defaults = UserDefaults(suiteName: StorageService.appGroupID)
         if defaults?.bool(forKey: "pendingQuickAdd") == true {
             defaults?.set(false, forKey: "pendingQuickAdd")
+            let typeRaw = defaults?.string(forKey: "pendingQuickAddType") ?? TransactionType.expense.rawValue
+            defaults?.removeObject(forKey: "pendingQuickAddType")
             defaults?.synchronize()
+            let type = TransactionType(rawValue: typeRaw) ?? .expense
             selectedTab = AppTab.home.rawValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                openQuickAdd(.expense)
+                openQuickAdd(type)
             }
         }
     }

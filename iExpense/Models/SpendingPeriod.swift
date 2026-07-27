@@ -53,7 +53,7 @@ enum SpendingPeriod: String, CaseIterable, Codable, Identifiable, AppEnum {
             return DateInterval(start: startOfDay, end: end)
         case .week:
             let weekday = calendar.component(.weekday, from: startOfDay)
-            let daysFromMonday = (weekday + 5) % 7 // Monday-start week
+            let daysFromMonday = (weekday + 5) % 7
             let weekStart = calendar.date(byAdding: .day, value: -daysFromMonday, to: startOfDay) ?? startOfDay
             let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? date
             return DateInterval(start: weekStart, end: weekEnd)
@@ -72,26 +72,19 @@ enum SpendingPeriod: String, CaseIterable, Codable, Identifiable, AppEnum {
 
 enum PeriodTotals {
     static func spent(from expenses: [Expense], period: SpendingPeriod, date: Date = Date()) -> Double {
-        let interval = period.dateInterval(relativeTo: date)
-        return expenses
-            .filter { $0.type == .expense && interval.contains($0.date) }
-            .reduce(0) { $0 + $1.price }
+        spent(from: expenses, interval: period.dateInterval(relativeTo: date))
     }
 
     static func income(from expenses: [Expense], period: SpendingPeriod, date: Date = Date()) -> Double {
-        let interval = period.dateInterval(relativeTo: date)
-        return expenses
-            .filter { $0.type == .income && interval.contains($0.date) }
-            .reduce(0) { $0 + $1.price }
+        income(from: expenses, interval: period.dateInterval(relativeTo: date))
     }
 
     static func net(from expenses: [Expense], period: SpendingPeriod, date: Date = Date()) -> Double {
-        income(from: expenses, period: period, date: date) - spent(from: expenses, period: period, date: date)
+        net(from: expenses, interval: period.dateInterval(relativeTo: date))
     }
 
     static func categoryBreakdown(from expenses: [Expense], period: SpendingPeriod, date: Date = Date()) -> [String: Double] {
-        let interval = period.dateInterval(relativeTo: date)
-        return categoryBreakdown(from: expenses, interval: interval)
+        categoryBreakdown(from: expenses, interval: period.dateInterval(relativeTo: date))
     }
 
     static func spent(from expenses: [Expense], interval: DateInterval) -> Double {
@@ -119,13 +112,13 @@ enum PeriodTotals {
     }
 }
 
-// MARK: - Home flexible date filter
+// MARK: - Home / Activity date filters
 
-enum HomeRangeMode: String, CaseIterable, Identifiable {
+enum LedgerRangeMode: String, CaseIterable, Identifiable {
     case day
     case week
     case month
-    case custom
+    case year
 
     var id: String { rawValue }
 
@@ -134,30 +127,32 @@ enum HomeRangeMode: String, CaseIterable, Identifiable {
         case .day: return "Day"
         case .week: return "Week"
         case .month: return "Month"
-        case .custom: return "Range"
+        case .year: return "Year"
         }
     }
+
+    /// Home only uses day/week/month
+    static var homeModes: [LedgerRangeMode] { [.day, .week, .month] }
 }
 
-struct HomeDateSelection: Equatable {
-    var mode: HomeRangeMode = .month
-    /// Anchor day for day / week / month modes
+struct LedgerDateSelection: Equatable {
+    var mode: LedgerRangeMode = .month
     var anchor: Date = Date()
-    var customStart: Date = Calendar.current.date(byAdding: .day, value: -6, to: Date()) ?? Date()
-    var customEnd: Date = Date()
 
     func interval(calendar: Calendar = .current) -> DateInterval {
+        let startOfDay = calendar.startOfDay(for: anchor)
         switch mode {
         case .day:
-            return SpendingPeriod.today.dateInterval(relativeTo: anchor, calendar: calendar)
+            let end = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? anchor
+            return DateInterval(start: startOfDay, end: end)
         case .week:
             return SpendingPeriod.week.dateInterval(relativeTo: anchor, calendar: calendar)
         case .month:
             return SpendingPeriod.month.dateInterval(relativeTo: anchor, calendar: calendar)
-        case .custom:
-            let start = calendar.startOfDay(for: min(customStart, customEnd))
-            let endDay = calendar.startOfDay(for: max(customStart, customEnd))
-            let end = calendar.date(byAdding: .day, value: 1, to: endDay) ?? endDay
+        case .year:
+            let year = calendar.component(.year, from: startOfDay)
+            let start = calendar.date(from: DateComponents(year: year, month: 1, day: 1)) ?? startOfDay
+            let end = calendar.date(byAdding: .year, value: 1, to: start) ?? startOfDay
             return DateInterval(start: start, end: end)
         }
     }
@@ -174,10 +169,8 @@ struct HomeDateSelection: Equatable {
             return "spent \(start)–\(end.formatted(.dateTime.month(.abbreviated).day()))"
         case .month:
             return "spent \(anchor.formatted(.dateTime.month(.wide).year()))"
-        case .custom:
-            let a = customStart.formatted(.dateTime.month(.abbreviated).day())
-            let b = customEnd.formatted(.dateTime.month(.abbreviated).day())
-            return "spent \(a)–\(b)"
+        case .year:
+            return "spent \(anchor.formatted(.dateTime.year()))"
         }
     }
 
@@ -186,9 +179,15 @@ struct HomeDateSelection: Equatable {
         case .day:
             if Calendar.current.isDateInToday(anchor) { return "Today" }
             return anchor.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
-        case .week: return "Week"
-        case .month: return anchor.formatted(.dateTime.month(.wide).year())
-        case .custom: return "Custom range"
+        case .week:
+            let interval = interval()
+            let start = interval.start.formatted(.dateTime.month(.abbreviated).day())
+            let end = Calendar.current.date(byAdding: .day, value: -1, to: interval.end) ?? interval.end
+            return "\(start) – \(end.formatted(.dateTime.month(.abbreviated).day()))"
+        case .month:
+            return anchor.formatted(.dateTime.month(.wide).year())
+        case .year:
+            return anchor.formatted(.dateTime.year())
         }
     }
 
@@ -200,8 +199,12 @@ struct HomeDateSelection: Equatable {
             anchor = calendar.date(byAdding: .weekOfYear, value: steps, to: anchor) ?? anchor
         case .month:
             anchor = calendar.date(byAdding: .month, value: steps, to: anchor) ?? anchor
-        case .custom:
-            break
+        case .year:
+            anchor = calendar.date(byAdding: .year, value: steps, to: anchor) ?? anchor
         }
     }
 }
+
+/// Back-compat aliases used by HomeView
+typealias HomeRangeMode = LedgerRangeMode
+typealias HomeDateSelection = LedgerDateSelection

@@ -16,11 +16,11 @@ struct HomeView: View {
     @Binding var showQuickAdd: Bool
     var onAddTransaction: (TransactionType) -> Void
 
-    @State private var dateSelection = HomeDateSelection()
-    @State private var showDatePicker = false
+    @State private var dateSelection = LedgerDateSelection()
     @State private var selectedExpenseToEdit: Expense?
     @State private var showReceiptScan = false
     @State private var showInsights = false
+    @ObservedObject private var premiumStore = PremiumDataStore.shared
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
     private var interval: DateInterval { dateSelection.interval() }
@@ -55,6 +55,9 @@ struct HomeView: View {
                             proUpsell
                         }
                         heroCard
+                        if abs(premiumStore.netWorth) > 0.001 || !premiumStore.accounts.isEmpty {
+                            accountsStrip
+                        }
                         if dateSelection.mode == .month, analyticsViewModel.currentBudget > 0,
                            Calendar.current.isDate(dateSelection.anchor, equalTo: Date(), toGranularity: .month) {
                             budgetStrip
@@ -75,10 +78,6 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showReceiptScan) {
                 ReceiptScanView(viewModel: viewModel)
-            }
-            .sheet(isPresented: $showDatePicker) {
-                HomeDateRangeSheet(selection: $dateSelection)
-                    .presentationDetents([.medium, .large])
             }
             .navigationDestination(isPresented: $showInsights) {
                 AnalyticsView(analyticsViewModel: analyticsViewModel)
@@ -195,25 +194,18 @@ struct HomeView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(dateSelection.mode == .custom ? InpensoTheme.muted.opacity(0.4) : InpensoTheme.ink)
+                        .foregroundStyle(InpensoTheme.ink)
                         .frame(width: 36, height: 36)
                         .background(InpensoTheme.mist, in: Circle())
                 }
-                .disabled(dateSelection.mode == .custom)
 
                 Spacer()
 
-                Button {
-                    showDatePicker = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "calendar")
-                        Text(dateSelection.summaryTitle)
-                            .lineLimit(1)
-                    }
+                Text(dateSelection.summaryTitle)
                     .font(InpensoTheme.label(14, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.tide)
-                }
+                    .foregroundStyle(InpensoTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
 
                 Spacer()
 
@@ -222,11 +214,10 @@ struct HomeView: View {
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(dateSelection.mode == .custom ? InpensoTheme.muted.opacity(0.4) : InpensoTheme.ink)
+                        .foregroundStyle(InpensoTheme.ink)
                         .frame(width: 36, height: 36)
                         .background(InpensoTheme.mist, in: Circle())
                 }
-                .disabled(dateSelection.mode == .custom)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -256,7 +247,7 @@ struct HomeView: View {
 
     private var rangeModePicker: some View {
         HStack(spacing: 0) {
-            ForEach(HomeRangeMode.allCases) { mode in
+            ForEach(LedgerRangeMode.homeModes) { mode in
                 let selected = dateSelection.mode == mode
                 Button {
                     HapticFeedback.selection()
@@ -282,6 +273,33 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
                 .fill(InpensoTheme.mist)
         )
+    }
+
+    private var accountsStrip: some View {
+        NavigationLink {
+            AccountsNetWorthView()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Accounts")
+                        .font(InpensoTheme.label(12))
+                        .foregroundStyle(InpensoTheme.muted)
+                    Text(premiumStore.netWorth, format: .currency(code: currencyCode))
+                        .font(InpensoTheme.displayAmount(20))
+                        .foregroundStyle(premiumStore.netWorth >= 0 ? InpensoTheme.ink : InpensoTheme.expenseTint)
+                }
+                Spacer()
+                Text("\(premiumStore.accounts.count) accounts")
+                    .font(InpensoTheme.label(12, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(InpensoTheme.muted.opacity(0.6))
+            }
+            .padding(InpensoTheme.Space.md)
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
+        }
+        .buttonStyle(.plain)
     }
 
     private func heroStat(_ title: String, _ value: Double, _ color: Color) -> some View {
@@ -327,7 +345,11 @@ struct HomeView: View {
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
             InpensoSectionHeader(title: "Top categories", actionTitle: "Insights") {
-                showInsights = true
+                if pro.isPro {
+                    showInsights = true
+                } else {
+                    pro.openPaywall(plan: .yearly)
+                }
             }
 
             VStack(spacing: InpensoTheme.Space.sm) {
@@ -410,58 +432,6 @@ struct HomeView: View {
                     }
                 }
                 .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
-            }
-        }
-    }
-}
-
-// MARK: - Date range sheet
-
-private struct HomeDateRangeSheet: View {
-    @Binding var selection: HomeDateSelection
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Mode") {
-                    Picker("Range", selection: $selection.mode) {
-                        ForEach(HomeRangeMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                switch selection.mode {
-                case .day:
-                    Section("Day") {
-                        DatePicker("Date", selection: $selection.anchor, displayedComponents: .date)
-                    }
-                case .week:
-                    Section("Week containing") {
-                        DatePicker("Any day in the week", selection: $selection.anchor, displayedComponents: .date)
-                    }
-                case .month:
-                    Section("Month") {
-                        DatePicker("Month", selection: $selection.anchor, displayedComponents: [.date])
-                    }
-                case .custom:
-                    Section("Custom range") {
-                        DatePicker("From", selection: $selection.customStart, displayedComponents: .date)
-                        DatePicker("To", selection: $selection.customEnd, displayedComponents: .date)
-                    }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .background(AtmosphereBackground())
-            .navigationTitle("Date range")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .fontWeight(.semibold)
-                }
             }
         }
     }

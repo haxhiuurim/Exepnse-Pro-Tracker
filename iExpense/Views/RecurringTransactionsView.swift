@@ -302,7 +302,7 @@ struct RecurringEditorSheet: View {
 
                 Section {
                     Picker("Repeats", selection: $frequency) {
-                        ForEach(RecurrenceFrequency.allCases) { freq in
+                        ForEach(RecurrenceFrequency.selectableCases) { freq in
                             Text(freq.displayName).tag(freq)
                         }
                     }

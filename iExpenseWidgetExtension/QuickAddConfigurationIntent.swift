@@ -16,19 +16,31 @@ struct QuickAddConfigurationIntent: WidgetConfigurationIntent {
 
 /// Opens Expense focused on the quick-add sheet.
 struct OpenQuickAddIntent: AppIntent {
-    static var title: LocalizedStringResource = "Add Spend"
-    static var description = IntentDescription("Open Expense to quickly log a new spend.")
+    static var title: LocalizedStringResource = "Quick Add"
+    static var description = IntentDescription("Open Expense to quickly log expense or income.")
     static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "Type", default: "expense")
+    var transactionType: String
+
+    init() {
+        self.transactionType = "expense"
+    }
+
+    init(transactionType: String) {
+        self.transactionType = transactionType
+    }
 
     func perform() async throws -> some IntentResult {
         let defaults = UserDefaults(suiteName: StorageService.appGroupID)
         defaults?.set(true, forKey: "pendingQuickAdd")
+        defaults?.set(transactionType, forKey: "pendingQuickAddType")
         defaults?.synchronize()
         return .result()
     }
 }
 
-/// One-tap add from a saved template (used by medium/large widgets).
+/// One-tap add from a saved template (used by large widgets).
 struct AddTemplateExpenseIntent: AppIntent {
     static var title: LocalizedStringResource = "Log Quick Spend"
     static var description = IntentDescription("Log a saved quick spend from the widget.")
