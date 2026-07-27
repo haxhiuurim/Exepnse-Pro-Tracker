@@ -415,8 +415,8 @@
 				DEVELOPMENT_TEAM = 4JKYP9B3CA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_CFBundleDisplayName = Expense;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Expense uses the camera to photograph receipts and automatically log your spending.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Expense uses Face ID to protect your spending data when the app lock is enabled.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Expense reads receipt photos you choose to extract items and totals on-device.";
@@ -456,8 +456,8 @@
 				DEVELOPMENT_TEAM = 4JKYP9B3CA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_CFBundleDisplayName = Expense;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Expense uses the camera to photograph receipts and automatically log your spending.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Expense uses Face ID to protect your spending data when the app lock is enabled.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Expense reads receipt photos you choose to extract items and totals on-device.";

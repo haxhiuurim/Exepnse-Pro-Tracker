@@ -58,7 +58,12 @@ struct MoreHubView: View {
                             hubRow("Household", "Local shared categories", "person.2", InpensoTheme.ink) {
                                 HouseholdLedgerView()
                             }
-                            hubRow("Categories", "Order, hide, create", "square.grid.2x2", InpensoTheme.ink) {
+                            hubRow(
+                                "Categories",
+                                pro.isPro ? "Order, hide, create" : "Customize with Pro",
+                                "square.grid.2x2",
+                                InpensoTheme.ink
+                            ) {
                                 CategoryManagementView()
                             }
                         }

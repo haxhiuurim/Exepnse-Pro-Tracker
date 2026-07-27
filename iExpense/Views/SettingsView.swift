@@ -28,72 +28,69 @@ struct SettingsView: View {
     private enum ExportFormat { case csv, ofx }
 
     private var settingsRowInsets: EdgeInsets {
-        EdgeInsets(
-            top: InpensoTheme.Space.sm,
-            leading: InpensoTheme.Space.screen,
-            bottom: InpensoTheme.Space.sm,
-            trailing: InpensoTheme.Space.screen
-        )
+        EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)
     }
 
     var body: some View {
         List {
-                appHeader
-                proSection
-                appearanceSection
-                securitySection
-                remindersSection
-                currencySection
-                defaultSettingsSection
-                dataManagementSection
-                aboutSection
-            }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(AtmosphereBackground())
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .tint(InpensoTheme.ink)
-            .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .listRowBackground(InpensoTheme.panelFill)
-            .listRowInsets(settingsRowInsets)
-            .listRowSeparatorTint(InpensoTheme.hairline)
-            .listSectionSpacing(InpensoTheme.Space.section)
-            .sheet(isPresented: $showingImportFilePicker) {
-                documentPicker
-            }
-            .sheet(isPresented: $showingExportShareSheet) {
-                shareSheet
-            }
-            .alert("Data Reset", isPresented: $showingResetConfirmation) {
-                resetAlertButtons
-            } message: {
-                Text("This will delete all your expenses, budgets, and recurring items. This action cannot be undone.")
-            }
-            .alert("Import Successful", isPresented: $showingImportSuccess) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("Your data has been imported successfully.")
-            }
-            .alert("Import Failed", isPresented: $showingImportFailure) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("Failed to import data. Please check the file format and try again.")
-            }
-            .alert("Export Successful", isPresented: $showingExportSuccess) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("Your data has been exported successfully.")
-            }
-            .alert("Couldn't enable lock", isPresented: Binding(
-                get: { biometricError != nil },
-                set: { if !$0 { biometricError = nil } }
-            )) {
-                Button("OK", role: .cancel) { biometricError = nil }
-            } message: {
-                Text(biometricError ?? "")
-            }
+            appHeader
+            proSection
+            appearanceSection
+            securitySection
+            remindersSection
+            currencySection
+            defaultSettingsSection
+            dataManagementSection
+            aboutSection
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(AtmosphereBackground())
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(InpensoTheme.ink)
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .listRowBackground(InpensoTheme.panelFill)
+        .listRowInsets(settingsRowInsets)
+        .listRowSeparatorTint(InpensoTheme.hairline)
+        .listSectionSpacing(InpensoTheme.Space.lg)
+        .contentMargins(.horizontal, InpensoTheme.Space.screen, for: .scrollContent)
+        .contentMargins(.vertical, InpensoTheme.Space.md, for: .scrollContent)
+        .sheet(isPresented: $showingImportFilePicker) {
+            documentPicker
+        }
+        .sheet(isPresented: $showingExportShareSheet) {
+            shareSheet
+        }
+        .alert("Data Reset", isPresented: $showingResetConfirmation) {
+            resetAlertButtons
+        } message: {
+            Text("This will delete all your expenses, budgets, and recurring items. This action cannot be undone.")
+        }
+        .alert("Import Successful", isPresented: $showingImportSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Your data has been imported successfully.")
+        }
+        .alert("Import Failed", isPresented: $showingImportFailure) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Failed to import data. Please check the file format and try again.")
+        }
+        .alert("Export Successful", isPresented: $showingExportSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Your data has been exported successfully.")
+        }
+        .alert("Couldn't enable lock", isPresented: Binding(
+            get: { biometricError != nil },
+            set: { if !$0 { biometricError = nil } }
+        )) {
+            Button("OK", role: .cancel) { biometricError = nil }
+        } message: {
+            Text(biometricError ?? "")
+        }
     }
 
     // MARK: - Sections

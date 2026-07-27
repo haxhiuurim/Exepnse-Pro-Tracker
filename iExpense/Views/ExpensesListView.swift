@@ -26,11 +26,12 @@ struct ExpensesListView: View {
     @State private var isListLoaded = false
 
     private let monthHistoryLength = 61
-    private let listRowInsets = EdgeInsets(
-        top: InpensoTheme.Space.sm,
-        leading: InpensoTheme.Space.screen,
-        bottom: InpensoTheme.Space.sm,
-        trailing: InpensoTheme.Space.screen
+    private let screenInset = InpensoTheme.Space.screen
+    private let rowInsets = EdgeInsets(
+        top: InpensoTheme.Space.row,
+        leading: InpensoTheme.Space.md,
+        bottom: InpensoTheme.Space.row,
+        trailing: InpensoTheme.Space.md
     )
 
     enum SortOption: String, CaseIterable, Identifiable {
@@ -127,30 +128,18 @@ struct ExpensesListView: View {
         categoryStore.orderedCategoryIDs(for: Set(groupedExpenses.keys))
     }
 
+    private var monthLabel: String {
+        "\(Calendar.current.monthSymbols[selectedMonth - 1]) \(String(selectedYear))"
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
                 AtmosphereBackground()
 
-                VStack(spacing: 0) {
-                    monthYearPicker
-                        .padding(.top, InpensoTheme.Space.xs)
-
-                    typeFilterChips
-                        .inpensoScreenPadding()
-                        .padding(.top, InpensoTheme.Space.sm)
-
-                    if !filteredExpenses.isEmpty {
-                        summaryStats
-                            .inpensoScreenPadding()
-                            .padding(.top, InpensoTheme.Space.md)
-                            .padding(.bottom, InpensoTheme.Space.sm)
-                    }
-
+                Group {
                     if filteredExpenses.isEmpty {
                         emptyStateView
-                            .transition(.opacity)
-                            .animation(.easeInOut, value: filteredExpenses.isEmpty)
                     } else {
                         transactionList
                     }
@@ -158,8 +147,12 @@ struct ExpensesListView: View {
             }
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search transactions")
             .navigationTitle("Activity")
+            .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                activityControls
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     toolbarFilters
@@ -170,8 +163,10 @@ struct ExpensesListView: View {
                         NotificationCenter.default.post(name: NSNotification.Name("OpenQuickAdd"), object: nil)
                     } label: {
                         Image(systemName: "plus")
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(InpensoTheme.ink)
                     }
+                    .accessibilityLabel("Quick add")
                 }
             }
             .tint(InpensoTheme.ink)
@@ -212,75 +207,97 @@ struct ExpensesListView: View {
         }
     }
 
-    // MARK: - List
+    // MARK: - Controls
 
-    private var transactionList: some View {
-        List {
-            ForEach(visibleCategoryIDs, id: \.self) { categoryID in
-                let category = categoryStore.category(for: categoryID)
-                let items = groupedExpenses[categoryID] ?? []
+    private var activityControls: some View {
+        VStack(spacing: InpensoTheme.Space.sm) {
+            monthYearPicker
+            summaryStrip
+            typeFilterChips
+        }
+        .padding(.horizontal, screenInset)
+        .padding(.top, InpensoTheme.Space.xs)
+        .padding(.bottom, InpensoTheme.Space.sm)
+        .background(
+            InpensoTheme.foam
+                .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 8, y: 4)
+        )
+    }
 
-                Section {
-                    ForEach(items) { expense in
-                        ExpenseRowContent(
-                            expense: expense,
-                            currencyCode: currencyCode,
-                            onEdit: {
-                                selectedExpenseToEdit = expense
-                            },
-                            onDelete: {
-                                deleteExpenseByID(expense)
-                            }
-                        )
-                        .listRowInsets(listRowInsets)
-                        .listRowSeparator(.visible)
-                        .listRowSeparatorTint(InpensoTheme.hairline)
-                        .listRowBackground(InpensoTheme.panelFill)
-                    }
-                } header: {
-                    categorySectionHeader(category: category, items: items)
-                }
+    private var summaryStrip: some View {
+        VStack(spacing: InpensoTheme.Space.sm) {
+            HStack(spacing: 0) {
+                summaryCell(title: "Spent", amount: totalSpent, tint: InpensoTheme.expenseTint)
+                summaryDivider
+                summaryCell(title: "Income", amount: totalIncome, tint: InpensoTheme.incomeTint)
+                summaryDivider
+                summaryCell(
+                    title: "Net",
+                    amount: netCashflow,
+                    tint: netCashflow >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint
+                )
+            }
+
+            if analyticsViewModel.currentBudget > 0 {
+                budgetProgress
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(InpensoTheme.panelFill)
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: InpensoTheme.Space.bottomClearance - 40)
-        }
-        .opacity(isListLoaded ? 1 : 0)
-        .animation(.easeIn(duration: 0.3), value: isListLoaded)
+        .padding(InpensoTheme.Space.md)
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
     }
 
-    private func categorySectionHeader(category: FinanceCategory, items: [Expense]) -> some View {
-        let categoryTotal = items.reduce(0) { total, transaction in
-            total + (transaction.type == .income ? transaction.price : -transaction.price)
-        }
-
-        return HStack(spacing: InpensoTheme.Space.sm) {
-            Image(systemName: category.iconName)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(category.color)
-                .frame(width: 24, height: 24)
-
-            Text(category.displayName)
-                .font(InpensoTheme.label(13, weight: .semibold))
-                .foregroundStyle(InpensoTheme.ink)
-
-            Spacer()
-
-            Text(categoryTotal, format: .currency(code: currencyCode))
-                .font(InpensoTheme.displayAmount(13))
-                .foregroundStyle(categoryTotal >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint)
-        }
-        .padding(.horizontal, InpensoTheme.Space.screen)
-        .padding(.vertical, InpensoTheme.Space.xs)
-        .textCase(.none)
-        .listRowInsets(EdgeInsets())
-        .background(InpensoTheme.foam)
+    private var summaryDivider: some View {
+        Rectangle()
+            .fill(InpensoTheme.hairline)
+            .frame(width: 1, height: 36)
+            .padding(.horizontal, InpensoTheme.Space.xs)
     }
 
-    // MARK: - Filters & summary
+    private func summaryCell(title: String, amount: Double, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
+            Text(title)
+                .font(InpensoTheme.label(11, weight: .semibold))
+                .foregroundStyle(InpensoTheme.muted)
+                .textCase(.uppercase)
+            Text(amount, format: .currency(code: currencyCode))
+                .font(InpensoTheme.displayAmount(15))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var budgetProgress: some View {
+        VStack(spacing: InpensoTheme.Space.xs) {
+            HStack {
+                Text("Monthly budget")
+                    .font(InpensoTheme.label(11, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.muted)
+                Spacer()
+                Text("\(totalSpent.formatted(.currency(code: currencyCode))) / \(analyticsViewModel.currentBudget.formatted(.currency(code: currencyCode)))")
+                    .font(InpensoTheme.label(11))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+
+            let progress = min(1.0, totalSpent / analyticsViewModel.currentBudget)
+            let progressColor: Color = progress >= 0.9 ? InpensoTheme.expenseTint : (progress >= 0.75 ? InpensoTheme.ink : InpensoTheme.tide)
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(InpensoTheme.mist)
+                        .frame(height: 5)
+
+                    Capsule()
+                        .fill(progressColor)
+                        .frame(width: max(5, geometry.size.width * CGFloat(progress)), height: 5)
+                }
+            }
+            .frame(height: 5)
+        }
+    }
 
     private var typeFilterChips: some View {
         HStack(spacing: InpensoTheme.Space.xs) {
@@ -307,95 +324,95 @@ struct ExpensesListView: View {
             }
         } label: {
             Text(filter.rawValue)
-                .font(InpensoTheme.label(13, weight: .semibold))
+                .font(InpensoTheme.label(13, weight: .bold))
                 .foregroundStyle(selected ? .white : InpensoTheme.slate)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .padding(.vertical, 11)
                 .background(
                     RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
                         .fill(selected ? tint : InpensoTheme.mist)
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private var summaryStats: some View {
-        VStack(spacing: InpensoTheme.Space.sm) {
-            HStack(spacing: 0) {
-                statCell(title: "Income", amount: totalIncome, color: InpensoTheme.incomeTint)
-                statDivider
-                statCell(title: "Spent", amount: totalSpent, color: InpensoTheme.expenseTint)
-                statDivider
-                statCell(title: "Net", amount: netCashflow, color: netCashflow >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint)
-                statDivider
-                VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
-                    Text("Count")
-                        .font(InpensoTheme.label(11))
-                        .foregroundStyle(InpensoTheme.muted)
-                    Text("\(filteredExpenses.count)")
-                        .font(InpensoTheme.displayAmount(16))
-                        .foregroundStyle(InpensoTheme.ink)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+    // MARK: - List
 
-            if analyticsViewModel.currentBudget > 0 {
-                budgetProgress
+    private var transactionList: some View {
+        List {
+            ForEach(visibleCategoryIDs, id: \.self) { categoryID in
+                let category = categoryStore.category(for: categoryID)
+                let items = groupedExpenses[categoryID] ?? []
+
+                Section {
+                    ForEach(items) { expense in
+                        ExpenseRowContent(
+                            expense: expense,
+                            currencyCode: currencyCode,
+                            onEdit: {
+                                selectedExpenseToEdit = expense
+                            },
+                            onDelete: {
+                                deleteExpenseByID(expense)
+                            }
+                        )
+                        .listRowInsets(rowInsets)
+                        .listRowSeparator(.visible, edges: .bottom)
+                        .listRowSeparatorTint(InpensoTheme.hairline)
+                        .listRowBackground(InpensoTheme.panelFill)
+                    }
+                } header: {
+                    categorySectionHeader(category: category, items: items)
+                }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .contentMargins(.horizontal, screenInset, for: .scrollContent)
+        .listSectionSpacing(InpensoTheme.Space.sm)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: InpensoTheme.Space.bottomClearance)
+        }
+        .opacity(isListLoaded ? 1 : 0)
+        .animation(.easeIn(duration: 0.3), value: isListLoaded)
+    }
+
+    private func categorySectionHeader(category: FinanceCategory, items: [Expense]) -> some View {
+        let categoryTotal = items.reduce(0) { total, transaction in
+            total + (transaction.type == .income ? transaction.price : -transaction.price)
+        }
+
+        return HStack(spacing: InpensoTheme.Space.sm) {
+            Image(systemName: category.iconName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(category.color)
+                .frame(width: 28, height: 28)
+                .background(
+                    category.color.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+
+            Text(category.displayName)
+                .font(InpensoTheme.label(13, weight: .bold))
+                .foregroundStyle(InpensoTheme.ink)
+
+            Spacer()
+
+            Text(categoryTotal, format: .currency(code: currencyCode))
+                .font(InpensoTheme.displayAmount(13))
+                .foregroundStyle(categoryTotal >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint)
+        }
+        .padding(.horizontal, InpensoTheme.Space.md)
         .padding(.vertical, InpensoTheme.Space.sm)
-        .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
-    }
-
-    private var statDivider: some View {
-        Rectangle()
-            .fill(InpensoTheme.hairline)
-            .frame(width: 1, height: 36)
-            .padding(.horizontal, InpensoTheme.Space.xs)
-    }
-
-    private func statCell(title: String, amount: Double, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
-            Text(title)
-                .font(InpensoTheme.label(11))
-                .foregroundStyle(InpensoTheme.muted)
-            Text(amount, format: .currency(code: currencyCode))
-                .font(InpensoTheme.displayAmount(14))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var budgetProgress: some View {
-        VStack(spacing: InpensoTheme.Space.xs) {
-            HStack {
-                Text("Budget")
-                    .font(InpensoTheme.label(11))
-                    .foregroundStyle(InpensoTheme.muted)
-                Spacer()
-                Text("\(totalSpent.formatted(.currency(code: currencyCode))) / \(analyticsViewModel.currentBudget.formatted(.currency(code: currencyCode)))")
-                    .font(InpensoTheme.label(11))
-                    .foregroundStyle(InpensoTheme.muted)
-            }
-
-            let progress = min(1.0, totalSpent / analyticsViewModel.currentBudget)
-            let progressColor: Color = progress >= 0.9 ? InpensoTheme.expenseTint : (progress >= 0.75 ? InpensoTheme.ink : InpensoTheme.tide)
-
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(InpensoTheme.mist)
-                        .frame(height: 4)
-
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(progressColor)
-                        .frame(width: max(4, geometry.size.width * CGFloat(progress)), height: 4)
-                }
-            }
-            .frame(height: 4)
-        }
+        .background(
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                .fill(InpensoTheme.panelFill)
+                .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 8, y: 2)
+        )
+        .textCase(.none)
+        .listRowInsets(EdgeInsets())
     }
 
     private func syncSelectedCategoryIDs(oldCategoryIDs: [String], newCategoryIDs: [String]) {
@@ -415,15 +432,23 @@ struct ExpensesListView: View {
                 }
             } label: {
                 Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(InpensoTheme.ink)
             }
+            .accessibilityLabel("Sort transactions")
 
             Button {
                 showingFilterSheet = true
             } label: {
                 Image(systemName: "line.3.horizontal.decrease.circle")
-                    .foregroundStyle(InpensoTheme.ink)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(
+                        selectedCategoryIDs.count < filterCategoryIDs.count
+                            ? InpensoTheme.tide
+                            : InpensoTheme.ink
+                    )
             }
+            .accessibilityLabel("Filter categories")
         }
     }
 
@@ -433,58 +458,66 @@ struct ExpensesListView: View {
             selectedYear: $selectedYear,
             monthsToShow: monthHistoryLength
         )
-        .inpensoScreenPadding()
     }
 
     // MARK: - Empty & undo
 
     private var emptyStateView: some View {
-        VStack(spacing: InpensoTheme.Space.md) {
-            Spacer()
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: InpensoTheme.Space.lg) {
+                Spacer(minLength: InpensoTheme.Space.xxl)
 
-            Text("No activity")
-                .font(InpensoTheme.sectionLabel())
-                .foregroundStyle(InpensoTheme.ink)
+                VStack(spacing: InpensoTheme.Space.md) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 36, weight: .medium))
+                        .foregroundStyle(InpensoTheme.muted.opacity(0.5))
 
-            if !searchText.isEmpty {
-                Text("Adjust search or filters.")
-                    .font(InpensoTheme.body(14))
-                    .foregroundStyle(InpensoTheme.muted)
-                    .multilineTextAlignment(.center)
-            } else if selectedCategoryIDs.count < filterCategoryIDs.count {
-                Text("Select more categories to show results.")
-                    .font(InpensoTheme.body(14))
-                    .foregroundStyle(InpensoTheme.muted)
-                    .multilineTextAlignment(.center)
+                    Text("No activity")
+                        .font(InpensoTheme.brandFont(22, weight: .bold))
+                        .foregroundStyle(InpensoTheme.ink)
 
-                Button {
-                    selectedCategoryIDs = Set(filterCategoryIDs)
-                } label: {
-                    Text("Reset filters")
-                        .font(InpensoTheme.label(14, weight: .semibold))
-                        .foregroundStyle(InpensoTheme.tide)
+                    if !searchText.isEmpty {
+                        Text("Nothing matches your search. Try different keywords or clear filters.")
+                            .font(InpensoTheme.body(14))
+                            .foregroundStyle(InpensoTheme.muted)
+                            .multilineTextAlignment(.center)
+                    } else if selectedCategoryIDs.count < filterCategoryIDs.count {
+                        Text("Your category filters are hiding all transactions for \(monthLabel).")
+                            .font(InpensoTheme.body(14))
+                            .foregroundStyle(InpensoTheme.muted)
+                            .multilineTextAlignment(.center)
+
+                        Button {
+                            selectedCategoryIDs = Set(filterCategoryIDs)
+                        } label: {
+                            Text("Show all categories")
+                                .font(InpensoTheme.label(14, weight: .bold))
+                                .foregroundStyle(InpensoTheme.tide)
+                        }
+                    } else {
+                        Text("No transactions recorded for \(monthLabel). Tap + to log your first one.")
+                            .font(InpensoTheme.body(14))
+                            .foregroundStyle(InpensoTheme.muted)
+                            .multilineTextAlignment(.center)
+
+                        Button {
+                            NotificationCenter.default.post(name: NSNotification.Name("OpenQuickAdd"), object: nil)
+                        } label: {
+                            Text("Add transaction")
+                        }
+                        .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.ink))
+                        .frame(maxWidth: 240)
+                    }
                 }
-                .padding(.top, InpensoTheme.Space.xs)
-            } else {
-                Text("No transactions for \(Calendar.current.monthSymbols[selectedMonth - 1]) \(String(selectedYear)).")
-                    .font(InpensoTheme.body(14))
-                    .foregroundStyle(InpensoTheme.muted)
-                    .multilineTextAlignment(.center)
+                .padding(InpensoTheme.Space.xl)
+                .frame(maxWidth: .infinity)
+                .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
 
-                Button {
-                    NotificationCenter.default.post(name: NSNotification.Name("OpenQuickAdd"), object: nil)
-                } label: {
-                    Text("Add transaction")
-                }
-                .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.copper))
-                .frame(maxWidth: 220)
-                .padding(.top, InpensoTheme.Space.xs)
+                Spacer(minLength: InpensoTheme.Space.xxl)
             }
-
-            Spacer()
+            .padding(.horizontal, screenInset)
+            .padding(.bottom, InpensoTheme.Space.bottomClearance)
         }
-        .inpensoScreenPadding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var undoSnackbar: some View {
@@ -492,7 +525,11 @@ struct ExpensesListView: View {
             Spacer()
             if showUndoSnackbar {
                 HStack(spacing: InpensoTheme.Space.sm) {
-                    Text("Deleted")
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.muted)
+
+                    Text("Transaction deleted")
                         .font(InpensoTheme.body(14, weight: .medium))
                         .foregroundStyle(InpensoTheme.ink)
 
@@ -501,13 +538,13 @@ struct ExpensesListView: View {
                     Button("Undo") {
                         undoDelete()
                     }
-                    .font(InpensoTheme.label(14, weight: .semibold))
+                    .font(InpensoTheme.label(14, weight: .bold))
                     .foregroundStyle(InpensoTheme.tide)
                 }
                 .padding(InpensoTheme.Space.md)
                 .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
-                .inpensoScreenPadding()
-                .padding(.bottom, InpensoTheme.Space.xs)
+                .padding(.horizontal, screenInset)
+                .padding(.bottom, InpensoTheme.Space.bottomClearance - 56)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(InpensoTheme.Motion.snappy, value: showUndoSnackbar)
             }
@@ -596,9 +633,9 @@ struct FilterCategoriesView: View {
                                 Spacer()
 
                                 if tempSelectedCategoryIDs.contains(category.id) {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(InpensoTheme.ink)
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(InpensoTheme.tide)
                                 }
                             }
                         }

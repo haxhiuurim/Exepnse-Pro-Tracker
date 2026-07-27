@@ -9,6 +9,7 @@ struct AddExpenseView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var categoryStore: CategoryStore
+    @EnvironmentObject private var pro: ProEntitlementManager
     @ObservedObject var viewModel: ExpenseViewModel
 
     @State private var title: String = ""
@@ -130,9 +131,10 @@ struct AddExpenseView: View {
     private var detailsSection: some View {
         CardView(title: "Details") {
             TextFormField(
-                label: "Title",
+                label: "Title (optional)",
                 text: $title,
-                placeholder: transactionType == .expense ? "What did you spend on?" : "Income source"
+                placeholder: transactionType == .income ? "Payday, freelance…" : "Coffee, rent…",
+                leadingIcon: "pencil"
             )
             .padding(.horizontal, InpensoTheme.Space.md)
         }
@@ -184,12 +186,36 @@ struct AddExpenseView: View {
     }
 
     private var templateToggle: some View {
-        Toggle(isOn: $saveAsTemplate) {
-            Text("Save as shortcut")
-                .font(InpensoTheme.body(14, weight: .medium))
-                .foregroundStyle(InpensoTheme.ink)
+        Group {
+            if pro.isPro {
+                Toggle(isOn: $saveAsTemplate) {
+                    Text("Save as shortcut")
+                        .font(InpensoTheme.body(14, weight: .medium))
+                        .foregroundStyle(InpensoTheme.ink)
+                }
+                .tint(InpensoTheme.tide)
+            } else {
+                Button {
+                    pro.openPaywall(plan: .yearly)
+                } label: {
+                    HStack {
+                        Text("Save as shortcut")
+                            .font(InpensoTheme.body(14, weight: .medium))
+                            .foregroundStyle(InpensoTheme.ink)
+                        Spacer()
+                        Text("Pro")
+                            .font(InpensoTheme.label(11, weight: .bold))
+                            .foregroundStyle(InpensoTheme.tide)
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(InpensoTheme.muted)
+                    }
+                    .padding(InpensoTheme.Space.md)
+                    .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .tint(InpensoTheme.ink)
     }
 
     private var saveButton: some View {
@@ -227,16 +253,12 @@ struct AddExpenseView: View {
     // MARK: - Actions
 
     private func isFormValid() -> Bool {
-        !title.isEmpty && !price.isEmpty
+        !price.isEmpty
     }
 
     private func saveExpense() {
         hideKeyboard()
 
-        if title.isEmpty {
-            showValidationAlert("Please enter a title.")
-            return
-        }
         if price.isEmpty {
             showValidationAlert("Please enter an amount.")
             return
@@ -253,9 +275,11 @@ struct AddExpenseView: View {
         let selectedCategory = categoryStore.category(for: selectedCategoryID)
         let legacyCategory = Category.category(from: selectedCategory.id) ?? .others
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = trimmedTitle.isEmpty ? selectedCategory.displayName : trimmedTitle
 
         _ = viewModel.addExpense(
-            title: title,
+            title: resolvedTitle,
             price: priceValue,
             date: selectedDate,
             category: legacyCategory,
@@ -264,9 +288,9 @@ struct AddExpenseView: View {
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes
         )
 
-        if saveAsTemplate && transactionType == .expense {
+        if saveAsTemplate && transactionType == .expense && pro.isPro {
             viewModel.saveTemplate(
-                title: title,
+                title: resolvedTitle,
                 amount: priceValue,
                 categoryID: selectedCategory.id,
                 category: legacyCategory

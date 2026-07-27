@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 struct CategoryManagementView: View {
     @EnvironmentObject private var categoryStore: CategoryStore
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var pro: ProEntitlementManager
     @State private var categoryToEdit: FinanceCategory?
     @State private var showingEditor = false
     @State private var targetedCategoryID: String?
@@ -22,6 +23,50 @@ struct CategoryManagementView: View {
     )
 
     var body: some View {
+        Group {
+            if pro.isPro {
+                proContent
+            } else {
+                lockedContent
+            }
+        }
+        .navigationTitle("Categories")
+        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .tint(InpensoTheme.ink)
+    }
+
+    private var lockedContent: some View {
+        ZStack {
+            AtmosphereBackground()
+            VStack(spacing: InpensoTheme.Space.md) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
+                    .frame(width: 64, height: 64)
+                    .background(InpensoTheme.tide.opacity(0.12), in: Circle())
+
+                Text("Category customization is Pro")
+                    .font(InpensoTheme.body(18, weight: .bold))
+                    .foregroundStyle(InpensoTheme.ink)
+                    .multilineTextAlignment(.center)
+
+                Text("Create, edit, hide, and reorder categories with \(AppBrand.proName).")
+                    .font(InpensoTheme.body(14))
+                    .foregroundStyle(InpensoTheme.muted)
+                    .multilineTextAlignment(.center)
+
+                Button("Upgrade to Pro") {
+                    pro.openPaywall(plan: .yearly)
+                }
+                .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.tide))
+                .padding(.top, InpensoTheme.Space.sm)
+            }
+            .padding(InpensoTheme.Space.screen)
+        }
+    }
+
+    private var proContent: some View {
         List {
             visibleSection
 
@@ -33,10 +78,6 @@ struct CategoryManagementView: View {
         .scrollContentBackground(.hidden)
         .background(AtmosphereBackground())
         .listRowSeparatorTint(InpensoTheme.hairline)
-        .navigationTitle("Categories")
-        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .tint(InpensoTheme.ink)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {

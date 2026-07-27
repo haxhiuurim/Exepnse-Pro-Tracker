@@ -2,8 +2,6 @@
 //  HomeView.swift
 //  iExpense
 //
-//  North home — brand-led cash overview for a fresh app feel.
-//
 
 import SwiftUI
 
@@ -18,27 +16,31 @@ struct HomeView: View {
     @Binding var showQuickAdd: Bool
     var onAddTransaction: (TransactionType) -> Void
 
-    @State private var period: SpendingPeriod = .month
+    @State private var dateSelection = HomeDateSelection()
+    @State private var showDatePicker = false
     @State private var selectedExpenseToEdit: Expense?
     @State private var showReceiptScan = false
     @State private var showInsights = false
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
-    private var periodSpent: Double { viewModel.spent(for: period) }
-    private var periodIncome: Double { viewModel.income(for: period) }
-    private var periodNet: Double { viewModel.net(for: period) }
+    private var interval: DateInterval { dateSelection.interval() }
+    private var periodSpent: Double { PeriodTotals.spent(from: viewModel.expenses, interval: interval) }
+    private var periodIncome: Double { PeriodTotals.income(from: viewModel.expenses, interval: interval) }
+    private var periodNet: Double { PeriodTotals.net(from: viewModel.expenses, interval: interval) }
 
     private var topCategories: [(String, Double)] {
-        PeriodTotals.categoryBreakdown(from: viewModel.expenses, period: period)
+        PeriodTotals.categoryBreakdown(from: viewModel.expenses, interval: interval)
             .sorted { $0.value > $1.value }
             .prefix(3)
             .map { ($0.key, $0.value) }
     }
 
-    private var recent: [Expense] { viewModel.recentExpenses(limit: 6) }
-
-    private var monthTitle: String {
-        Date.now.formatted(.dateTime.month(.wide).year())
+    private var recent: [Expense] {
+        viewModel.expenses
+            .filter { interval.contains($0.date) }
+            .sorted { $0.date > $1.date }
+            .prefix(6)
+            .map { $0 }
     }
 
     var body: some View {
@@ -49,10 +51,12 @@ struct HomeView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
                         brandHeader
+                        if !pro.isPro {
+                            proUpsell
+                        }
                         heroCard
-                        actionStack
-                        tripsBanner
-                        if period == .month, analyticsViewModel.currentBudget > 0 {
+                        if dateSelection.mode == .month, analyticsViewModel.currentBudget > 0,
+                           Calendar.current.isDate(dateSelection.anchor, equalTo: Date(), toGranularity: .month) {
                             budgetStrip
                         }
                         if !topCategories.isEmpty {
@@ -62,7 +66,7 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, InpensoTheme.Space.screen)
                     .padding(.top, InpensoTheme.Space.sm)
-                    .padding(.bottom, InpensoTheme.Space.bottomClearance)
+                    .padding(.bottom, InpensoTheme.Space.xxl)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -71,6 +75,10 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showReceiptScan) {
                 ReceiptScanView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showDatePicker) {
+                HomeDateRangeSheet(selection: $dateSelection)
+                    .presentationDetents([.medium, .large])
             }
             .navigationDestination(isPresented: $showInsights) {
                 AnalyticsView(analyticsViewModel: analyticsViewModel)
@@ -97,47 +105,136 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Brand header
+    // MARK: - Header
 
     private var brandHeader: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: InpensoTheme.Space.sm) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(AppBrand.name)
                     .font(InpensoTheme.brandFont(28, weight: .heavy))
                     .foregroundStyle(InpensoTheme.ink)
-                Text(monthTitle)
+                Text(dateSelection.summaryTitle)
                     .font(InpensoTheme.label(13))
                     .foregroundStyle(InpensoTheme.muted)
             }
-            Spacer()
-            Button {
+
+            Spacer(minLength: 8)
+
+            headerIconButton("minus.circle.fill", tint: InpensoTheme.expenseTint, label: "Add expense") {
+                onAddTransaction(.expense)
+            }
+            headerIconButton("plus.circle.fill", tint: InpensoTheme.incomeTint, label: "Add income") {
+                onAddTransaction(.income)
+            }
+            headerIconButton("doc.text.viewfinder", tint: InpensoTheme.ink, label: "Scan receipt") {
                 showReceiptScan = true
-            } label: {
-                Image(systemName: "doc.text.viewfinder")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.ink)
-                    .frame(width: 44, height: 44)
+            }
+        }
+    }
+
+    private func headerIconButton(_ systemImage: String, tint: Color, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle().fill(InpensoTheme.panelFill)
+                        .shadow(color: InpensoTheme.ink.opacity(0.06), radius: 8, y: 2)
+                )
+        }
+        .accessibilityLabel(label)
+    }
+
+    private var proUpsell: some View {
+        Button {
+            pro.openPaywall(plan: .yearly)
+        } label: {
+            HStack(spacing: InpensoTheme.Space.sm) {
+                Image(systemName: "crown.fill")
+                    .foregroundStyle(InpensoTheme.tide)
+                    .frame(width: 36, height: 36)
                     .background(
-                        Circle().fill(InpensoTheme.panelFill)
-                            .shadow(color: InpensoTheme.ink.opacity(0.06), radius: 8, y: 2)
+                        InpensoTheme.tide.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("You're on Free")
+                        .font(InpensoTheme.body(15, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text("Upgrade for OCR, shortcuts, categories & more")
+                        .font(InpensoTheme.label(12))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+                Spacer()
+                Text("Pro")
+                    .font(InpensoTheme.label(13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                            .fill(InpensoTheme.tide)
                     )
             }
-            .accessibilityLabel("Scan receipt")
+            .padding(InpensoTheme.Space.md)
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Hero
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.lg) {
-            PeriodSelector(period: $period)
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+            rangeModePicker
+
+            HStack {
+                Button {
+                    dateSelection.shift(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(dateSelection.mode == .custom ? InpensoTheme.muted.opacity(0.4) : InpensoTheme.ink)
+                        .frame(width: 36, height: 36)
+                        .background(InpensoTheme.mist, in: Circle())
+                }
+                .disabled(dateSelection.mode == .custom)
+
+                Spacer()
+
+                Button {
+                    showDatePicker = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "calendar")
+                        Text(dateSelection.summaryTitle)
+                            .lineLimit(1)
+                    }
+                    .font(InpensoTheme.label(14, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
+                }
+
+                Spacer()
+
+                Button {
+                    dateSelection.shift(by: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(dateSelection.mode == .custom ? InpensoTheme.muted.opacity(0.4) : InpensoTheme.ink)
+                        .frame(width: 36, height: 36)
+                        .background(InpensoTheme.mist, in: Circle())
+                }
+                .disabled(dateSelection.mode == .custom)
+            }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(period.spentLabel)
+                Text(dateSelection.spentLabel)
                     .font(InpensoTheme.label(13, weight: .semibold))
                     .foregroundStyle(InpensoTheme.muted)
                 Text(periodSpent, format: .currency(code: currencyCode))
-                    .font(InpensoTheme.displayAmount(42))
+                    .font(InpensoTheme.displayAmount(40))
                     .foregroundStyle(InpensoTheme.ink)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
@@ -154,10 +251,36 @@ struct HomeView: View {
             }
         }
         .padding(InpensoTheme.Space.lg)
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
+    }
+
+    private var rangeModePicker: some View {
+        HStack(spacing: 0) {
+            ForEach(HomeRangeMode.allCases) { mode in
+                let selected = dateSelection.mode == mode
+                Button {
+                    HapticFeedback.selection()
+                    withAnimation(InpensoTheme.Motion.snappy) {
+                        dateSelection.mode = mode
+                    }
+                } label: {
+                    Text(mode.title)
+                        .font(InpensoTheme.label(13, weight: .bold))
+                        .foregroundStyle(selected ? .white : InpensoTheme.slate)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                .fill(selected ? InpensoTheme.ink : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
         .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.hero, style: .continuous)
-                .fill(InpensoTheme.panelFill)
-                .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 16, y: 6)
+            RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                .fill(InpensoTheme.mist)
         )
     }
 
@@ -174,75 +297,6 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-
-    // MARK: - Actions
-
-    private var actionStack: some View {
-        VStack(spacing: InpensoTheme.Space.sm) {
-            Button {
-                HapticFeedback.impact()
-                onAddTransaction(.expense)
-            } label: {
-                Label("Add expense", systemImage: "minus.circle.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.expenseTint))
-
-            Button {
-                HapticFeedback.impact()
-                onAddTransaction(.income)
-            } label: {
-                Label("Add income", systemImage: "plus.circle.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.incomeTint))
-        }
-    }
-
-    private var tripsBanner: some View {
-        Button {
-            NotificationCenter.default.post(name: NSNotification.Name("SwitchToTripsTab"), object: nil)
-        } label: {
-            HStack(spacing: InpensoTheme.Space.md) {
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "person.3.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Trips with friends")
-                        .font(InpensoTheme.body(16, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text("Create or join with an invite code")
-                        .font(InpensoTheme.label(12))
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-
-                Spacer()
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .padding(InpensoTheme.Space.md)
-            .background(
-                RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [InpensoTheme.tide, Color(inpensoHex: "#2554D6")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Budget
 
     private var budgetStrip: some View {
         let progress = min(1.0, analyticsViewModel.totalSpent / max(analyticsViewModel.currentBudget, 1))
@@ -266,14 +320,9 @@ struct HomeView: View {
                     }
                 }
                 .frame(height: 8)
-                Text("\(analyticsViewModel.daysRemainingInMonth) days left")
-                    .font(InpensoTheme.label(12))
-                    .foregroundStyle(InpensoTheme.muted)
             }
         }
     }
-
-    // MARK: - Categories
 
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
@@ -316,16 +365,11 @@ struct HomeView: View {
                         }
                     }
                     .padding(InpensoTheme.Space.md)
-                    .background(
-                        RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                            .fill(InpensoTheme.panelFill)
-                    )
+                    .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
                 }
             }
         }
     }
-
-    // MARK: - Recent
 
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
@@ -336,10 +380,10 @@ struct HomeView: View {
             if recent.isEmpty {
                 SurfacePanel(padding: InpensoTheme.Space.lg) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Start tracking")
+                        Text("Nothing in this range")
                             .font(InpensoTheme.body(17, weight: .bold))
                             .foregroundStyle(InpensoTheme.ink)
-                        Text("Add an expense or income to see your cashflow here.")
+                        Text("Add an expense or income, or pick another date.")
                             .font(InpensoTheme.body(14))
                             .foregroundStyle(InpensoTheme.muted)
                     }
@@ -365,11 +409,59 @@ struct HomeView: View {
                         }
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .fill(InpensoTheme.panelFill)
-                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 12, y: 4)
-                )
+                .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
+            }
+        }
+    }
+}
+
+// MARK: - Date range sheet
+
+private struct HomeDateRangeSheet: View {
+    @Binding var selection: HomeDateSelection
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Mode") {
+                    Picker("Range", selection: $selection.mode) {
+                        ForEach(HomeRangeMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                switch selection.mode {
+                case .day:
+                    Section("Day") {
+                        DatePicker("Date", selection: $selection.anchor, displayedComponents: .date)
+                    }
+                case .week:
+                    Section("Week containing") {
+                        DatePicker("Any day in the week", selection: $selection.anchor, displayedComponents: .date)
+                    }
+                case .month:
+                    Section("Month") {
+                        DatePicker("Month", selection: $selection.anchor, displayedComponents: [.date])
+                    }
+                case .custom:
+                    Section("Custom range") {
+                        DatePicker("From", selection: $selection.customStart, displayedComponents: .date)
+                        DatePicker("To", selection: $selection.customEnd, displayedComponents: .date)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(AtmosphereBackground())
+            .navigationTitle("Date range")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                }
             }
         }
     }

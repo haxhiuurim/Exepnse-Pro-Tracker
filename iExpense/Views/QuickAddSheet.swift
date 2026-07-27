@@ -2,8 +2,6 @@
 //  QuickAddSheet.swift
 //  iExpense
 //
-//  Amount-first entry. Expense / Income always at the top.
-//
 
 import SwiftUI
 
@@ -20,7 +18,11 @@ struct QuickAddSheet: View {
     @State private var selectedCategoryID: String
     @State private var showFullForm = false
     @State private var showReceiptScan = false
-    @FocusState private var amountFocused: Bool
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case amount, title
+    }
 
     private var currencySymbol: String {
         Locale.current.localizedCurrencySymbol(forCurrencyCode: settingsViewModel.selectedCurrency)
@@ -33,7 +35,7 @@ struct QuickAddSheet: View {
 
     private var isValid: Bool {
         guard let value = Double(amount.replacingOccurrences(of: ",", with: ".")), value > 0 else { return false }
-        return !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return true
     }
 
     init(viewModel: ExpenseViewModel, initialType: TransactionType = .expense) {
@@ -54,23 +56,10 @@ struct QuickAddSheet: View {
 
                         amountBlock
 
-                        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
-                            Text("What for?")
-                                .font(InpensoTheme.label(13))
-                                .foregroundStyle(InpensoTheme.muted)
-                            TextField(transactionType == .income ? "Payday, freelance…" : "Coffee, rent…", text: $title)
-                                .font(InpensoTheme.body(17, weight: .medium))
-                                .foregroundStyle(InpensoTheme.ink)
-                                .padding(.horizontal, InpensoTheme.Space.md)
-                                .padding(.vertical, InpensoTheme.Space.sm + 2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
-                                        .fill(InpensoTheme.mist)
-                                )
-                        }
+                        titleBlock
 
                         if transactionType == .expense {
-                            categoryStrip
+                            categoryWrap
                             templatesSection
                             scanRow
                         }
@@ -97,6 +86,20 @@ struct QuickAddSheet: View {
                     Button("Full form") { showFullForm = true }
                         .fontWeight(.semibold)
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    if focusedField == .amount {
+                        Button("Next") {
+                            focusedField = .title
+                        }
+                        .fontWeight(.semibold)
+                    } else {
+                        Button("Done") {
+                            focusedField = nil
+                        }
+                        .fontWeight(.semibold)
+                    }
+                }
             }
             .sheet(isPresented: $showFullForm) {
                 AddExpenseView(viewModel: viewModel, initialType: transactionType)
@@ -106,7 +109,7 @@ struct QuickAddSheet: View {
             }
             .onAppear {
                 selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
-                amountFocused = true
+                focusedField = .amount
             }
             .onChange(of: title) { _, newValue in
                 applyMerchantRule(for: newValue)
@@ -131,7 +134,7 @@ struct QuickAddSheet: View {
                     .font(InpensoTheme.displayAmount(40))
                     .foregroundStyle(InpensoTheme.ink)
                     .keyboardType(.decimalPad)
-                    .focused($amountFocused)
+                    .focused($focusedField, equals: .amount)
                     .tint(accent)
                     .onChange(of: amount) { _, newValue in
                         amount = formatCurrencyInput(newValue)
@@ -143,36 +146,62 @@ struct QuickAddSheet: View {
         .inpensoPanelBackground(radius: InpensoTheme.Radius.xl)
     }
 
-    private var categoryStrip: some View {
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
+            HStack {
+                Text("What for?")
+                    .font(InpensoTheme.label(13))
+                    .foregroundStyle(InpensoTheme.muted)
+                Text("Optional")
+                    .font(InpensoTheme.label(11, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.muted.opacity(0.8))
+            }
+            TextField(
+                transactionType == .income ? "Payday, freelance…" : "Coffee, rent…",
+                text: $title
+            )
+            .font(InpensoTheme.body(17, weight: .medium))
+            .foregroundStyle(InpensoTheme.ink)
+            .focused($focusedField, equals: .title)
+            .submitLabel(.done)
+            .onSubmit { focusedField = nil }
+            .padding(.horizontal, InpensoTheme.Space.md)
+            .padding(.vertical, InpensoTheme.Space.sm + 2)
+            .background(
+                RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous)
+                    .fill(InpensoTheme.mist)
+            )
+        }
+    }
+
+    private var categoryWrap: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
             Text("Category")
                 .font(InpensoTheme.label(13))
                 .foregroundStyle(InpensoTheme.muted)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: InpensoTheme.Space.xs) {
-                    ForEach(categoryStore.visibleCategories) { category in
-                        let selected = selectedCategoryID == category.id
-                        Button {
-                            HapticFeedback.selection()
-                            selectedCategoryID = category.id
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: category.iconName)
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text(category.displayName)
-                                    .font(InpensoTheme.label(13, weight: .semibold))
-                            }
-                            .foregroundStyle(selected ? .white : InpensoTheme.slate)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                                    .fill(selected ? category.color : InpensoTheme.mist)
-                            )
+            FlowLayout(spacing: InpensoTheme.Space.xs, lineSpacing: InpensoTheme.Space.xs) {
+                ForEach(categoryStore.visibleCategories) { category in
+                    let selected = selectedCategoryID == category.id
+                    Button {
+                        HapticFeedback.selection()
+                        selectedCategoryID = category.id
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: category.iconName)
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(category.displayName)
+                                .font(InpensoTheme.label(13, weight: .semibold))
                         }
-                        .buttonStyle(.plain)
+                        .foregroundStyle(selected ? .white : InpensoTheme.slate)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                .fill(selected ? category.color : InpensoTheme.mist)
+                        )
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -181,29 +210,63 @@ struct QuickAddSheet: View {
     @ViewBuilder
     private var templatesSection: some View {
         let templates = viewModel.quickTemplates
-        if !templates.isEmpty {
+        if !templates.isEmpty || !pro.isPro {
             VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-                Text("Shortcuts")
-                    .font(InpensoTheme.label(13))
-                    .foregroundStyle(InpensoTheme.muted)
-
-                FlowWrap(spacing: InpensoTheme.Space.xs) {
-                    ForEach(templates) { template in
-                        Button {
-                            applyTemplate(template)
-                        } label: {
-                            Text(template.title)
-                                .font(InpensoTheme.label(13, weight: .medium))
-                                .foregroundStyle(InpensoTheme.ink)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                                        .fill(InpensoTheme.mist)
-                                )
-                        }
-                        .buttonStyle(.plain)
+                HStack {
+                    Text("Shortcuts")
+                        .font(InpensoTheme.label(13))
+                        .foregroundStyle(InpensoTheme.muted)
+                    if !pro.isPro {
+                        Text("Pro")
+                            .font(InpensoTheme.label(10, weight: .bold))
+                            .foregroundStyle(InpensoTheme.tide)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(InpensoTheme.tide.opacity(0.12), in: Capsule())
                     }
+                }
+
+                if pro.isPro {
+                    if templates.isEmpty {
+                        Text("Save frequent expenses from the full form.")
+                            .font(InpensoTheme.body(13))
+                            .foregroundStyle(InpensoTheme.muted)
+                    } else {
+                        FlowLayout(spacing: InpensoTheme.Space.xs, lineSpacing: InpensoTheme.Space.xs) {
+                            ForEach(templates) { template in
+                                Button {
+                                    applyTemplate(template)
+                                } label: {
+                                    Text(template.title)
+                                        .font(InpensoTheme.label(13, weight: .medium))
+                                        .foregroundStyle(InpensoTheme.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                                .fill(InpensoTheme.mist)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                } else {
+                    Button {
+                        pro.openPaywall(plan: .yearly)
+                    } label: {
+                        HStack {
+                            Text("Unlock one-tap shortcuts with Pro")
+                                .font(InpensoTheme.body(14, weight: .medium))
+                                .foregroundStyle(InpensoTheme.ink)
+                            Spacer()
+                            Image(systemName: "lock.fill")
+                                .foregroundStyle(InpensoTheme.muted)
+                        }
+                        .padding(InpensoTheme.Space.md)
+                        .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -241,6 +304,10 @@ struct QuickAddSheet: View {
     }
 
     private func applyTemplate(_ template: QuickSpendTemplate) {
+        guard pro.isPro else {
+            pro.openPaywall(plan: .yearly)
+            return
+        }
         _ = viewModel.addFromTemplate(template)
         HapticFeedback.success()
         dismiss()
@@ -263,9 +330,10 @@ struct QuickAddSheet: View {
             ? FinanceCategory.builtIn(for: .others)
             : categoryStore.category(for: selectedCategoryID)
         let legacy = Category.category(from: category.id) ?? .others
+        let resolvedTitle = cleanTitle.isEmpty ? category.displayName : cleanTitle
 
         _ = viewModel.addExpense(
-            title: cleanTitle,
+            title: resolvedTitle,
             price: price,
             date: Date(),
             category: legacy,
@@ -290,20 +358,5 @@ struct QuickAddSheet: View {
             }
         }
         return formatted
-    }
-}
-
-/// Simple wrapping HStack for template chips.
-private struct FlowWrap<Content: View>: View {
-    var spacing: CGFloat = 8
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        // Fallback: horizontal scroll if many chips — keeps layout simple & reliable
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: spacing) {
-                content()
-            }
-        }
     }
 }

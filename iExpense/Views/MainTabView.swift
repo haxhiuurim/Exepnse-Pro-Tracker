@@ -27,7 +27,7 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var showsFloatingAdd: Bool {
-        selectedTab == AppTab.home.rawValue || selectedTab == AppTab.activity.rawValue
+        selectedTab == AppTab.activity.rawValue
     }
 
     var body: some View {
