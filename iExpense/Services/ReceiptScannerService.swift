@@ -216,17 +216,67 @@ final class ReceiptScannerService {
 
     private func suggestCategory(for name: String) -> String {
         let lower = name.lowercased()
-        let foodKeywords = ["milk", "bread", "egg", "cheese", "apple", "banana", "chicken", "beef", "rice", "pasta", "yogurt", "butter", "fruit", "veg", "salad", "grocery", "water", "juice", "coffee", "tea"]
-        let eatingOut = ["burger", "pizza", "sushi", "latte", "espresso", "meal", "combo", "fries", "sandwich"]
-        let transport = ["uber", "lyft", "taxi", "transit", "metro", "bus", "fuel", "gas", "parking"]
-        let shopping = ["shirt", "pants", "shoe", "bag", "amazon", "store"]
-        let utilities = ["electric", "internet", "wifi", "phone bill", "utility"]
 
-        if foodKeywords.contains(where: { lower.contains($0) }) { return Category.food.categoryID }
-        if eatingOut.contains(where: { lower.contains($0) }) { return Category.eatingOut.categoryID }
-        if transport.contains(where: { lower.contains($0) }) { return Category.transportation.categoryID }
-        if shopping.contains(where: { lower.contains($0) }) { return Category.shopping.categoryID }
-        if utilities.contains(where: { lower.contains($0) }) { return Category.utilities.categoryID }
-        return Category.food.categoryID
+        // Keyword scoring: better than first-match.
+        let keywordsByCategory: [Category: [String: Int]] = [
+            .food: [
+                "milk": 5, "bread": 5, "egg": 5, "cheese": 5, "yogurt": 4, "butter": 4,
+                "apple": 3, "banana": 3, "chicken": 3, "beef": 3, "rice": 3, "pasta": 3,
+                "fruit": 2, "veg": 2, "salad": 2, "grocery": 4, "water": 2, "juice": 2,
+                "coffee": 3, "tea": 3
+            ],
+            .eatingOut: [
+                "burger": 5, "pizza": 5, "sushi": 5, "latte": 4, "espresso": 4,
+                "restaurant": 4, "meal": 3, "combo": 3, "fries": 2, "sandwich": 3,
+                "taco": 4, "ramen": 4, "burrito": 4
+            ],
+            .transportation: [
+                "uber": 7, "lyft": 7, "taxi": 7, "toll": 5,
+                "fuel": 4, "gas": 4, "parking": 4, "metro": 3, "transit": 3,
+                "bus": 3, "train": 3
+            ],
+            .shopping: [
+                "amazon": 5, "walmart": 4, "ikea": 4, "target": 4,
+                "shirt": 3, "pants": 3, "shoe": 3, "bag": 3, "store": 3
+            ],
+            .utilities: [
+                "electric": 6, "electricity": 6, "internet": 6, "wifi": 6,
+                "phone": 5, "phone bill": 5, "utility": 4, "water bill": 6, "gas bill": 6
+            ],
+            .rent: [
+                "rent": 10, "landlord": 3
+            ],
+            .healthcare: [
+                "pharmacy": 8, "pharm": 7, "prescription": 9,
+                "doctor": 5, "dentist": 6, "hospital": 5
+            ],
+            .subscriptions: [
+                "subscription": 8, "netflix": 7, "spotify": 7, "icloud": 5,
+                "prime": 4, "cloud": 4
+            ],
+            .education: [
+                "school": 6, "course": 5, "tuition": 8, "university": 6
+            ],
+            .entertainment: [
+                "movie": 6, "cinema": 6, "concert": 7,
+                "ticket": 4, "streaming": 4
+            ]
+        ]
+
+        var bestCategory: Category = .others
+        var bestScore = 0
+
+        for (category, table) in keywordsByCategory {
+            var score = 0
+            for (keyword, keywordScore) in table where lower.contains(keyword) {
+                score += keywordScore
+            }
+            if score > bestScore {
+                bestScore = score
+                bestCategory = category
+            }
+        }
+
+        return bestScore > 0 ? bestCategory.categoryID : Category.others.categoryID
     }
 }

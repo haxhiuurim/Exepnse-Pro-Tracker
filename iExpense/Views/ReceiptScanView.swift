@@ -327,8 +327,15 @@ struct ReceiptScanView: View {
             let scanned = try await ReceiptScannerService.shared.scan(image: image)
             await MainActor.run {
                 pro.recordReceiptScan()
-                result = scanned
-                merchantOverride = scanned.merchant ?? "Receipt"
+                var fixed = scanned
+                // Apply merchant rule overrides on top of OCR suggestions.
+                for idx in fixed.items.indices {
+                    if let ruleID = PremiumDataStore.shared.suggestedCategoryID(forTitle: fixed.items[idx].name) {
+                        fixed.items[idx].suggestedCategoryID = ruleID
+                    }
+                }
+                result = fixed
+                merchantOverride = fixed.merchant ?? "Receipt"
                 HapticFeedback.success()
             }
         } catch {

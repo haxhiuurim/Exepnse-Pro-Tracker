@@ -164,6 +164,7 @@ struct MainTabView: View {
                 consumePendingQuickAdd()
                 if PremiumDataStore.shared.iCloudSyncEnabled {
                     ICloudSyncService.shared.pullIfAvailable()
+                    ICloudSyncService.shared.pushAll()
                 }
             case .inactive, .background:
                 biometricLock.lockIfNeeded()

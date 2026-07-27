@@ -284,6 +284,48 @@ class AnalyticsViewModel: ObservableObject {
     private func generateInsights() {
         var newInsights: [SpendingInsight] = []
 
+        // Overall month-over-month comparison.
+        // This feeds the "spending up 20% vs last month" insight.
+        if let currentMonthStart = Calendar.current.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: 1)) {
+            if let previousMonthStart = Calendar.current.date(byAdding: .month, value: -1, to: currentMonthStart) {
+                let prevMonth = Calendar.current.component(.month, from: previousMonthStart)
+                let prevYear = Calendar.current.component(.year, from: previousMonthStart)
+
+                let previousMonthSpent = expenses
+                    .filter {
+                        $0.type == .expense &&
+                        Calendar.current.component(.month, from: $0.date) == prevMonth &&
+                        Calendar.current.component(.year, from: $0.date) == prevYear
+                    }
+                    .reduce(0) { $0 + $1.price }
+
+                if previousMonthSpent > 0 {
+                    let percentChange = ((totalSpent - previousMonthSpent) / previousMonthSpent) * 100
+                    if percentChange >= 20 {
+                        newInsights.append(
+                            SpendingInsight(
+                                type: .negative,
+                                title: "Spending Up",
+                                description: "Your spending increased by \(Int(percentChange))% vs last month.",
+                                icon: "arrow.up.right",
+                                color: InpensoTheme.danger
+                            )
+                        )
+                    } else if percentChange <= -20 {
+                        newInsights.append(
+                            SpendingInsight(
+                                type: .positive,
+                                title: "Spending Down",
+                                description: "You reduced spending by \(Int(abs(percentChange)))% vs last month.",
+                                icon: "arrow.down.right",
+                                color: InpensoTheme.surplus
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
         if currentBudget > 0 {
             let percentOfBudgetUsed = (totalSpent / currentBudget) * 100
 

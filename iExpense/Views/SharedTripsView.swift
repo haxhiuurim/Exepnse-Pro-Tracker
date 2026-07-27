@@ -167,11 +167,7 @@ struct SharedTripsView: View {
 
             Spacer(minLength: 8)
 
-            Menu {
-                Button("Edit display name") {
-                    editDisplayName()
-                }
-            } label: {
+            HStack(spacing: InpensoTheme.Space.xs) {
                 Text(model.displayName)
                     .font(InpensoTheme.label(12, weight: .semibold))
                     .foregroundStyle(InpensoTheme.tide)
@@ -182,6 +178,19 @@ struct SharedTripsView: View {
                         in: Capsule()
                     )
                     .lineLimit(1)
+
+                Button {
+                    editDisplayName()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                        .frame(width: 34, height: 34)
+                        .background(
+                            InpensoTheme.mist,
+                            in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                        )
+                }
             }
         }
     }
@@ -469,18 +478,6 @@ struct SharedTripDetailView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showAdd = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(InpensoTheme.ink)
-                }
-                .disabled(detail == nil)
-            }
-        }
         .task { await load() }
         .alert("Add shared expense", isPresented: $showAdd) {
             TextField("Title", text: $expenseTitle)
@@ -589,6 +586,14 @@ struct SharedTripDetailView: View {
                     }
                 }
             }
+
+            Button {
+                showAdd = true
+            } label: {
+                Text("Add shared expense")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.tide))
         }
     }
 

@@ -16,6 +16,10 @@ struct Expense: Identifiable, Codable, Equatable {
     var type: TransactionType
     var categoryID: String
     var notes: String?
+    /// Linked account for cash tracking (optional for legacy rows).
+    var accountID: UUID?
+    /// When true, created from a manual balance edit — do not re-apply to account balance.
+    var isBalanceAdjustment: Bool
 
     init(
         id: UUID = UUID(),
@@ -25,7 +29,9 @@ struct Expense: Identifiable, Codable, Equatable {
         category: Category,
         type: TransactionType = .expense,
         categoryID: String? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        accountID: UUID? = nil,
+        isBalanceAdjustment: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -35,6 +41,8 @@ struct Expense: Identifiable, Codable, Equatable {
         self.type = type
         self.categoryID = categoryID ?? category.categoryID
         self.notes = notes
+        self.accountID = accountID
+        self.isBalanceAdjustment = isBalanceAdjustment
     }
 
     enum CodingKeys: String, CodingKey {
@@ -46,6 +54,8 @@ struct Expense: Identifiable, Codable, Equatable {
         case type
         case categoryID
         case notes
+        case accountID
+        case isBalanceAdjustment
     }
 
     init(from decoder: Decoder) throws {
@@ -59,5 +69,7 @@ struct Expense: Identifiable, Codable, Equatable {
         type = try container.decodeIfPresent(TransactionType.self, forKey: .type) ?? .expense
         categoryID = try container.decodeIfPresent(String.self, forKey: .categoryID) ?? category.categoryID
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        accountID = try container.decodeIfPresent(UUID.self, forKey: .accountID)
+        isBalanceAdjustment = try container.decodeIfPresent(Bool.self, forKey: .isBalanceAdjustment) ?? false
     }
 }

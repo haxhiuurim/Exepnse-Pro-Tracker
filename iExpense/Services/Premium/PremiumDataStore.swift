@@ -47,6 +47,16 @@ final class PremiumDataStore: ObservableObject {
         accounts.filter(\.includeInNetWorth).reduce(0) { $0 + $1.signedBalance }
     }
 
+    /// Cash available across liquid accounts (checking, savings, cash…).
+    var availableCash: Double {
+        accounts.filter { $0.includeInNetWorth && $0.isLiquid }.reduce(0) { $0 + $1.balance }
+    }
+
+    var primaryLiquidAccount: FinanceAccount? {
+        accounts.first { $0.includeInNetWorth && $0.isLiquid }
+            ?? accounts.first { $0.isLiquid }
+    }
+
     var selectedTheme: ThemePack {
         ThemePack.standard
     }
@@ -111,6 +121,60 @@ final class PremiumDataStore: ObservableObject {
             accounts.append(account)
         }
         saveAccounts()
+    }
+
+    /// Saves account and returns a ledger adjustment when the balance changed (for history / income).
+    @discardableResult
+    func upsertAccountRecordingChange(
+        _ account: FinanceAccount,
+        previous: FinanceAccount?
+    ) -> Expense? {
+        let oldBalance = previous?.balance ?? 0
+        let newBalance = account.balance
+        let delta = newBalance - oldBalance
+
+        upsertAccount(account)
+
+        guard abs(delta) > 0.000_1 else { return nil }
+
+        let isIncome = delta > 0
+        let amount = abs(delta)
+        let title: String
+        if previous == nil {
+            title = isIncome ? "Opening balance · \(account.name)" : "Opening balance · \(account.name)"
+        } else {
+            title = isIncome ? "Balance increase · \(account.name)" : "Balance decrease · \(account.name)"
+        }
+
+        return Expense(
+            title: title,
+            price: amount,
+            date: Date(),
+            category: .others,
+            type: isIncome ? .income : .expense,
+            categoryID: Category.others.categoryID,
+            notes: "Account adjustment",
+            accountID: account.id,
+            isBalanceAdjustment: true
+        )
+    }
+
+    func adjustBalance(accountID: UUID?, by amount: Double) {
+        guard abs(amount) > 0.000_1 else { return }
+        let targetID = accountID ?? primaryLiquidAccount?.id
+        guard let targetID,
+              let idx = accounts.firstIndex(where: { $0.id == targetID }),
+              accounts[idx].isLiquid
+        else { return }
+
+        accounts[idx].balance = max(0, accounts[idx].balance + amount)
+        saveAccounts()
+    }
+
+    func applyTransactionToAccounts(_ expense: Expense, reversing: Bool = false) {
+        guard !expense.isBalanceAdjustment else { return }
+        let signed = expense.type == .income ? expense.price : -expense.price
+        adjustBalance(accountID: expense.accountID, by: reversing ? -signed : signed)
     }
 
     func deleteAccount(_ account: FinanceAccount) {

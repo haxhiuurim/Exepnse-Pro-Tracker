@@ -226,7 +226,7 @@ struct HomeView: View {
                     .foregroundStyle(InpensoTheme.muted)
                 Text(periodSpent, format: .currency(code: currencyCode))
                     .font(InpensoTheme.displayAmount(40))
-                    .foregroundStyle(InpensoTheme.ink)
+                    .foregroundStyle(InpensoTheme.expenseTint)
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
                     .contentTransition(.numericText())
@@ -281,12 +281,12 @@ struct HomeView: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Accounts")
+                    Text("Available cash")
                         .font(InpensoTheme.label(12))
                         .foregroundStyle(InpensoTheme.muted)
-                    Text(premiumStore.netWorth, format: .currency(code: currencyCode))
+                    Text(premiumStore.availableCash, format: .currency(code: currencyCode))
                         .font(InpensoTheme.displayAmount(20))
-                        .foregroundStyle(premiumStore.netWorth >= 0 ? InpensoTheme.ink : InpensoTheme.expenseTint)
+                        .foregroundStyle(InpensoTheme.ink)
                 }
                 Spacer()
                 Text("\(premiumStore.accounts.count) accounts")

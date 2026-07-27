@@ -211,8 +211,6 @@ struct ExpensesListView: View {
 
     private var periodHero: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
-            rangeModePicker
-
             HStack {
                 Button {
                     dateSelection.shift(by: -1)
@@ -245,9 +243,19 @@ struct ExpensesListView: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Spent")
+                    .font(InpensoTheme.label(13, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.muted)
+                Text(totalSpent, format: .currency(code: currencyCode))
+                    .font(InpensoTheme.displayAmount(40))
+                    .foregroundStyle(InpensoTheme.expenseTint)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .contentTransition(.numericText())
+            }
+
             HStack(spacing: 0) {
-                summaryCell(title: "Spent", amount: totalSpent, tint: InpensoTheme.expenseTint)
-                summaryDivider
                 summaryCell(title: "Income", amount: totalIncome, tint: InpensoTheme.incomeTint)
                 summaryDivider
                 summaryCell(
@@ -256,6 +264,8 @@ struct ExpensesListView: View {
                     tint: netCashflow >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint
                 )
             }
+
+            rangeModePicker
 
             if dateSelection.mode == .month,
                analyticsViewModel.currentBudget > 0,
@@ -458,9 +468,9 @@ struct ExpensesListView: View {
     }
 
     private func categorySection(category: FinanceCategory, items: [Expense]) -> some View {
-        let categoryTotal = items.reduce(0) { total, transaction in
-            total + (transaction.type == .income ? transaction.price : -transaction.price)
-        }
+        let spent = items.filter { $0.type == .expense }.reduce(0) { $0 + $1.price }
+        let income = items.filter { $0.type == .income }.reduce(0) { $0 + $1.price }
+        let isOthers = category.id == Category.others.categoryID
 
         return VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
             HStack(spacing: InpensoTheme.Space.sm) {
@@ -473,15 +483,31 @@ struct ExpensesListView: View {
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous)
                     )
 
-                Text(category.displayName)
-                    .font(InpensoTheme.label(13, weight: .bold))
-                    .foregroundStyle(InpensoTheme.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(category.displayName)
+                        .font(InpensoTheme.label(13, weight: .bold))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text("\(items.count) transaction\(items.count == 1 ? "" : "s")")
+                        .font(InpensoTheme.label(11))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
 
                 Spacer()
 
-                Text(categoryTotal, format: .currency(code: currencyCode))
-                    .font(InpensoTheme.displayAmount(13))
-                    .foregroundStyle(categoryTotal >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint)
+                if !isOthers {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        if spent > 0 {
+                            Text(spent, format: .currency(code: currencyCode))
+                                .font(InpensoTheme.displayAmount(13))
+                                .foregroundStyle(InpensoTheme.expenseTint)
+                        }
+                        if income > 0 {
+                            Text(income, format: .currency(code: currencyCode))
+                                .font(InpensoTheme.displayAmount(12))
+                                .foregroundStyle(InpensoTheme.incomeTint)
+                        }
+                    }
+                }
             }
 
             VStack(spacing: 0) {
@@ -601,23 +627,19 @@ struct ExpensesListView: View {
     }
 
     private func deleteExpenseByID(_ expense: Expense) {
-        if let index = viewModel.expenses.firstIndex(where: { $0.id == expense.id }) {
-            recentlyDeletedExpenses = [expense]
-            viewModel.expenses.remove(at: index)
-            viewModel.saveExpenses()
-            showUndoSnackbar = true
-            undoTimer?.invalidate()
-            undoTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { _ in
-                showUndoSnackbar = false
-                recentlyDeletedExpenses.removeAll()
-            }
+        recentlyDeletedExpenses = [expense]
+        viewModel.deleteExpenses([expense])
+        showUndoSnackbar = true
+        undoTimer?.invalidate()
+        undoTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false) { _ in
+            showUndoSnackbar = false
+            recentlyDeletedExpenses.removeAll()
         }
     }
 
     private func undoDelete() {
         undoTimer?.invalidate()
-        viewModel.expenses.append(contentsOf: recentlyDeletedExpenses)
-        viewModel.saveExpenses()
+        viewModel.addExpenses(recentlyDeletedExpenses)
         recentlyDeletedExpenses.removeAll()
         showUndoSnackbar = false
     }

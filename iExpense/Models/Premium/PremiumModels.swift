@@ -134,6 +134,9 @@ struct FinanceAccount: Identifiable, Codable, Equatable, Hashable {
     var signedBalance: Double {
         kind.countsAsLiability ? -abs(balance) : balance
     }
+
+    /// Liquid money available to spend (excludes credit cards).
+    var isLiquid: Bool { !kind.countsAsLiability }
 }
 
 // MARK: - Household

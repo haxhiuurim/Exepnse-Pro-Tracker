@@ -14,6 +14,8 @@ class ExpenseViewModel: ObservableObject {
     @Published var expenses: [Expense] = []
     @Published var quickTemplates: [QuickSpendTemplate] = []
 
+    private var accountsStore: PremiumDataStore { .shared }
+
     init() {
         loadExpenses()
         quickTemplates = StorageService.loadQuickTemplates()
@@ -27,8 +29,12 @@ class ExpenseViewModel: ObservableObject {
         category: Category,
         type: TransactionType = .expense,
         categoryID: String? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        accountID: UUID? = nil,
+        isBalanceAdjustment: Bool = false,
+        applyToAccount: Bool = true
     ) -> Expense {
+        let linkedAccount = accountID ?? (isBalanceAdjustment ? nil : accountsStore.primaryLiquidAccount?.id)
         let newExpense = Expense(
             title: title,
             price: price,
@@ -36,9 +42,14 @@ class ExpenseViewModel: ObservableObject {
             category: category,
             type: type,
             categoryID: categoryID,
-            notes: notes
+            notes: notes,
+            accountID: linkedAccount ?? accountID,
+            isBalanceAdjustment: isBalanceAdjustment
         )
         expenses.insert(newExpense, at: 0)
+        if applyToAccount {
+            accountsStore.applyTransactionToAccounts(newExpense)
+        }
         saveExpenses()
         return newExpense
     }
@@ -59,11 +70,32 @@ class ExpenseViewModel: ObservableObject {
     }
 
     func addExpenses(_ newExpenses: [Expense]) {
-        expenses.insert(contentsOf: newExpenses, at: 0)
+        for expense in newExpenses {
+            var linked = expense
+            if linked.accountID == nil, !linked.isBalanceAdjustment {
+                linked.accountID = accountsStore.primaryLiquidAccount?.id
+            }
+            expenses.insert(linked, at: 0)
+            accountsStore.applyTransactionToAccounts(linked)
+        }
         saveExpenses()
     }
 
+    /// Persist a manual account balance change as income/expense history.
+    @discardableResult
+    func recordAccountBalanceChange(account: FinanceAccount, previous: FinanceAccount?) -> Expense? {
+        guard let adjustment = accountsStore.upsertAccountRecordingChange(account, previous: previous) else {
+            return nil
+        }
+        expenses.insert(adjustment, at: 0)
+        saveExpenses()
+        return adjustment
+    }
+
     func deleteExpense(at offsets: IndexSet) {
+        for index in offsets {
+            accountsStore.applyTransactionToAccounts(expenses[index], reversing: true)
+        }
         expenses.remove(atOffsets: offsets)
         saveExpenses()
     }
@@ -80,6 +112,7 @@ class ExpenseViewModel: ObservableObject {
     func deleteExpenses(_ expenses: [Expense]) {
         for expense in expenses {
             if let index = self.expenses.firstIndex(where: { $0.id == expense.id }) {
+                accountsStore.applyTransactionToAccounts(self.expenses[index], reversing: true)
                 self.expenses.remove(at: index)
             }
         }
@@ -88,7 +121,14 @@ class ExpenseViewModel: ObservableObject {
 
     func updateExpense(_ expense: Expense) {
         guard let index = expenses.firstIndex(where: { $0.id == expense.id }) else { return }
-        expenses[index] = expense
+        let previous = expenses[index]
+        accountsStore.applyTransactionToAccounts(previous, reversing: true)
+        var updated = expense
+        if updated.accountID == nil, !updated.isBalanceAdjustment {
+            updated.accountID = previous.accountID ?? accountsStore.primaryLiquidAccount?.id
+        }
+        expenses[index] = updated
+        accountsStore.applyTransactionToAccounts(updated)
         saveExpenses()
     }
 
@@ -141,5 +181,9 @@ class ExpenseViewModel: ObservableObject {
 
     func recentExpenses(limit: Int = 5) -> [Expense] {
         Array(expenses.prefix(limit))
+    }
+
+    func transactions(forAccountID id: UUID) -> [Expense] {
+        expenses.filter { $0.accountID == id }
     }
 }

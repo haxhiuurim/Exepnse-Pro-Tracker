@@ -19,6 +19,13 @@ final class ICloudSyncService {
         static let budgets = "icloud.budgets"
         static let categoryBudgets = "icloud.categoryBudgets"
         static let recurring = "icloud.recurring"
+        static let accounts = "icloud.accounts"
+        static let goals = "icloud.goals"
+        static let rules = "icloud.rules"
+        static let household = "icloud.household"
+        static let customCategories = "icloud.customCategories"
+        static let categoryCatalogState = "icloud.categoryCatalogState"
+        static let quickTemplates = "icloud.quickTemplates"
         static let lastPush = "icloud.lastPush"
     }
 
@@ -32,6 +39,7 @@ final class ICloudSyncService {
         store.synchronize()
     }
 
+    @MainActor
     func pushAll() {
         guard UserDefaults.standard.bool(forKey: "premiumiCloudSyncEnabled") else {
             return
@@ -49,6 +57,32 @@ final class ICloudSyncService {
         if let recurring = try? JSONEncoder().encode(StorageService.loadRecurringTransactions()) {
             store.set(recurring, forKey: Keys.recurring)
         }
+
+        let premium = PremiumDataStore.shared
+        if let accountsData = try? JSONEncoder().encode(premium.accounts) {
+            store.set(accountsData, forKey: Keys.accounts)
+        }
+        if let goalsData = try? JSONEncoder().encode(premium.goals) {
+            store.set(goalsData, forKey: Keys.goals)
+        }
+        if let rulesData = try? JSONEncoder().encode(premium.merchantRules) {
+            store.set(rulesData, forKey: Keys.rules)
+        }
+        if let householdData = try? JSONEncoder().encode(premium.household) {
+            store.set(householdData, forKey: Keys.household)
+        }
+
+        if let customCategories = try? JSONEncoder().encode(StorageService.loadCustomCategories()) {
+            store.set(customCategories, forKey: Keys.customCategories)
+        }
+        if let catalogState = StorageService.loadCategoryCatalogState(),
+           let catalogData = try? JSONEncoder().encode(catalogState) {
+            store.set(catalogData, forKey: Keys.categoryCatalogState)
+        }
+        if let templates = try? JSONEncoder().encode(StorageService.loadQuickTemplates()) {
+            store.set(templates, forKey: Keys.quickTemplates)
+        }
+
         store.set(Date().timeIntervalSince1970, forKey: Keys.lastPush)
         store.synchronize()
     }
@@ -71,6 +105,50 @@ final class ICloudSyncService {
            let items = try? JSONDecoder().decode([RecurringTransaction].self, from: data) {
             StorageService.saveRecurringTransactions(items)
         }
+
+        if let data = store.data(forKey: Keys.accounts),
+           let accounts = try? JSONDecoder().decode([FinanceAccount].self, from: data) {
+            Task { @MainActor in
+                PremiumDataStore.shared.accounts = accounts
+            }
+        }
+
+        if let data = store.data(forKey: Keys.goals),
+           let goals = try? JSONDecoder().decode([SavingsGoal].self, from: data) {
+            Task { @MainActor in
+                PremiumDataStore.shared.goals = goals
+            }
+        }
+
+        if let data = store.data(forKey: Keys.rules),
+           let rules = try? JSONDecoder().decode([MerchantRule].self, from: data) {
+            Task { @MainActor in
+                PremiumDataStore.shared.merchantRules = rules
+            }
+        }
+
+        if let data = store.data(forKey: Keys.household),
+           let household = try? JSONDecoder().decode(HouseholdLedger.self, from: data) {
+            Task { @MainActor in
+                PremiumDataStore.shared.household = household
+            }
+        }
+
+        if let data = store.data(forKey: Keys.customCategories),
+           let cats = try? JSONDecoder().decode([FinanceCategory].self, from: data) {
+            StorageService.saveCustomCategories(cats)
+        }
+
+        if let data = store.data(forKey: Keys.categoryCatalogState),
+           let state = try? JSONDecoder().decode(CategoryCatalogState.self, from: data) {
+            StorageService.saveCategoryCatalogState(state)
+        }
+
+        if let data = store.data(forKey: Keys.quickTemplates),
+           let templates = try? JSONDecoder().decode([QuickSpendTemplate].self, from: data) {
+            StorageService.saveQuickTemplates(templates)
+        }
+
         WidgetCenter.shared.reloadAllTimelines()
     }
 
