@@ -16,6 +16,7 @@ struct QuickAddSheet: View {
     @State private var amount: String = ""
     @State private var title: String = ""
     @State private var selectedCategoryID: String
+    @State private var selectedAccountID: UUID?
     @State private var showFullForm = false
     @State private var showReceiptScan = false
     @FocusState private var focusedField: Field?
@@ -33,8 +34,15 @@ struct QuickAddSheet: View {
         transactionType == .income ? InpensoTheme.incomeTint : InpensoTheme.expenseTint
     }
 
+    private var liquidAccounts: [FinanceAccount] {
+        PremiumDataStore.shared.accounts.filter(\.isLiquid)
+    }
+
     private var isValid: Bool {
         guard let value = Double(amount.replacingOccurrences(of: ",", with: ".")), value > 0 else { return false }
+        if transactionType == .income, !liquidAccounts.isEmpty {
+            return selectedAccountID != nil
+        }
         return true
     }
 
@@ -57,6 +65,13 @@ struct QuickAddSheet: View {
                         amountBlock
 
                         titleBlock
+
+                        if transactionType == .income {
+                            AccountDestinationPicker(
+                                selectedAccountID: $selectedAccountID,
+                                currencyCode: settingsViewModel.selectedCurrency
+                            )
+                        }
 
                         if transactionType == .expense {
                             categoryWrap
@@ -109,7 +124,15 @@ struct QuickAddSheet: View {
             }
             .onAppear {
                 selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
+                if selectedAccountID == nil {
+                    selectedAccountID = PremiumDataStore.shared.primaryLiquidAccount?.id
+                }
                 focusedField = .amount
+            }
+            .onChange(of: transactionType) { _, newType in
+                if newType == .income, selectedAccountID == nil {
+                    selectedAccountID = PremiumDataStore.shared.primaryLiquidAccount?.id
+                }
             }
             .onChange(of: title) { _, newValue in
                 applyMerchantRule(for: newValue)
@@ -338,7 +361,8 @@ struct QuickAddSheet: View {
             date: Date(),
             category: legacy,
             type: transactionType,
-            categoryID: category.id
+            categoryID: category.id,
+            accountID: transactionType == .income ? selectedAccountID : nil
         )
         HapticFeedback.success()
         dismiss()

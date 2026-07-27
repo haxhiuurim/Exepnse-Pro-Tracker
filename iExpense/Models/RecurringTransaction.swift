@@ -83,6 +83,8 @@ struct RecurringTransaction: Identifiable, Codable, Equatable, Hashable {
     var isActive: Bool
     var notes: String?
     var lastGeneratedDate: Date?
+    /// Account that receives recurring income (or pays recurring expenses).
+    var accountID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -97,7 +99,8 @@ struct RecurringTransaction: Identifiable, Codable, Equatable, Hashable {
         endDate: Date? = nil,
         isActive: Bool = true,
         notes: String? = nil,
-        lastGeneratedDate: Date? = nil
+        lastGeneratedDate: Date? = nil,
+        accountID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -112,6 +115,30 @@ struct RecurringTransaction: Identifiable, Codable, Equatable, Hashable {
         self.isActive = isActive
         self.notes = notes
         self.lastGeneratedDate = lastGeneratedDate
+        self.accountID = accountID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, amount, categoryID, category, type, frequency
+        case startDate, nextDueDate, endDate, isActive, notes, lastGeneratedDate, accountID
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try container.decode(String.self, forKey: .title)
+        amount = try container.decode(Double.self, forKey: .amount)
+        categoryID = try container.decode(String.self, forKey: .categoryID)
+        category = try container.decodeIfPresent(Category.self, forKey: .category) ?? .others
+        type = try container.decodeIfPresent(TransactionType.self, forKey: .type) ?? .expense
+        frequency = try container.decodeIfPresent(RecurrenceFrequency.self, forKey: .frequency) ?? .monthly
+        startDate = try container.decodeIfPresent(Date.self, forKey: .startDate) ?? Date()
+        nextDueDate = try container.decodeIfPresent(Date.self, forKey: .nextDueDate) ?? startDate
+        endDate = try container.decodeIfPresent(Date.self, forKey: .endDate)
+        isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        lastGeneratedDate = try container.decodeIfPresent(Date.self, forKey: .lastGeneratedDate)
+        accountID = try container.decodeIfPresent(UUID.self, forKey: .accountID)
     }
 
     func makeExpense(on date: Date) -> Expense {
@@ -122,7 +149,8 @@ struct RecurringTransaction: Identifiable, Codable, Equatable, Hashable {
             category: category,
             type: type,
             categoryID: categoryID,
-            notes: notes.map { "Recurring · \($0)" } ?? "Recurring · \(frequency.displayName)"
+            notes: notes.map { "Recurring · \($0)" } ?? "Recurring · \(frequency.displayName)",
+            accountID: accountID
         )
     }
 }

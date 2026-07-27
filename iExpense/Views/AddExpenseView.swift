@@ -16,6 +16,7 @@ struct AddExpenseView: View {
     @State private var price: String = ""
     @State private var selectedCategoryID: String
     @State private var transactionType: TransactionType
+    @State private var selectedAccountID: UUID?
     @State private var selectedDate: Date = Date()
     @State private var notes: String = ""
     @State private var showDatePicker = false
@@ -51,6 +52,13 @@ struct AddExpenseView: View {
                         amountSection
 
                         detailsSection
+
+                        if transactionType == .income {
+                            AccountDestinationPicker(
+                                selectedAccountID: $selectedAccountID,
+                                currencyCode: settingsViewModel.selectedCurrency
+                            )
+                        }
 
                         if transactionType == .expense {
                             receiptScanLink
@@ -107,6 +115,14 @@ struct AddExpenseView: View {
             }
             .onAppear {
                 selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
+                if selectedAccountID == nil {
+                    selectedAccountID = PremiumDataStore.shared.primaryLiquidAccount?.id
+                }
+            }
+            .onChange(of: transactionType) { _, newType in
+                if newType == .income, selectedAccountID == nil {
+                    selectedAccountID = PremiumDataStore.shared.primaryLiquidAccount?.id
+                }
             }
         }
     }
@@ -253,7 +269,12 @@ struct AddExpenseView: View {
     // MARK: - Actions
 
     private func isFormValid() -> Bool {
-        !price.isEmpty
+        guard !price.isEmpty else { return false }
+        if transactionType == .income,
+           !PremiumDataStore.shared.accounts.filter(\.isLiquid).isEmpty {
+            return selectedAccountID != nil
+        }
+        return true
     }
 
     private func saveExpense() {
@@ -261,6 +282,13 @@ struct AddExpenseView: View {
 
         if price.isEmpty {
             showValidationAlert("Please enter an amount.")
+            return
+        }
+
+        if transactionType == .income,
+           !PremiumDataStore.shared.accounts.filter(\.isLiquid).isEmpty,
+           selectedAccountID == nil {
+            showValidationAlert("Choose which account should receive this income.")
             return
         }
 
@@ -285,7 +313,8 @@ struct AddExpenseView: View {
             category: legacyCategory,
             type: transactionType,
             categoryID: selectedCategory.id,
-            notes: trimmedNotes.isEmpty ? nil : trimmedNotes
+            notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
+            accountID: transactionType == .income ? selectedAccountID : nil
         )
 
         if saveAsTemplate && transactionType == .expense && pro.isPro {

@@ -83,18 +83,6 @@ struct ExpensesListView: View {
         return result
     }
 
-    private var totalSpent: Double {
-        filteredExpenses.filter { $0.type == .expense }.reduce(0) { $0 + $1.price }
-    }
-
-    private var totalIncome: Double {
-        filteredExpenses.filter { $0.type == .income }.reduce(0) { $0 + $1.price }
-    }
-
-    private var netCashflow: Double {
-        totalIncome - totalSpent
-    }
-
     private var groupedExpenses: [String: [Expense]] {
         Dictionary(grouping: filteredExpenses) { $0.categoryID }
     }
@@ -119,7 +107,7 @@ struct ExpensesListView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
                         brandHeader
-                        periodHero
+                        periodControls
                         typeFilterChips
                         searchAndTools
                         activityContent
@@ -207,10 +195,12 @@ struct ExpensesListView: View {
         .accessibilityLabel(label)
     }
 
-    // MARK: - Period hero
+    // MARK: - Period controls
 
-    private var periodHero: some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
+    private var periodControls: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            rangeModePicker
+
             HStack {
                 Button {
                     dateSelection.shift(by: -1)
@@ -225,7 +215,7 @@ struct ExpensesListView: View {
                 Spacer()
 
                 Text(dateSelection.summaryTitle)
-                    .font(InpensoTheme.label(14, weight: .semibold))
+                    .font(InpensoTheme.label(15, weight: .semibold))
                     .foregroundStyle(InpensoTheme.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -242,39 +232,9 @@ struct ExpensesListView: View {
                         .background(InpensoTheme.mist, in: Circle())
                 }
             }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Spent")
-                    .font(InpensoTheme.label(13, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.muted)
-                Text(totalSpent, format: .currency(code: currencyCode))
-                    .font(InpensoTheme.displayAmount(40))
-                    .foregroundStyle(InpensoTheme.expenseTint)
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .contentTransition(.numericText())
-            }
-
-            HStack(spacing: 0) {
-                summaryCell(title: "Income", amount: totalIncome, tint: InpensoTheme.incomeTint)
-                summaryDivider
-                summaryCell(
-                    title: "Net",
-                    amount: netCashflow,
-                    tint: netCashflow >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint
-                )
-            }
-
-            rangeModePicker
-
-            if dateSelection.mode == .month,
-               analyticsViewModel.currentBudget > 0,
-               Calendar.current.isDate(dateSelection.anchor, equalTo: Date(), toGranularity: .month) {
-                budgetProgress
-            }
         }
         .padding(InpensoTheme.Space.md)
-        .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
     }
 
     private var rangeModePicker: some View {
@@ -307,62 +267,10 @@ struct ExpensesListView: View {
         )
     }
 
-    private var summaryDivider: some View {
-        Rectangle()
-            .fill(InpensoTheme.hairline)
-            .frame(width: 1, height: 36)
-            .padding(.horizontal, InpensoTheme.Space.xs)
-    }
-
-    private func summaryCell(title: String, amount: Double, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
-            Text(title)
-                .font(InpensoTheme.label(11, weight: .semibold))
-                .foregroundStyle(InpensoTheme.muted)
-                .textCase(.uppercase)
-            Text(amount, format: .currency(code: currencyCode))
-                .font(InpensoTheme.displayAmount(15))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .contentTransition(.numericText())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var budgetProgress: some View {
-        VStack(spacing: InpensoTheme.Space.xs) {
-            HStack {
-                Text("Monthly budget")
-                    .font(InpensoTheme.label(11, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.muted)
-                Spacer()
-                Text("\(totalSpent.formatted(.currency(code: currencyCode))) / \(analyticsViewModel.currentBudget.formatted(.currency(code: currencyCode)))")
-                    .font(InpensoTheme.label(11))
-                    .foregroundStyle(InpensoTheme.muted)
-            }
-
-            let progress = min(1.0, totalSpent / max(analyticsViewModel.currentBudget, 0.01))
-            let progressColor: Color = progress >= 0.9 ? InpensoTheme.expenseTint : (progress >= 0.75 ? InpensoTheme.ink : InpensoTheme.tide)
-
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(InpensoTheme.mist)
-                        .frame(height: 5)
-                    Capsule()
-                        .fill(progressColor)
-                        .frame(width: max(5, geometry.size.width * CGFloat(progress)), height: 5)
-                }
-            }
-            .frame(height: 5)
-        }
-    }
-
     // MARK: - Filters
 
     private var typeFilterChips: some View {
-        HStack(spacing: InpensoTheme.Space.xs) {
+        HStack(spacing: 6) {
             ForEach(TransactionFilter.allCases) { filter in
                 typeChip(filter)
             }
@@ -386,12 +294,12 @@ struct ExpensesListView: View {
             }
         } label: {
             Text(filter.rawValue)
-                .font(InpensoTheme.label(13, weight: .bold))
+                .font(InpensoTheme.label(12, weight: .semibold))
                 .foregroundStyle(selected ? .white : InpensoTheme.slate)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
                 .background(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                    Capsule(style: .continuous)
                         .fill(selected ? tint : InpensoTheme.mist)
                 )
         }

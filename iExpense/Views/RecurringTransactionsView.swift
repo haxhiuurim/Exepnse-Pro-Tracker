@@ -269,6 +269,7 @@ struct RecurringEditorSheet: View {
     @State private var hasEndDate = false
     @State private var endDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var notes: String = ""
+    @State private var selectedAccountID: UUID?
 
     private var currencySymbol: String {
         Locale.current.localizedCurrencySymbol(forCurrencyCode: settingsViewModel.selectedCurrency)
@@ -298,6 +299,24 @@ struct RecurringEditorSheet: View {
                         ))
                 } header: {
                     editorHeader("Details")
+                }
+
+                if type == .income {
+                    Section {
+                        AccountDestinationPicker(
+                            selectedAccountID: $selectedAccountID,
+                            currencyCode: settingsViewModel.selectedCurrency
+                        )
+                        .listRowInsets(EdgeInsets(
+                            top: InpensoTheme.Space.sm,
+                            leading: InpensoTheme.Space.screen,
+                            bottom: InpensoTheme.Space.sm,
+                            trailing: InpensoTheme.Space.screen
+                        ))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        editorHeader("Deposit to")
+                    }
                 }
 
                 Section {
@@ -364,8 +383,16 @@ struct RecurringEditorSheet: View {
                     hasEndDate = existing.endDate != nil
                     endDate = existing.endDate ?? endDate
                     notes = existing.notes ?? ""
+                    selectedAccountID = existing.accountID
+                        ?? PremiumDataStore.shared.primaryLiquidAccount?.id
                 } else {
                     categoryID = categoryStore.preferredCategoryID(for: Category.rent.categoryID)
+                    selectedAccountID = PremiumDataStore.shared.primaryLiquidAccount?.id
+                }
+            }
+            .onChange(of: type) { _, newType in
+                if newType == .income, selectedAccountID == nil {
+                    selectedAccountID = PremiumDataStore.shared.primaryLiquidAccount?.id
                 }
             }
         }
@@ -379,8 +406,12 @@ struct RecurringEditorSheet: View {
     }
 
     private var isValid: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && (Double(amount.replacingOccurrences(of: ",", with: ".")) ?? 0) > 0
+        let hasTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasAmount = (Double(amount.replacingOccurrences(of: ",", with: ".")) ?? 0) > 0
+        if type == .income, !PremiumDataStore.shared.accounts.filter(\.isLiquid).isEmpty {
+            return hasTitle && hasAmount && selectedAccountID != nil
+        }
+        return hasTitle && hasAmount
     }
 
     private func save() {
@@ -402,7 +433,8 @@ struct RecurringEditorSheet: View {
             endDate: hasEndDate ? endDate : nil,
             isActive: existing?.isActive ?? true,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
-            lastGeneratedDate: existing?.lastGeneratedDate
+            lastGeneratedDate: existing?.lastGeneratedDate,
+            accountID: type == .income ? selectedAccountID : nil
         )
         onSave(item)
         HapticFeedback.success()
