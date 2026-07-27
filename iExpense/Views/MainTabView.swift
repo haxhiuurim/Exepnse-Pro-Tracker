@@ -15,6 +15,11 @@ private enum AppTab: Int {
     case more = 3
 }
 
+private struct QuickAddRequest: Identifiable {
+    let id = UUID()
+    let type: TransactionType
+}
+
 struct MainTabView: View {
     @StateObject private var viewModel = ExpenseViewModel()
     @StateObject private var analyticsViewModel = AnalyticsViewModel(expenses: [])
@@ -22,8 +27,7 @@ struct MainTabView: View {
     @ObservedObject private var biometricLock = BiometricLockService.shared
     @ObservedObject private var pro = ProEntitlementManager.shared
     @State private var selectedTab = AppTab.home.rawValue
-    @State private var showQuickAdd = false
-    @State private var quickAddType: TransactionType = .expense
+    @State private var quickAddRequest: QuickAddRequest?
     @Environment(\.scenePhase) private var scenePhase
 
     private var showsFloatingAdd: Bool { false }
@@ -34,7 +38,10 @@ struct MainTabView: View {
                 HomeView(
                     viewModel: viewModel,
                     analyticsViewModel: analyticsViewModel,
-                    showQuickAdd: $showQuickAdd,
+                    showQuickAdd: Binding(
+                        get: { quickAddRequest != nil },
+                        set: { if !$0 { quickAddRequest = nil } }
+                    ),
                     onAddTransaction: { openQuickAdd($0) }
                 )
                 .tabItem {
@@ -75,8 +82,9 @@ struct MainTabView: View {
                         .transition(.scale.combined(with: .opacity))
                 }
             }
-            .sheet(isPresented: $showQuickAdd) {
-                QuickAddSheet(viewModel: viewModel, initialType: quickAddType)
+            .sheet(item: $quickAddRequest) { request in
+                QuickAddSheet(viewModel: viewModel, initialType: request.type)
+                    .id(request.id)
             }
             .sheet(isPresented: $pro.showPaywall) {
                 PaywallView(pro: pro, initialPlan: pro.selectedPaywallPlan)
@@ -180,8 +188,7 @@ struct MainTabView: View {
     }
 
     private func openQuickAdd(_ type: TransactionType) {
-        quickAddType = type
-        showQuickAdd = true
+        quickAddRequest = QuickAddRequest(type: type)
     }
 
     private func processRecurring() {
