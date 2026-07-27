@@ -225,7 +225,7 @@ final class ProEntitlementManager: ObservableObject {
             try await AppStore.sync()
             await refreshEntitlements()
             if !isPro {
-                lastError = "No active Inpenso Pro subscription found."
+                lastError = "No active \(AppBrand.proName) subscription found."
             } else {
                 showPaywall = false
                 showSpecialOffer = false

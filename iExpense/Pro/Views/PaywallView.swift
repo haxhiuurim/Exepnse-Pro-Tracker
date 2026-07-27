@@ -99,7 +99,7 @@ struct PaywallView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-            Text("Inpenso Pro")
+            Text(AppBrand.proName)
                 .font(InpensoTheme.label(12, weight: .semibold))
                 .foregroundStyle(InpensoTheme.muted)
                 .textCase(.uppercase)

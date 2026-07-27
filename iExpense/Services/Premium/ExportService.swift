@@ -23,7 +23,7 @@ enum ExportService {
             lines.append("\(date),\(title),\(type),\(category),\(amount),\(notes)")
         }
 
-        return writeTemp(filename: "Inpenso_export.csv", contents: lines.joined(separator: "\n"))
+        return writeTemp(filename: "Expense_export.csv", contents: lines.joined(separator: "\n"))
     }
 
     static func ofxURL(expenses: [Expense], currencyCode: String) -> URL? {
@@ -97,7 +97,7 @@ enum ExportService {
         </OFX>
         """
 
-        return writeTemp(filename: "Inpenso_export.ofx", contents: body)
+        return writeTemp(filename: "Expense_export.ofx", contents: body)
     }
 
     private static func csvEscape(_ value: String) -> String {

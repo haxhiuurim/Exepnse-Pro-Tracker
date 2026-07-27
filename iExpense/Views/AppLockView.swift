@@ -17,7 +17,7 @@ struct AppLockView: View {
                 Spacer()
 
                 VStack(spacing: InpensoTheme.Space.md) {
-                    Text("Inpenso")
+                    Text(AppBrand.name)
                         .font(InpensoTheme.brandFont(32, weight: .bold))
                         .foregroundStyle(InpensoTheme.ink)
 

@@ -8,16 +8,16 @@ import WidgetKit
 
 struct QuickAddConfigurationIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Spending Overview"
-    static var description = IntentDescription("Choose which period to show on your Inpenso widget.")
+    static var description = IntentDescription("Choose which period to show on your Expense widget.")
 
     @Parameter(title: "Period", default: SpendingPeriod.month)
     var period: SpendingPeriod
 }
 
-/// Opens Inpenso focused on the quick-add sheet.
+/// Opens Expense focused on the quick-add sheet.
 struct OpenQuickAddIntent: AppIntent {
     static var title: LocalizedStringResource = "Add Spend"
-    static var description = IntentDescription("Open Inpenso to quickly log a new spend.")
+    static var description = IntentDescription("Open Expense to quickly log a new spend.")
     static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {

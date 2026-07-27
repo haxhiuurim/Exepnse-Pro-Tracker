@@ -101,10 +101,10 @@ struct SettingsView: View {
     private var appHeader: some View {
         Section {
             VStack(alignment: .leading, spacing: InpensoTheme.Space.xxs) {
-                Text("Inpenso")
+                Text(AppBrand.name)
                     .font(InpensoTheme.brandFont(24, weight: .bold))
                     .foregroundStyle(InpensoTheme.ink)
-                Text("On-device expense tracking")
+                Text(AppBrand.tagline)
                     .font(InpensoTheme.body(13))
                     .foregroundStyle(InpensoTheme.muted)
             }
@@ -117,7 +117,7 @@ struct SettingsView: View {
         Section {
             if pro.isPro {
                 HStack {
-                    Label("Inpenso Pro", systemImage: "checkmark.seal")
+                    Label(AppBrand.proName, systemImage: "checkmark.seal")
                         .foregroundStyle(InpensoTheme.ink)
                     Spacer()
                     Text("Active")

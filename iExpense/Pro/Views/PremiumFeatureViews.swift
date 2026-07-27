@@ -324,7 +324,7 @@ struct MerchantRulesView: View {
             AtmosphereBackground(intensity: 0.5)
             List {
                 Section {
-                    Text("When a spend title contains a match, Inpenso picks the category for you.")
+                    Text("When a spend title contains a match, \(AppBrand.name) picks the category for you.")
                         .font(InpensoTheme.body(13))
                         .foregroundStyle(InpensoTheme.muted)
                         .listRowBackground(Color.clear)
@@ -562,7 +562,7 @@ struct ThemePacksView: View {
                 Text("North")
                     .font(InpensoTheme.brandFont(22, weight: .bold))
                     .foregroundStyle(InpensoTheme.ink)
-                Text("Inpenso uses one visual theme — navy type, cobalt accent, soft blue canvas.")
+                Text("\(AppBrand.name) uses one visual theme — navy type, cobalt accent, soft blue canvas.")
                     .font(InpensoTheme.body(14))
                     .foregroundStyle(InpensoTheme.muted)
             }

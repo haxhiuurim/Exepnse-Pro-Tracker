@@ -102,7 +102,7 @@ struct HomeView: View {
     private var brandHeader: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Inpenso")
+                Text(AppBrand.name)
                     .font(InpensoTheme.brandFont(28, weight: .heavy))
                     .foregroundStyle(InpensoTheme.ink)
                 Text(monthTitle)

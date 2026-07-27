@@ -45,7 +45,7 @@ struct SpentTodayLiveActivityWidget: Widget {
                         .minimumScaleFactor(0.7)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text("Inpenso · spent today")
+                    Text("\(AppBrand.name) · spent today")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

@@ -151,7 +151,7 @@ final class ReminderService: ObservableObject {
 
         let content = UNMutableNotificationContent()
         content.title = "Log your spending"
-        content.body = "Open Inpenso and tap + to capture what you spent."
+        content.body = "Open \(AppBrand.name) and tap + to capture what you spent."
         content.sound = .default
 
         switch frequency {

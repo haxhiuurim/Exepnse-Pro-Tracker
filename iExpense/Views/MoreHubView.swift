@@ -84,7 +84,7 @@ struct MoreHubView: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Inpenso Pro")
+                    Text(AppBrand.proName)
                         .font(InpensoTheme.body(16, weight: .bold))
                         .foregroundStyle(.white)
                     Text("OCR · sync · unlimited tools · \(ProPlan.yearly.displayPrice)/yr")

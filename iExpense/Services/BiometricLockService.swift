@@ -105,7 +105,7 @@ final class BiometricLockService: ObservableObject {
         do {
             let success = try await context.evaluatePolicy(
                 policy,
-                localizedReason: "Unlock Inpenso to view your spending."
+                localizedReason: "Unlock \(AppBrand.name) to view your spending."
             )
             isUnlocked = success
             if success { lastErrorMessage = nil }

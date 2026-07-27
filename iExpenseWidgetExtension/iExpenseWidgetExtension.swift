@@ -140,7 +140,7 @@ struct iExpenseWidgetEntryView: View {
     private var smallWidget: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Inpenso")
+                Text(AppBrand.name)
                     .font(.system(size: 12, weight: .bold, design: .default))
                     .foregroundStyle(NorthWidgetColor.ink)
                 Spacer()
@@ -180,7 +180,7 @@ struct iExpenseWidgetEntryView: View {
     private var mediumWidget: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Inpenso")
+                Text(AppBrand.name)
                     .font(.system(size: 14, weight: .bold, design: .default))
                     .foregroundStyle(NorthWidgetColor.ink)
 
@@ -220,7 +220,7 @@ struct iExpenseWidgetEntryView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Inpenso")
+                    Text(AppBrand.name)
                         .font(.system(size: 18, weight: .bold, design: .default))
                         .foregroundStyle(NorthWidgetColor.ink)
                     Text(entry.period.displayTitle)
@@ -343,7 +343,7 @@ struct iExpenseWidgetExtension: Widget {
             iExpenseWidgetEntryView(entry: entry)
         }
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
-        .configurationDisplayName("Inpenso Spending")
+        .configurationDisplayName("Expense Spending")
         .description("See today, week, or month spending — and add a spend with one tap.")
         .contentMarginsDisabled()
     }
