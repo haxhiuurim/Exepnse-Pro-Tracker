@@ -6,6 +6,9 @@ namespace Inpenso;
 
 final class Response
 {
+    /** Max JSON request body size (64 KiB). */
+    public const MAX_BODY_BYTES = 65536;
+
     public static function json(mixed $data, int $status = 200): void
     {
         http_response_code($status);
@@ -48,8 +51,21 @@ final class Response
 
     public static function readJsonBody(): array
     {
-        $raw = file_get_contents('php://input');
-        if ($raw === false || trim($raw) === '') {
+        $contentLength = $_SERVER['CONTENT_LENGTH'] ?? null;
+        if ($contentLength !== null && $contentLength !== '' && (int) $contentLength > self::MAX_BODY_BYTES) {
+            self::error('Request body too large', 413);
+        }
+
+        $raw = file_get_contents('php://input', false, null, 0, self::MAX_BODY_BYTES + 1);
+        if ($raw === false) {
+            return [];
+        }
+
+        if (strlen($raw) > self::MAX_BODY_BYTES) {
+            self::error('Request body too large', 413);
+        }
+
+        if (trim($raw) === '') {
             return [];
         }
 

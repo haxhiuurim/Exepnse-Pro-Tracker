@@ -75,6 +75,23 @@ try {
 
 echo "Migration complete.\n";
 
+if ($driver === 'mysql') {
+    try {
+        $db->exec('ALTER TABLE trips MODIFY invite_code VARCHAR(16) NOT NULL');
+        echo "Ensured trips.invite_code is VARCHAR(16).\n";
+    } catch (Throwable $e) {
+        // Column may already be correct on fresh installs.
+        echo "invite_code column check skipped: " . $e->getMessage() . PHP_EOL;
+    }
+}
+
+$rateDir = dirname(__DIR__) . '/storage/rate_limits';
+if (!is_dir($rateDir) && !mkdir($rateDir, 0755, true) && !is_dir($rateDir)) {
+    fwrite(STDERR, "Warning: could not create {$rateDir}\n");
+} else {
+    echo "Rate limit storage ready: {$rateDir}\n";
+}
+
 if ($driver === 'sqlite') {
     echo 'Database file: ' . $config['sqlite_path'] . PHP_EOL;
 }

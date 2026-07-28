@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS trips (
     currency CHAR(3) NOT NULL DEFAULT 'USD',
     start_date DATE NULL,
     end_date DATE NULL,
-    invite_code CHAR(6) NOT NULL UNIQUE,
+    invite_code VARCHAR(16) NOT NULL UNIQUE,
     owner_id INTEGER NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE

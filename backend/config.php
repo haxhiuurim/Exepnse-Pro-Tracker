@@ -42,7 +42,13 @@ loadEnv(__DIR__ . '/.env');
 
 return [
     'app_env' => $_ENV['APP_ENV'] ?? 'production',
-    'debug' => filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOL),
+    'debug' => (static function (): bool {
+        $env = strtolower((string) ($_ENV['APP_ENV'] ?? 'production'));
+        if ($env === 'production') {
+            return false;
+        }
+        return filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOL);
+    })(),
 
     'db_driver' => strtolower($_ENV['DB_DRIVER'] ?? 'sqlite'),
 

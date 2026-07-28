@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Inpenso\Controllers;
 
 use Inpenso\Auth;
+use Inpenso\RateLimiter;
 use Inpenso\Response;
 use PDO;
 use PDOException;
@@ -27,6 +28,10 @@ final class TripController
 
         if ($name === '') {
             Response::error('name is required', 422);
+        }
+
+        if (mb_strlen($name) > 200) {
+            Response::error('name must be 200 characters or fewer', 422);
         }
 
         if (!preg_match('/^[A-Z]{3}$/', $currency)) {
@@ -82,11 +87,17 @@ final class TripController
     public function join(): void
     {
         $user = Auth::requireUser($this->db);
+        RateLimiter::enforce('trips.join', 20, 3600);
+
         $body = Response::readJsonBody();
         $inviteCode = strtoupper(trim((string) ($body['invite_code'] ?? '')));
 
         if ($inviteCode === '') {
             Response::error('invite_code is required', 422);
+        }
+
+        if (!preg_match('/^[A-Z0-9]{6,16}$/', $inviteCode)) {
+            Response::error('Invalid invite code', 422);
         }
 
         $stmt = $this->db->prepare('SELECT * FROM trips WHERE invite_code = :invite_code LIMIT 1');
@@ -386,10 +397,11 @@ final class TripController
     private function generateUniqueInviteCode(): string
     {
         $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $length = 12;
 
         for ($attempt = 0; $attempt < 20; $attempt++) {
             $code = '';
-            for ($i = 0; $i < 6; $i++) {
+            for ($i = 0; $i < $length; $i++) {
                 $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
             }
 

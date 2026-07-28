@@ -13,6 +13,11 @@ final class Auth
         return bin2hex(random_bytes(32));
     }
 
+    public static function hashToken(string $token): string
+    {
+        return hash('sha256', $token);
+    }
+
     public static function extractToken(): ?string
     {
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['HTTP_X_API_TOKEN'] ?? '';
@@ -35,9 +40,32 @@ final class Auth
             return null;
         }
 
-        $stmt = $db->prepare('SELECT id, display_name, api_token, created_at FROM users WHERE api_token = :token LIMIT 1');
-        $stmt->execute(['token' => $token]);
+        // Reject obviously malformed tokens early (hex, 64 chars for new tokens).
+        if (strlen($token) > 128) {
+            return null;
+        }
+
+        $hash = self::hashToken($token);
+
+        $stmt = $db->prepare(
+            'SELECT id, display_name, api_token, created_at FROM users WHERE api_token = :token LIMIT 1'
+        );
+        $stmt->execute(['token' => $hash]);
         $user = $stmt->fetch();
+
+        // Legacy plaintext tokens: upgrade to hash on successful auth.
+        if (!$user) {
+            $stmt->execute(['token' => $token]);
+            $user = $stmt->fetch();
+            if ($user) {
+                $upgrade = $db->prepare('UPDATE users SET api_token = :hash WHERE id = :id');
+                $upgrade->execute([
+                    'hash' => $hash,
+                    'id' => (int) $user['id'],
+                ]);
+                $user['api_token'] = $hash;
+            }
+        }
 
         return $user ?: null;
     }

@@ -4,4 +4,7 @@
 *.sqlite-wal
 *.sqlite-shm
 
+rate_limits/*
+!rate_limits/.gitkeep
+
 .env

@@ -46,8 +46,16 @@ final class ExpenseController
             Response::error('title is required', 422);
         }
 
+        if (mb_strlen($title) > 200) {
+            Response::error('title must be 200 characters or fewer', 422);
+        }
+
         if (!is_numeric($amount) || (float) $amount <= 0) {
             Response::error('amount must be a positive number', 422);
+        }
+
+        if ((float) $amount > 9999999999.99) {
+            Response::error('amount is too large', 422);
         }
 
         $amountValue = round((float) $amount, 2);
@@ -115,19 +123,30 @@ final class ExpenseController
         $user = Auth::requireUser($this->db);
         $trip = (int) $tripId;
         $expense = (int) $expenseId;
+        $userId = (int) $user['id'];
 
-        if (!$this->userIsMember($trip, (int) $user['id'])) {
+        if (!$this->userIsMember($trip, $userId)) {
             Response::error('Trip not found', 404);
         }
 
         $stmt = $this->db->prepare(
-            'SELECT id FROM expenses WHERE id = :expense_id AND trip_id = :trip_id LIMIT 1'
+            'SELECT e.id, e.created_by_user_id, t.owner_id
+             FROM expenses e
+             INNER JOIN trips t ON t.id = e.trip_id
+             WHERE e.id = :expense_id AND e.trip_id = :trip_id
+             LIMIT 1'
         );
         $stmt->execute(['expense_id' => $expense, 'trip_id' => $trip]);
         $row = $stmt->fetch();
 
         if (!$row) {
             Response::error('Expense not found', 404);
+        }
+
+        $isCreator = (int) $row['created_by_user_id'] === $userId;
+        $isOwner = (int) $row['owner_id'] === $userId;
+        if (!$isCreator && !$isOwner) {
+            Response::error('Only the expense creator or trip owner can delete this expense', 403);
         }
 
         $delete = $this->db->prepare('DELETE FROM expenses WHERE id = :id');
