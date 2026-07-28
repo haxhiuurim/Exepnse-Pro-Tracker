@@ -91,7 +91,7 @@ struct SharedTripsView: View {
                         .submitLabel(.continue)
                         .onSubmit { continueWithName() }
 
-                    TextField("API base URL (optional)", text: $urlDraft)
+                    TextField(SharedTripAPI.defaultBaseURL, text: $urlDraft)
                         .font(InpensoTheme.body(14))
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)

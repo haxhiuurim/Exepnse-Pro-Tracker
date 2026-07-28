@@ -26,6 +26,9 @@ enum SharedTripAPIError: LocalizedError {
 final class SharedTripAPI {
     static let shared = SharedTripAPI()
 
+    /// Production shared-trips backend.
+    static let defaultBaseURL = "https://expense.usolution.cloud"
+
     private let defaults = UserDefaults.standard
     private let baseURLKey = "sharedTripsBaseURL"
     private let tokenKey = "sharedTripsAPIToken"
@@ -35,8 +38,15 @@ final class SharedTripAPI {
     private init() {}
 
     var baseURLString: String {
-        get { defaults.string(forKey: baseURLKey) ?? "" }
-        set { defaults.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: baseURLKey) }
+        get {
+            let stored = defaults.string(forKey: baseURLKey)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return stored.isEmpty ? Self.defaultBaseURL : stored
+        }
+        set {
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            defaults.set(trimmed.isEmpty ? Self.defaultBaseURL : trimmed, forKey: baseURLKey)
+        }
     }
 
     var displayName: String {

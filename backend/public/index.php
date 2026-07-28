@@ -27,6 +27,16 @@ spl_autoload_register(static function (string $class): void {
 
 Response::applyCors($config['cors']);
 
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$uri = $_SERVER['REQUEST_URI'] ?? '/';
+$path = parse_url($uri, PHP_URL_PATH) ?: '/';
+$path = rtrim($path, '/') ?: '/';
+
+if ($method === 'GET' && $path === '/') {
+    require __DIR__ . '/landing.php';
+    exit;
+}
+
 try {
     $db = Database::connection($config);
 } catch (Throwable $e) {
@@ -86,9 +96,6 @@ $router->post('/api/trips/{id}/expenses', static function (string $id) use ($exp
 $router->delete('/api/trips/{id}/expenses/{expenseId}', static function (string $id, string $expenseId) use ($expenseController): void {
     $expenseController->delete($id, $expenseId);
 });
-
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$uri = $_SERVER['REQUEST_URI'] ?? '/';
 
 try {
     $router->dispatch($method, $uri);
