@@ -12,18 +12,18 @@ final class PremiumDataStore: ObservableObject {
     static let shared = PremiumDataStore()
 
     @Published var goals: [SavingsGoal] = []
+    @Published var debts: [DebtLoan] = []
     @Published var merchantRules: [MerchantRule] = []
     @Published var accounts: [FinanceAccount] = []
-    @Published var household: HouseholdLedger = .empty
     @Published var selectedThemeID: String = ThemePack.standard.id
     @Published var selectedIcon: AppIconOption = .classic
     @Published var iCloudSyncEnabled: Bool = false
 
     private enum Keys {
         static let goals = "premiumSavingsGoals"
+        static let debts = "premiumDebtLoans"
         static let rules = "premiumMerchantRules"
         static let accounts = "premiumAccounts"
-        static let household = "premiumHousehold"
         static let theme = "premiumThemePackID"
         static let icon = "premiumAppIcon"
         static let iCloud = "premiumiCloudSyncEnabled"
@@ -31,16 +31,17 @@ final class PremiumDataStore: ObservableObject {
 
     init() {
         goals = load([SavingsGoal].self, key: Keys.goals) ?? []
+        debts = load([DebtLoan].self, key: Keys.debts) ?? []
         merchantRules = load([MerchantRule].self, key: Keys.rules) ?? MerchantRule.starters
         accounts = load([FinanceAccount].self, key: Keys.accounts) ?? [
             FinanceAccount(name: "Wallet", kind: .cash, balance: 0),
             FinanceAccount(name: "Main checking", kind: .checking, balance: 0)
         ]
-        household = load(HouseholdLedger.self, key: Keys.household) ?? .empty
         selectedThemeID = ThemePack.standard.id
         UserDefaults.standard.set(ThemePack.standard.id, forKey: Keys.theme)
         selectedIcon = .classic
         iCloudSyncEnabled = UserDefaults.standard.bool(forKey: Keys.iCloud)
+        UserDefaults.standard.removeObject(forKey: "premiumHousehold")
     }
 
     var netWorth: Double {
@@ -80,6 +81,33 @@ final class PremiumDataStore: ObservableObject {
     func deleteGoal(_ goal: SavingsGoal) {
         goals.removeAll { $0.id == goal.id }
         saveGoals()
+    }
+
+    // MARK: - Debts / EMI
+
+    func saveDebts() {
+        persist(debts, key: Keys.debts)
+        syncIfNeeded()
+    }
+
+    func upsertDebt(_ debt: DebtLoan) {
+        if let idx = debts.firstIndex(where: { $0.id == debt.id }) {
+            debts[idx] = debt
+        } else {
+            debts.append(debt)
+        }
+        saveDebts()
+    }
+
+    func deleteDebt(_ debt: DebtLoan) {
+        debts.removeAll { $0.id == debt.id }
+        saveDebts()
+    }
+
+    func recordDebtPayment(_ debt: DebtLoan, amount: Double) {
+        guard let idx = debts.firstIndex(where: { $0.id == debt.id }) else { return }
+        debts[idx].recordPayment(amount)
+        saveDebts()
     }
 
     // MARK: - Rules
@@ -173,32 +201,13 @@ final class PremiumDataStore: ObservableObject {
 
     func applyTransactionToAccounts(_ expense: Expense, reversing: Bool = false) {
         guard !expense.isBalanceAdjustment else { return }
-        let signed = expense.type == .income ? expense.price : -expense.price
+        let signed = expense.type == .income ? expense.homeAmount : -expense.homeAmount
         adjustBalance(accountID: expense.accountID, by: reversing ? -signed : signed)
     }
 
     func deleteAccount(_ account: FinanceAccount) {
         accounts.removeAll { $0.id == account.id }
         saveAccounts()
-    }
-
-    // MARK: - Household
-
-    func saveHousehold() {
-        persist(household, key: Keys.household)
-        syncIfNeeded()
-    }
-
-    func addHouseholdMember(name: String) {
-        let colors = ["#059669", "#2563EB", "#D97706", "#16A34A", "#7C3AED"]
-        let color = colors[household.members.count % colors.count]
-        household.members.append(HouseholdMember(name: name, colorHex: color))
-        saveHousehold()
-    }
-
-    func regenerateInviteCode() {
-        household.inviteCode = String(UUID().uuidString.prefix(6)).uppercased()
-        saveHousehold()
     }
 
     // MARK: - Theme / icon / iCloud

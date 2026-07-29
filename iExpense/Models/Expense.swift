@@ -20,6 +20,12 @@ struct Expense: Identifiable, Codable, Equatable {
     var accountID: UUID?
     /// When true, created from a manual balance edit — do not re-apply to account balance.
     var isBalanceAdjustment: Bool
+    /// Free-form tags (normalized lowercase for matching).
+    var tags: [String]
+    /// Currency the user entered (`price` is in this currency). Nil = app home currency.
+    var currencyCode: String?
+    /// Optional explicit rate: 1 foreign unit → home currency. Nil uses offline table.
+    var exchangeRateToHome: Double?
 
     init(
         id: UUID = UUID(),
@@ -31,7 +37,10 @@ struct Expense: Identifiable, Codable, Equatable {
         categoryID: String? = nil,
         notes: String? = nil,
         accountID: UUID? = nil,
-        isBalanceAdjustment: Bool = false
+        isBalanceAdjustment: Bool = false,
+        tags: [String] = [],
+        currencyCode: String? = nil,
+        exchangeRateToHome: Double? = nil
     ) {
         self.id = id
         self.title = title
@@ -43,6 +52,9 @@ struct Expense: Identifiable, Codable, Equatable {
         self.notes = notes
         self.accountID = accountID
         self.isBalanceAdjustment = isBalanceAdjustment
+        self.tags = Self.normalizedTags(tags)
+        self.currencyCode = currencyCode
+        self.exchangeRateToHome = exchangeRateToHome
     }
 
     enum CodingKeys: String, CodingKey {
@@ -56,6 +68,9 @@ struct Expense: Identifiable, Codable, Equatable {
         case notes
         case accountID
         case isBalanceAdjustment
+        case tags
+        case currencyCode
+        case exchangeRateToHome
     }
 
     init(from decoder: Decoder) throws {
@@ -71,5 +86,41 @@ struct Expense: Identifiable, Codable, Equatable {
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         accountID = try container.decodeIfPresent(UUID.self, forKey: .accountID)
         isBalanceAdjustment = try container.decodeIfPresent(Bool.self, forKey: .isBalanceAdjustment) ?? false
+        tags = Self.normalizedTags(try container.decodeIfPresent([String].self, forKey: .tags) ?? [])
+        currencyCode = try container.decodeIfPresent(String.self, forKey: .currencyCode)
+        exchangeRateToHome = try container.decodeIfPresent(Double.self, forKey: .exchangeRateToHome)
+    }
+
+    /// Amount converted into the app home currency for totals / budgets.
+    var homeAmount: Double {
+        let home = CurrencyCode.currentCurrencyCode()
+        let source = (currencyCode?.isEmpty == false ? currencyCode! : home)
+        if source.uppercased() == home.uppercased() { return price }
+        return ExchangeRateService.convert(
+            amount: price,
+            from: source,
+            to: home,
+            customRate: exchangeRateToHome
+        )
+    }
+
+    var displayCurrencyCode: String {
+        if let currencyCode, !currencyCode.isEmpty { return currencyCode }
+        return CurrencyCode.currentCurrencyCode()
+    }
+
+    static func normalizedTags(_ tags: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for tag in tags {
+            let cleaned = tag
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "#", with: "")
+                .lowercased()
+            guard !cleaned.isEmpty, !seen.contains(cleaned) else { continue }
+            seen.insert(cleaned)
+            result.append(cleaned)
+        }
+        return result
     }
 }

@@ -2,7 +2,7 @@
 //  PremiumFeatureViews.swift
 //  iExpense
 //
-//  Goals, accounts, merchant rules, household, themes, upcoming calendar.
+//  Goals, accounts, merchant rules, themes, upcoming calendar.
 //
 
 import SwiftUI
@@ -628,18 +628,24 @@ struct MerchantRulesView: View {
 
                 if !pro.isPro {
                     Section {
-                        ProGateBanner(message: "Merchant rules are part of Pro.") {
-                            pro.openPaywall()
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
+                        Text("Starter rules work on Free. Custom rules unlock with Pro.")
+                            .font(InpensoTheme.body(13))
+                            .foregroundStyle(InpensoTheme.muted)
+                            .listRowBackground(Color.clear)
                     }
                 }
 
                 Section("Rules") {
                     ForEach(store.merchantRules) { rule in
+                        let isStarter = MerchantRule.starters.contains {
+                            $0.matchText.caseInsensitiveCompare(rule.matchText) == .orderedSame
+                                && $0.categoryID == rule.categoryID
+                        }
                         Button {
-                            guard pro.isPro else { pro.openPaywall(); return }
+                            guard pro.isPro else {
+                                if !isStarter { pro.openPaywall() }
+                                return
+                            }
                             editing = rule
                             showEditor = true
                         } label: {
@@ -653,6 +659,11 @@ struct MerchantRulesView: View {
                                         .foregroundStyle(InpensoTheme.muted)
                                 }
                                 Spacer()
+                                if !pro.isPro && isStarter {
+                                    Text("Free")
+                                        .font(InpensoTheme.label(10, weight: .bold))
+                                        .foregroundStyle(InpensoTheme.tide)
+                                }
                                 Image(systemName: rule.isEnabled ? "checkmark.circle.fill" : "circle")
                                     .foregroundStyle(rule.isEnabled ? InpensoTheme.surplus : InpensoTheme.muted)
                             }
@@ -731,118 +742,6 @@ struct MerchantRuleEditor: View {
                     enabled = existing.isEnabled
                 }
             }
-        }
-    }
-}
-
-// MARK: - Household
-
-struct HouseholdLedgerView: View {
-    @EnvironmentObject private var pro: ProEntitlementManager
-    @EnvironmentObject private var categoryStore: CategoryStore
-    @ObservedObject private var store = PremiumDataStore.shared
-    @State private var memberName = ""
-    @State private var showCopied = false
-
-    var body: some View {
-        ZStack {
-            AtmosphereBackground(intensity: 0.5)
-            List {
-                if !pro.isPro {
-                    Section {
-                        ProGateBanner(message: "Shared household ledger is a Pro feature.") {
-                            pro.openPaywall()
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
-                    }
-                }
-
-                Section("Household") {
-                    TextField("Name", text: Binding(
-                        get: { store.household.name },
-                        set: {
-                            store.household.name = $0
-                            if pro.isPro { store.saveHousehold() }
-                        }
-                    ))
-                    .disabled(!pro.isPro)
-
-                    HStack {
-                        Text("Invite code")
-                        Spacer()
-                        Text(store.household.inviteCode)
-                            .font(InpensoTheme.label(14, weight: .semibold))
-                            .foregroundStyle(InpensoTheme.ink)
-                        Button {
-                            UIPasteboard.general.string = store.household.inviteCode
-                            showCopied = true
-                        } label: {
-                            Image(systemName: "doc.on.doc")
-                        }
-                        .disabled(!pro.isPro)
-                    }
-
-                    Button("Regenerate code") {
-                        guard pro.isPro else { pro.openPaywall(); return }
-                        store.regenerateInviteCode()
-                    }
-                }
-
-                Section("Members") {
-                    ForEach(store.household.members) { member in
-                        HStack {
-                            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                .fill(Color(hex: member.colorHex) ?? InpensoTheme.tide)
-                                .frame(width: 4, height: 16)
-                            Text(member.name)
-                            if member.isOwner {
-                                Text("Owner")
-                                    .font(InpensoTheme.label(10, weight: .medium))
-                                    .foregroundStyle(InpensoTheme.muted)
-                            }
-                        }
-                    }
-
-                    if pro.isPro {
-                        HStack {
-                            TextField("Add partner name", text: $memberName)
-                            Button("Add") {
-                                let trimmed = memberName.trimmingCharacters(in: .whitespaces)
-                                guard !trimmed.isEmpty else { return }
-                                store.addHouseholdMember(name: trimmed)
-                                memberName = ""
-                            }
-                        }
-                    }
-                }
-
-                Section("Shared categories") {
-                    ForEach(categoryStore.allCategories) { category in
-                        Toggle(category.displayName, isOn: Binding(
-                            get: { store.household.sharedCategoryIDs.contains(category.id) },
-                            set: { on in
-                                guard pro.isPro else { pro.openPaywall(); return }
-                                if on {
-                                    store.household.sharedCategoryIDs.append(category.id)
-                                } else {
-                                    store.household.sharedCategoryIDs.removeAll { $0 == category.id }
-                                }
-                                store.saveHousehold()
-                            }
-                        ))
-                    }
-                }
-            }
-            .premiumListChrome()
-        }
-        .navigationTitle("Household")
-        .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .alert("Copied", isPresented: $showCopied) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Invite code copied. Share it with your partner.")
         }
     }
 }

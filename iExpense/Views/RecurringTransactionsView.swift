@@ -56,6 +56,7 @@ struct RecurringTransactionsView: View {
                 Button {
                     if editingItem == nil && !pro.canAddRecurring(currentCount: service.items.count) {
                         showLimitAlert = true
+                        pro.notifyLimitHit()
                         return
                     }
                     editingItem = nil
@@ -72,6 +73,7 @@ struct RecurringTransactionsView: View {
                 onSave: { item in
                     if editingItem == nil && !pro.canAddRecurring(currentCount: service.items.count) {
                         showLimitAlert = true
+                        pro.notifyLimitHit()
                         return
                     }
                     service.upsert(item)

@@ -19,6 +19,8 @@ struct AddExpenseView: View {
     @State private var selectedAccountID: UUID?
     @State private var selectedDate: Date = Date()
     @State private var notes: String = ""
+    @State private var selectedTags: [String] = []
+    @State private var selectedCurrencyCode: String = ""
     @State private var showDatePicker = false
     @State private var keyboardVisible: Bool = false
     @State private var showingValidationAlert = false
@@ -63,6 +65,14 @@ struct AddExpenseView: View {
                         if transactionType == .expense {
                             receiptScanLink
                             categorySection
+                            TagPickerView(
+                                tags: $selectedTags,
+                                suggested: Array(viewModel.allUniqueTags).sorted(),
+                                isPro: pro.isPro,
+                                freeLimit: FreeTierLimits.uniqueTags,
+                                onUpgrade: { pro.openPaywall(plan: .yearly) }
+                            )
+                            currencySection
                         }
 
                         DatePickerCard(
@@ -117,6 +127,9 @@ struct AddExpenseView: View {
                 selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
                 if selectedAccountID == nil {
                     selectedAccountID = PremiumDataStore.shared.primaryLiquidAccount?.id
+                }
+                if selectedCurrencyCode.isEmpty {
+                    selectedCurrencyCode = settingsViewModel.selectedCurrency
                 }
             }
             .onChange(of: transactionType) { _, newType in
@@ -174,6 +187,23 @@ struct AddExpenseView: View {
             .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
         }
         .buttonStyle(.plain)
+    }
+
+    private var currencySection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Currency")
+                .font(InpensoTheme.label(13))
+                .foregroundStyle(InpensoTheme.muted)
+            Picker("Currency", selection: $selectedCurrencyCode) {
+                ForEach(availableCurrencies, id: \.code) { currency in
+                    Text("\(currency.code) (\(currency.symbol))").tag(currency.code)
+                }
+            }
+            .pickerStyle(.menu)
+            .padding(InpensoTheme.Space.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
+        }
     }
 
     private var categorySection: some View {
@@ -306,6 +336,19 @@ struct AddExpenseView: View {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedTitle = trimmedTitle.isEmpty ? selectedCategory.displayName : trimmedTitle
 
+        let tags = Expense.normalizedTags(selectedTags)
+        if !pro.canUseTag(existingUniqueTags: viewModel.allUniqueTags, newTags: tags) {
+            pro.openPaywall(plan: .yearly)
+            pro.notifyLimitHit()
+            return
+        }
+
+        let currency = selectedCurrencyCode.isEmpty ? settingsViewModel.selectedCurrency : selectedCurrencyCode
+        let home = settingsViewModel.selectedCurrency
+        let rate: Double? = currency.uppercased() == home.uppercased()
+            ? nil
+            : ExchangeRateService.rate(from: currency, to: home)
+
         _ = viewModel.addExpense(
             title: resolvedTitle,
             price: priceValue,
@@ -314,7 +357,10 @@ struct AddExpenseView: View {
             type: transactionType,
             categoryID: selectedCategory.id,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
-            accountID: transactionType == .income ? selectedAccountID : nil
+            accountID: transactionType == .income ? selectedAccountID : nil,
+            tags: tags,
+            currencyCode: currency,
+            exchangeRateToHome: rate
         )
 
         if saveAsTemplate && transactionType == .expense && pro.isPro {

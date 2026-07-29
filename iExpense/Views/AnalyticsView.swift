@@ -8,6 +8,8 @@ import Charts
 
 struct AnalyticsView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var pro: ProEntitlementManager
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
 
     @ObservedObject var analyticsViewModel: AnalyticsViewModel
     @State private var selectedTab: AnalyticsTab = .overview
@@ -49,8 +51,18 @@ struct AnalyticsView: View {
                     VStack(spacing: InpensoTheme.Space.section) {
                         switch selectedTab {
                         case .overview: overviewTabContent
-                        case .trends: trendsTabContent
-                        case .insights: insightsTabContent
+                        case .trends:
+                            if pro.canUseFullInsights {
+                                trendsTabContent
+                            } else {
+                                insightsLockedCard
+                            }
+                        case .insights:
+                            if pro.canUseFullInsights {
+                                insightsTabContent
+                            } else {
+                                insightsLockedCard
+                            }
                         case .budget: budgetTabContent
                         }
                     }
@@ -69,12 +81,40 @@ struct AnalyticsView: View {
         } message: {
             Text("Your monthly budget has been saved successfully.")
         }
+        .onAppear {
+            OnboardingStore.shared.ensureInsightsPreviewStarted()
+        }
+    }
+
+    private var insightsLockedCard: some View {
+        SurfacePanel {
+            VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+                Text("Deeper Insights")
+                    .font(InpensoTheme.body(17, weight: .bold))
+                    .foregroundStyle(InpensoTheme.ink)
+                Text("Trends and pattern cards unlock with Pro, or during your 14-day preview.")
+                    .font(InpensoTheme.body(14))
+                    .foregroundStyle(InpensoTheme.muted)
+                Button("Upgrade to Pro") {
+                    pro.openPaywall(plan: .yearly)
+                }
+                .buttonStyle(InpensoPrimaryButtonStyle())
+            }
+        }
     }
 
     // MARK: - Overview
 
     private var overviewTabContent: some View {
         VStack(spacing: InpensoTheme.Space.section) {
+            if !ProEntitlementManager.shared.isPro,
+               OnboardingStore.shared.insightsPreviewActive {
+                Text("Insights preview · \(OnboardingStore.shared.insightsPreviewDaysRemaining) days left")
+                    .font(InpensoTheme.label(12, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             summaryCardsGrid
 
             DailySpendingChartView(
@@ -88,12 +128,27 @@ struct AnalyticsView: View {
                 averageDailySpend: analyticsViewModel.averageDailySpend
             )
 
+            SpendingHeatmapView(
+                dailyAmounts: heatmapAmounts,
+                currencyCode: currencyCode
+            )
+
             CategoryBreakdownView(
                 spendingByCategory: analyticsViewModel.spendingByCategory,
                 totalSpent: analyticsViewModel.totalSpent,
                 currencyCode: currencyCode
             )
         }
+    }
+
+    private var heatmapAmounts: [Date: Double] {
+        let calendar = Calendar.current
+        var map: [Date: Double] = [:]
+        for expense in expenseViewModel.expenses where expense.type == .expense && !expense.isBalanceAdjustment {
+            let day = calendar.startOfDay(for: expense.date)
+            map[day, default: 0] += expense.homeAmount
+        }
+        return map
     }
 
     private var summaryCardsGrid: some View {

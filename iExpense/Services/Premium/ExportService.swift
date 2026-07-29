@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 enum ExportService {
     static func csvURL(expenses: [Expense], currencyCode: String) -> URL? {
@@ -98,6 +99,59 @@ enum ExportService {
         """
 
         return writeTemp(filename: "Expense_export.ofx", contents: body)
+    }
+
+    static func pdfURL(expenses: [Expense], currencyCode: String) -> URL? {
+        let pageWidth: CGFloat = 612
+        let pageHeight: CGFloat = 792
+        let margin: CGFloat = 36
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Expense_report.pdf")
+
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight))
+        do {
+            try renderer.writePDF(to: url) { context in
+                var y: CGFloat = margin
+                func newPageIfNeeded(_ needed: CGFloat) {
+                    if y + needed > pageHeight - margin {
+                        context.beginPage()
+                        y = margin
+                    }
+                }
+
+                context.beginPage()
+                let title = "\(AppBrand.name) export" as NSString
+                title.draw(at: CGPoint(x: margin, y: y), withAttributes: [
+                    .font: UIFont.boldSystemFont(ofSize: 18),
+                    .foregroundColor: UIColor.label
+                ])
+                y += 28
+                let subtitle = "Currency: \(currencyCode) · \(expenses.count) transactions" as NSString
+                subtitle.draw(at: CGPoint(x: margin, y: y), withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 12),
+                    .foregroundColor: UIColor.secondaryLabel
+                ])
+                y += 24
+
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateStyle = .medium
+
+                for expense in expenses.sorted(by: { $0.date > $1.date }) {
+                    newPageIfNeeded(36)
+                    let line = "\(dateFormatter.string(from: expense.date))  \(expense.title)  \(expense.type.rawValue)  \(expense.homeAmount.formatted(.currency(code: currencyCode)))"
+                    (line as NSString).draw(
+                        in: CGRect(x: margin, y: y, width: pageWidth - margin * 2, height: 32),
+                        withAttributes: [
+                            .font: UIFont.systemFont(ofSize: 11),
+                            .foregroundColor: UIColor.label
+                        ]
+                    )
+                    y += 22
+                }
+            }
+            return url
+        } catch {
+            return nil
+        }
     }
 
     private static func csvEscape(_ value: String) -> String {

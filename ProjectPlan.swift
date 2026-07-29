@@ -22,7 +22,7 @@
 // Goals / envelopes       | Savings goals (Pro) ✅
 // Merchant rules          | Auto-categorize titles (Pro) ✅
 // Accounts / net worth    | Cash, cards, balances (Pro) ✅
-// Household ledger        | Invite partner + shared categories (Pro) ✅
+// Household ledger        | Removed — use Trips for shared spend
 // Themes & icons          | Pro theme packs + alternate icons ✅
 // CSV / OFX export        | Accountant-ready exports (Pro) ✅
 // Ads                     | Never — no ads by design ✅

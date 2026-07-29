@@ -63,6 +63,7 @@
 				Models/QuickSpendTemplate.swift,
 				Models/RecurringTransaction.swift,
 				Models/SpendingPeriod.swift,
+				Services/ExchangeRateService.swift,
 				Services/Premium/SpentTodayAttributes.swift,
 				Services/StorageService.swift,
 				Utils/AppBrand.swift,

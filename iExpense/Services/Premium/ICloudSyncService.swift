@@ -22,7 +22,6 @@ final class ICloudSyncService {
         static let accounts = "icloud.accounts"
         static let goals = "icloud.goals"
         static let rules = "icloud.rules"
-        static let household = "icloud.household"
         static let customCategories = "icloud.customCategories"
         static let categoryCatalogState = "icloud.categoryCatalogState"
         static let quickTemplates = "icloud.quickTemplates"
@@ -67,9 +66,6 @@ final class ICloudSyncService {
         }
         if let rulesData = try? JSONEncoder().encode(premium.merchantRules) {
             store.set(rulesData, forKey: Keys.rules)
-        }
-        if let householdData = try? JSONEncoder().encode(premium.household) {
-            store.set(householdData, forKey: Keys.household)
         }
 
         if let customCategories = try? JSONEncoder().encode(StorageService.loadCustomCategories()) {
@@ -124,13 +120,6 @@ final class ICloudSyncService {
            let rules = try? JSONDecoder().decode([MerchantRule].self, from: data) {
             Task { @MainActor in
                 PremiumDataStore.shared.merchantRules = rules
-            }
-        }
-
-        if let data = store.data(forKey: Keys.household),
-           let household = try? JSONDecoder().decode(HouseholdLedger.self, from: data) {
-            Task { @MainActor in
-                PremiumDataStore.shared.household = household
             }
         }
 

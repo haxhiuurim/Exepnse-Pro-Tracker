@@ -14,14 +14,16 @@ enum ProProductID {
     static let monthly = "com.premiumsolutions.expenses.pro.monthly"
     static let yearly = "com.premiumsolutions.expenses.pro.yearly"
     static let yearlySpecial = "com.premiumsolutions.expenses.pro.yearly.special"
+    static let lifetime = "com.premiumsolutions.expenses.pro.lifetime"
 
-    static let all: [String] = [monthly, yearly, yearlySpecial]
+    static let all: [String] = [monthly, yearly, yearlySpecial, lifetime]
 }
 
 enum ProPlan: String, Identifiable, CaseIterable {
     case monthly
     case yearly
     case yearlySpecial
+    case lifetime
 
     var id: String { rawValue }
 
@@ -30,6 +32,7 @@ enum ProPlan: String, Identifiable, CaseIterable {
         case .monthly: return ProProductID.monthly
         case .yearly: return ProProductID.yearly
         case .yearlySpecial: return ProProductID.yearlySpecial
+        case .lifetime: return ProProductID.lifetime
         }
     }
 
@@ -39,12 +42,13 @@ enum ProPlan: String, Identifiable, CaseIterable {
         case .monthly: return "$2.99"
         case .yearly: return "$14.99"
         case .yearlySpecial: return "$11.99"
+        case .lifetime: return "$59.99"
         }
     }
 
     var strikethroughPrice: String? {
         switch self {
-        case .monthly: return nil
+        case .monthly, .lifetime: return nil
         case .yearly: return "$29.99"
         case .yearlySpecial: return "$29.99"
         }
@@ -52,7 +56,7 @@ enum ProPlan: String, Identifiable, CaseIterable {
 
     var discountPercent: Int? {
         switch self {
-        case .monthly: return nil
+        case .monthly, .lifetime: return nil
         case .yearly: return 50
         case .yearlySpecial: return 60
         }
@@ -62,6 +66,7 @@ enum ProPlan: String, Identifiable, CaseIterable {
         switch self {
         case .monthly: return "Monthly"
         case .yearly, .yearlySpecial: return "Yearly"
+        case .lifetime: return "Lifetime"
         }
     }
 
@@ -70,13 +75,14 @@ enum ProPlan: String, Identifiable, CaseIterable {
         case .monthly: return "Flexible · cancel anytime"
         case .yearly: return "Best value · 50% off"
         case .yearlySpecial: return "Limited offer · 60% off"
+        case .lifetime: return "Pay once · keep Pro forever"
         }
     }
 
     /// Weekly equivalent for yearly intro price.
     var weeklyEquivalent: String? {
         switch self {
-        case .monthly: return nil
+        case .monthly, .lifetime: return nil
         case .yearly: return "$0.29"
         case .yearlySpecial: return "$0.23"
         }
@@ -87,6 +93,8 @@ enum FreeTierLimits {
     static let receiptScansPerMonth = 5
     static let categoryBudgets = 2
     static let recurringItems = 3
+    static let uniqueTags = 5
+    static let freeMerchantCustomRules = 0
 }
 
 @MainActor
@@ -245,33 +253,40 @@ final class ProEntitlementManager: ObservableObject {
     }
     #endif
 
-    // MARK: - Special offer (random)
+    // MARK: - Special offer (limit-triggered, not random)
 
-    /// Call on home appear — randomly presents 60% off yearly if not Pro.
-    func maybePresentSpecialOffer() {
+    /// Prefer calling when the user hits a free-tier ceiling.
+    func presentSpecialOfferIfEligible(force: Bool = false) {
         guard !isPro else { return }
         guard !showPaywall, !showSpecialOffer else { return }
 
         let defaults = UserDefaults.standard
         let now = Date()
-        if let last = defaults.object(forKey: Keys.specialOfferSeenAt) as? Date,
+        if !force,
+           let last = defaults.object(forKey: Keys.specialOfferSeenAt) as? Date,
            now.timeIntervalSince(last) < 60 * 60 * 36 {
-            return // cool-down ~1.5 days
+            return
         }
-
-        // ~35% chance each eligible open
-        guard Int.random(in: 1...100) <= 35 else { return }
 
         defaults.set(now, forKey: Keys.specialOfferSeenAt)
         selectedPaywallPlan = .yearlySpecial
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             self.showSpecialOffer = true
         }
     }
 
+    /// Kept for call-site compatibility — no longer random; only cool-down aware no-op.
+    func maybePresentSpecialOffer() {
+        // Random interrupt removed in favor of limit-hit offers.
+    }
+
     func openPaywall(plan: ProPlan = .yearly) {
-        selectedPaywallPlan = plan
+        selectedPaywallPlan = plan == .yearlySpecial ? .yearlySpecial : plan
         showPaywall = true
+    }
+
+    func notifyLimitHit() {
+        presentSpecialOfferIfEligible()
     }
 
     // MARK: - Free tier usage
@@ -296,6 +311,9 @@ final class ProEntitlementManager: ObservableObject {
         let count = UserDefaults.standard.integer(forKey: Keys.receiptScanCount) + 1
         UserDefaults.standard.set(count, forKey: Keys.receiptScanCount)
         objectWillChange.send()
+        if count >= FreeTierLimits.receiptScansPerMonth {
+            notifyLimitHit()
+        }
     }
 
     func canAddCategoryBudget(currentCount: Int) -> Bool {
@@ -305,6 +323,20 @@ final class ProEntitlementManager: ObservableObject {
     func canAddRecurring(currentCount: Int) -> Bool {
         isPro || currentCount < FreeTierLimits.recurringItems
     }
+
+    func canUseTag(existingUniqueTags: Set<String>, newTags: [String]) -> Bool {
+        if isPro { return true }
+        var union = existingUniqueTags
+        for tag in newTags { union.insert(tag) }
+        return union.count <= FreeTierLimits.uniqueTags
+    }
+
+    /// Full Insights (trends / deep cards) — Pro or 14-day preview.
+    var canUseFullInsights: Bool {
+        isPro || OnboardingStore.shared.insightsPreviewActive
+    }
+
+    var canUseInsightsOverview: Bool { true }
 
     private func rotateReceiptCounterIfNeeded() {
         let formatter = DateFormatter()

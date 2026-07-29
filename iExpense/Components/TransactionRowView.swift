@@ -27,24 +27,40 @@ struct TransactionRowView: View {
                     .foregroundStyle(InpensoTheme.ink)
                     .lineLimit(1)
 
-                Text(expense.date, format: .dateTime.month(.abbreviated).day())
-                    .font(InpensoTheme.label(12))
-                    .foregroundStyle(InpensoTheme.muted)
+                HStack(spacing: 6) {
+                    Text(expense.date, format: .dateTime.month(.abbreviated).day())
+                        .font(InpensoTheme.label(12))
+                        .foregroundStyle(InpensoTheme.muted)
+                    if !expense.tags.isEmpty {
+                        Text(expense.tags.prefix(2).map { "#\($0)" }.joined(separator: " "))
+                            .font(InpensoTheme.label(11, weight: .semibold))
+                            .foregroundStyle(InpensoTheme.tide)
+                            .lineLimit(1)
+                    }
+                }
             }
 
             Spacer(minLength: InpensoTheme.Space.xs)
 
-            Text(amountText)
-                .font(InpensoTheme.displayAmount(15))
-                .foregroundStyle(expense.type == .income ? InpensoTheme.incomeTint : InpensoTheme.ink)
-                .layoutPriority(1)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(amountText)
+                    .font(InpensoTheme.displayAmount(15))
+                    .foregroundStyle(expense.type == .income ? InpensoTheme.incomeTint : InpensoTheme.ink)
+                if expense.displayCurrencyCode.uppercased() != currencyCode.uppercased() {
+                    Text(expense.homeAmount.formatted(.currency(code: currencyCode)))
+                        .font(InpensoTheme.label(11))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+            }
+            .layoutPriority(1)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
     private var amountText: String {
-        let formatted = expense.price.formatted(.currency(code: currencyCode))
+        let code = expense.displayCurrencyCode
+        let formatted = expense.price.formatted(.currency(code: code))
         return expense.type == .income ? "+\(formatted)" : "−\(formatted)"
     }
 }

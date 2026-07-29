@@ -15,7 +15,7 @@ enum SharedTripAPIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Set your API base URL in Settings → Shared trips."
+        case .notConfigured: return "Shared trips aren’t configured. Check your connection and try again."
         case .server(let message): return message
         case .decoding: return "Could not read the server response."
         case .unauthorized: return "Session expired. Re-registering…"
@@ -164,6 +164,14 @@ final class SharedTripAPI {
         )
     }
 
+    func leaveTrip(id: Int) async throws {
+        _ = try await postJSON(path: "/api/trips/\(id)/leave", body: [:], authed: true)
+    }
+
+    func deleteTrip(id: Int) async throws {
+        _ = try await request(path: "/api/trips/\(id)", method: "DELETE", body: nil, authed: true)
+    }
+
     // MARK: - Networking
 
     private func getJSON(path: String) async throws -> [String: Any] {
@@ -245,6 +253,9 @@ struct SharedTripSummary: Identifiable, Hashable {
     let inviteCode: String
     let currency: String
     let memberCount: Int
+    let expenseCount: Int
+    let totalSpent: Double
+    let isOwner: Bool
 
     init?(dict: [String: Any]) {
         guard let id = dict["id"] as? Int ?? (dict["id"] as? String).flatMap(Int.init) else { return nil }
@@ -255,6 +266,17 @@ struct SharedTripSummary: Identifiable, Hashable {
         self.memberCount = dict["member_count"] as? Int
             ?? (dict["members"] as? [Any])?.count
             ?? 0
+        self.expenseCount = dict["expense_count"] as? Int ?? 0
+        if let total = dict["total_spent"] as? Double {
+            self.totalSpent = total
+        } else if let total = dict["total_spent"] as? NSNumber {
+            self.totalSpent = total.doubleValue
+        } else if let total = dict["total_spent"] as? String {
+            self.totalSpent = Double(total) ?? 0
+        } else {
+            self.totalSpent = 0
+        }
+        self.isOwner = dict["is_owner"] as? Bool ?? false
     }
 }
 

@@ -16,17 +16,16 @@ struct PaywallView: View {
     @State private var selected: ProPlan = .yearly
 
     private let features: [(icon: String, title: String, detail: String)] = [
+        ("sun.max.fill", "Available Today depth", "Forecasts, alerts, and unlimited budgets"),
         ("doc.text.viewfinder", "Receipt scans", "OCR without a monthly cap"),
-        ("icloud.fill", "iCloud sync", "Same ledger on every device"),
-        ("person.3.fill", "Shared trips", "Split trip spendings with friends"),
-        ("chart.bar.doc.horizontal", "Widgets & Live Activities", "Spending on Home Screen and Lock Screen"),
-        ("tag.fill", "Category budgets", "Set limits and get alerts"),
-        ("arrow.triangle.2.circlepath", "Recurring & calendar", "See what's due this month"),
-        ("square.and.arrow.up", "CSV / OFX export", "Export for your records"),
+        ("icloud.fill", "Encrypted iCloud sync", "Optional backup — personal ledger stays private"),
+        ("chart.bar.doc.horizontal", "Full Insights", "Trends, patterns, heatmap, projections"),
+        ("creditcard.fill", "Subscriptions", "Unlimited recurring & burn alerts"),
+        ("tag.fill", "Tags & categories", "Unlimited tags and custom categories"),
+        ("square.and.arrow.up", "CSV / OFX / PDF", "Export for taxes and records"),
         ("target", "Savings goals", "Track targets and envelopes"),
-        ("person.2.fill", "Household ledger", "Share categories with a partner"),
-        ("bolt.horizontal.fill", "Merchant rules", "Auto-categorize by payee name"),
-        ("building.columns.fill", "Accounts & net worth", "Cash, cards, and balances")
+        ("bolt.horizontal.fill", "Custom merchant rules", "Auto-categorize by payee name"),
+        ("widget.small", "Live Activities", "Spent Today on Lock Screen")
     ]
 
     var body: some View {
@@ -92,7 +91,11 @@ struct PaywallView: View {
                 Text(pro.lastError ?? "")
             }
             .onAppear {
-                selected = initialPlan == .yearlySpecial ? .yearly : initialPlan
+                if initialPlan == .yearlySpecial {
+                    selected = .yearly
+                } else {
+                    selected = initialPlan
+                }
             }
         }
     }
@@ -109,7 +112,7 @@ struct PaywallView: View {
                 .foregroundStyle(InpensoTheme.ink)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("No ads. Data stays on your device. Subscribe for sync, exports, and advanced tools.")
+            Text("No ads. Personal expenses stay on device. Trips use an optional server when you opt in. Subscribe for sync, exports, and advanced tools.")
                 .font(InpensoTheme.body(15))
                 .foregroundStyle(InpensoTheme.slate)
                 .fixedSize(horizontal: false, vertical: true)
@@ -121,6 +124,7 @@ struct PaywallView: View {
         VStack(spacing: InpensoTheme.Space.sm) {
             planCard(.yearly)
             planCard(.monthly)
+            planCard(.lifetime)
         }
     }
 
@@ -163,7 +167,7 @@ struct PaywallView: View {
                         Text(pro.priceText(for: plan))
                             .font(InpensoTheme.displayAmount(26))
                             .foregroundStyle(InpensoTheme.ink)
-                        Text(plan == .monthly ? "/ mo" : "/ yr")
+                        Text(plan == .monthly ? "/ mo" : plan == .lifetime ? " once" : "/ yr")
                             .font(InpensoTheme.label(13, weight: .medium))
                             .foregroundStyle(InpensoTheme.muted)
                     }
@@ -214,11 +218,24 @@ struct PaywallView: View {
                 if pro.purchaseInFlight {
                     ProgressView().tint(.white)
                 }
-                Text(selected == .yearly ? "Subscribe yearly · \(pro.priceText(for: .yearly))" : "Subscribe monthly · \(pro.priceText(for: .monthly))")
+                Text(ctaTitle)
             }
         }
         .buttonStyle(InpensoPrimaryButtonStyle(enabled: !pro.purchaseInFlight, tint: InpensoTheme.tide))
         .disabled(pro.purchaseInFlight)
+    }
+
+    private var ctaTitle: String {
+        switch selected {
+        case .yearly:
+            return "Subscribe yearly · \(pro.priceText(for: .yearly))"
+        case .yearlySpecial:
+            return "Claim offer · \(pro.priceText(for: .yearlySpecial))"
+        case .lifetime:
+            return "Unlock lifetime · \(pro.priceText(for: .lifetime))"
+        case .monthly:
+            return "Subscribe monthly · \(pro.priceText(for: .monthly))"
+        }
     }
 
     private var restoreRow: some View {
@@ -339,7 +356,7 @@ struct SpecialOfferPaywallView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         offerBullet("Unlimited OCR, sync, and widgets")
                         offerBullet("Goals, accounts, and merchant rules")
-                        offerBullet("Household ledger and exports")
+                        offerBullet("CSV, OFX, and PDF exports")
                     }
 
                     Button {

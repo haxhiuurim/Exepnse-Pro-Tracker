@@ -32,7 +32,10 @@ class ExpenseViewModel: ObservableObject {
         notes: String? = nil,
         accountID: UUID? = nil,
         isBalanceAdjustment: Bool = false,
-        applyToAccount: Bool = true
+        applyToAccount: Bool = true,
+        tags: [String] = [],
+        currencyCode: String? = nil,
+        exchangeRateToHome: Double? = nil
     ) -> Expense {
         let linkedAccount = accountID ?? (isBalanceAdjustment ? nil : accountsStore.primaryLiquidAccount?.id)
         let newExpense = Expense(
@@ -44,7 +47,10 @@ class ExpenseViewModel: ObservableObject {
             categoryID: categoryID,
             notes: notes,
             accountID: linkedAccount ?? accountID,
-            isBalanceAdjustment: isBalanceAdjustment
+            isBalanceAdjustment: isBalanceAdjustment,
+            tags: tags,
+            currencyCode: currencyCode,
+            exchangeRateToHome: exchangeRateToHome
         )
         expenses.insert(newExpense, at: 0)
         if applyToAccount {
@@ -185,5 +191,9 @@ class ExpenseViewModel: ObservableObject {
 
     func transactions(forAccountID id: UUID) -> [Expense] {
         expenses.filter { $0.accountID == id }
+    }
+
+    var allUniqueTags: Set<String> {
+        Set(expenses.flatMap(\.tags))
     }
 }

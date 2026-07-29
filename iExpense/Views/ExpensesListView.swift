@@ -12,7 +12,7 @@ struct ExpensesListView: View {
     @ObservedObject var viewModel: ExpenseViewModel
     @StateObject private var analyticsViewModel = AnalyticsViewModel(expenses: [])
 
-    @State private var dateSelection = LedgerDateSelection(mode: .month)
+    @State private var dateSelection = LedgerDateSelection(mode: .day)
     @State private var recentlyDeletedExpenses: [Expense] = []
     @State private var showUndoSnackbar = false
     @State private var undoTimer: Timer?
@@ -66,7 +66,8 @@ struct ExpensesListView: View {
             let matchesSearch = searchText.isEmpty ||
                 expense.title.localizedCaseInsensitiveContains(searchText) ||
                 category.displayName.localizedCaseInsensitiveContains(searchText) ||
-                (expense.notes?.localizedCaseInsensitiveContains(searchText) ?? false)
+                (expense.notes?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+                expense.tags.contains { $0.localizedCaseInsensitiveContains(searchText.replacingOccurrences(of: "#", with: "")) }
             let matchesCategory = selectedCategoryIDs.isEmpty || selectedCategoryIDs.contains(expense.categoryID)
             let matchesType = selectedTransactionFilter.matches(expense)
             return matchesDate && matchesSearch && matchesCategory && matchesType

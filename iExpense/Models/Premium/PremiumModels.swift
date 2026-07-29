@@ -46,6 +46,64 @@ struct SavingsGoal: Identifiable, Codable, Equatable, Hashable {
     var accent: Color { Color(hex: accentHex) ?? InpensoTheme.tide }
 }
 
+// MARK: - Debt / EMI (local payoff plans)
+
+struct DebtLoan: Identifiable, Codable, Equatable, Hashable {
+    var id: UUID
+    var name: String
+    var principal: Double
+    /// Remaining balance to pay off.
+    var remaining: Double
+    /// Fixed installment amount (EMI).
+    var emiAmount: Double
+    var annualInterestPercent: Double
+    var nextDueDate: Date
+    var notes: String?
+    var accentHex: String
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        principal: Double,
+        remaining: Double? = nil,
+        emiAmount: Double,
+        annualInterestPercent: Double = 0,
+        nextDueDate: Date = Date(),
+        notes: String? = nil,
+        accentHex: String = "#C45C26"
+    ) {
+        self.id = id
+        self.name = name
+        self.principal = principal
+        self.remaining = remaining ?? principal
+        self.emiAmount = emiAmount
+        self.annualInterestPercent = annualInterestPercent
+        self.nextDueDate = nextDueDate
+        self.notes = notes
+        self.accentHex = accentHex
+    }
+
+    var progress: Double {
+        guard principal > 0 else { return 0 }
+        return min(1, max(0, (principal - remaining) / principal))
+    }
+
+    var monthsRemainingEstimate: Int {
+        guard emiAmount > 0, remaining > 0 else { return 0 }
+        return Int(ceil(remaining / emiAmount))
+    }
+
+    var accent: Color { Color(hex: accentHex) ?? InpensoTheme.expenseTint }
+
+    mutating func recordPayment(_ amount: Double, calendar: Calendar = .current) {
+        let paid = min(remaining, max(0, amount))
+        remaining = max(0, remaining - paid)
+        if let next = calendar.date(byAdding: .month, value: 1, to: nextDueDate) {
+            nextDueDate = next
+        }
+    }
+}
+
 // MARK: - Merchant rules
 
 struct MerchantRule: Identifiable, Codable, Equatable, Hashable {
@@ -137,38 +195,6 @@ struct FinanceAccount: Identifiable, Codable, Equatable, Hashable {
 
     /// Liquid money available to spend (excludes credit cards).
     var isLiquid: Bool { !kind.countsAsLiability }
-}
-
-// MARK: - Household
-
-struct HouseholdMember: Identifiable, Codable, Equatable, Hashable {
-    var id: UUID
-    var name: String
-    var colorHex: String
-    var isOwner: Bool
-
-    init(id: UUID = UUID(), name: String, colorHex: String = "#2A8F87", isOwner: Bool = false) {
-        self.id = id
-        self.name = name
-        self.colorHex = colorHex
-        self.isOwner = isOwner
-    }
-}
-
-struct HouseholdLedger: Codable, Equatable {
-    var name: String
-    var inviteCode: String
-    var members: [HouseholdMember]
-    var sharedCategoryIDs: [String]
-
-    static var empty: HouseholdLedger {
-        HouseholdLedger(
-            name: "Household",
-            inviteCode: String(UUID().uuidString.prefix(6)).uppercased(),
-            members: [HouseholdMember(name: "You", isOwner: true)],
-            sharedCategoryIDs: []
-        )
-    }
 }
 
 // MARK: - Single app theme (no pack picker)

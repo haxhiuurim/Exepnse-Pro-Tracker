@@ -89,14 +89,14 @@ enum PeriodTotals {
 
     static func spent(from expenses: [Expense], interval: DateInterval) -> Double {
         expenses
-            .filter { $0.type == .expense && interval.contains($0.date) }
-            .reduce(0) { $0 + $1.price }
+            .filter { $0.type == .expense && interval.contains($0.date) && !$0.isBalanceAdjustment }
+            .reduce(0) { $0 + $1.homeAmount }
     }
 
     static func income(from expenses: [Expense], interval: DateInterval) -> Double {
         expenses
-            .filter { $0.type == .income && interval.contains($0.date) }
-            .reduce(0) { $0 + $1.price }
+            .filter { $0.type == .income && interval.contains($0.date) && !$0.isBalanceAdjustment }
+            .reduce(0) { $0 + $1.homeAmount }
     }
 
     static func net(from expenses: [Expense], interval: DateInterval) -> Double {
@@ -105,8 +105,8 @@ enum PeriodTotals {
 
     static func categoryBreakdown(from expenses: [Expense], interval: DateInterval) -> [String: Double] {
         var totals: [String: Double] = [:]
-        for expense in expenses where expense.type == .expense && interval.contains(expense.date) {
-            totals[expense.categoryID, default: 0] += expense.price
+        for expense in expenses where expense.type == .expense && interval.contains(expense.date) && !expense.isBalanceAdjustment {
+            totals[expense.categoryID, default: 0] += expense.homeAmount
         }
         return totals
     }
@@ -136,7 +136,7 @@ enum LedgerRangeMode: String, CaseIterable, Identifiable {
 }
 
 struct LedgerDateSelection: Equatable {
-    var mode: LedgerRangeMode = .month
+    var mode: LedgerRangeMode = .day
     var anchor: Date = Date()
 
     func interval(calendar: Calendar = .current) -> DateInterval {

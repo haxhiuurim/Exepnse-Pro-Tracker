@@ -25,7 +25,7 @@ struct SettingsView: View {
     @State private var biometricError: String?
     @State private var exportFormat: ExportFormat = .csv
 
-    private enum ExportFormat { case csv, ofx }
+    private enum ExportFormat { case csv, ofx, pdf }
 
     private var settingsRowInsets: EdgeInsets {
         EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)
@@ -338,10 +338,21 @@ struct SettingsView: View {
             } label: {
                 Label("Export OFX (Pro)", systemImage: "doc.badge.gearshape")
             }
+            Button {
+                guard pro.isPro else { pro.openPaywall(); return }
+                exportFormat = .pdf
+                exportProData(format: .pdf)
+            } label: {
+                Label("Export PDF (Pro)", systemImage: "doc.richtext")
+            }
             importButton
             resetButton
         } header: {
             sectionHeader("Data")
+        }
+        footer: {
+            Text("Personal ledger stays on device. Optional Pro iCloud sync backs up your data. Shared Trips use a server only when you create or join a trip.")
+                .font(InpensoTheme.label(11))
         }
     }
 
@@ -352,6 +363,8 @@ struct SettingsView: View {
             url = ExportService.csvURL(expenses: expenseViewModel.expenses, currencyCode: settingsManager.selectedCurrency)
         case .ofx:
             url = ExportService.ofxURL(expenses: expenseViewModel.expenses, currencyCode: settingsManager.selectedCurrency)
+        case .pdf:
+            url = ExportService.pdfURL(expenses: expenseViewModel.expenses, currencyCode: settingsManager.selectedCurrency)
         }
         if let url {
             exportURL = url

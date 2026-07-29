@@ -26,13 +26,24 @@ struct MainTabView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @ObservedObject private var biometricLock = BiometricLockService.shared
     @ObservedObject private var pro = ProEntitlementManager.shared
+    @ObservedObject private var onboarding = OnboardingStore.shared
     @State private var selectedTab = AppTab.home.rawValue
     @State private var quickAddRequest: QuickAddRequest?
     @Environment(\.scenePhase) private var scenePhase
 
-    private var showsFloatingAdd: Bool { false }
+    private var showsFloatingAdd: Bool { true }
 
     var body: some View {
+        Group {
+            if onboarding.hasCompletedOnboarding {
+                mainShell
+            } else {
+                OnboardingView(store: onboarding, settings: settingsViewModel)
+            }
+        }
+    }
+
+    private var mainShell: some View {
         ZStack {
             TabView(selection: $selectedTab) {
                 HomeView(
@@ -114,7 +125,10 @@ struct MainTabView: View {
             if PremiumDataStore.shared.iCloudSyncEnabled {
                 ICloudSyncService.shared.pullIfAvailable()
             }
-            Task { await pro.refresh() }
+            Task {
+                await pro.refresh()
+                await evaluateBudgetAlerts()
+            }
 
             NotificationCenter.default.addObserver(
                 forName: NSNotification.Name("SwitchToExpensesTab"),
@@ -153,6 +167,7 @@ struct MainTabView: View {
         }
         .onChange(of: viewModel.expenses) {
             analyticsViewModel.updateExpenses(viewModel.expenses)
+            Task { await evaluateBudgetAlerts() }
             if pro.isPro {
                 SpentTodayLiveActivity.startOrUpdate(
                     amount: viewModel.spent(for: .today),
@@ -174,6 +189,7 @@ struct MainTabView: View {
                     ICloudSyncService.shared.pullIfAvailable()
                     ICloudSyncService.shared.pushAll()
                 }
+                Task { await evaluateBudgetAlerts() }
             case .inactive, .background:
                 biometricLock.lockIfNeeded()
             @unknown default:
@@ -185,6 +201,16 @@ struct MainTabView: View {
         .environmentObject(viewModel)
         .environmentObject(pro)
         .environmentObject(PremiumDataStore.shared)
+        .environmentObject(onboarding)
+    }
+
+    private func evaluateBudgetAlerts() async {
+        await BudgetAlertService.evaluate(
+            expenses: viewModel.expenses,
+            monthlyBudget: analyticsViewModel.currentBudget,
+            categoryBudgets: StorageService.loadCategoryBudgets(),
+            currencyCode: settingsViewModel.selectedCurrency
+        )
     }
 
     private func openQuickAdd(_ type: TransactionType) {

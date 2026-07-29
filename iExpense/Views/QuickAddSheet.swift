@@ -17,6 +17,8 @@ struct QuickAddSheet: View {
     @State private var title: String = ""
     @State private var selectedCategoryID: String
     @State private var selectedAccountID: UUID?
+    @State private var selectedTags: [String] = []
+    @State private var selectedCurrencyCode: String = ""
     @State private var showFullForm = false
     @State private var showReceiptScan = false
     @FocusState private var focusedField: Field?
@@ -75,6 +77,14 @@ struct QuickAddSheet: View {
 
                         if transactionType == .expense {
                             categoryWrap
+                            TagPickerView(
+                                tags: $selectedTags,
+                                suggested: Array(viewModel.allUniqueTags).sorted(),
+                                isPro: pro.isPro,
+                                freeLimit: FreeTierLimits.uniqueTags,
+                                onUpgrade: { pro.openPaywall(plan: .yearly) }
+                            )
+                            currencyQuickPicker
                             templatesSection
                             scanRow
                         }
@@ -127,6 +137,9 @@ struct QuickAddSheet: View {
                 if selectedAccountID == nil {
                     selectedAccountID = PremiumDataStore.shared.primaryLiquidAccount?.id
                 }
+                if selectedCurrencyCode.isEmpty {
+                    selectedCurrencyCode = settingsViewModel.selectedCurrency
+                }
                 focusedField = .amount
             }
             .onChange(of: transactionType) { _, newType in
@@ -135,6 +148,7 @@ struct QuickAddSheet: View {
                 }
             }
             .onChange(of: title) { _, newValue in
+                applyNaturalLanguage(from: newValue)
                 applyMerchantRule(for: newValue)
             }
         }
@@ -179,8 +193,8 @@ struct QuickAddSheet: View {
                     .font(InpensoTheme.label(11, weight: .semibold))
                     .foregroundStyle(InpensoTheme.muted.opacity(0.8))
             }
-            TextField(
-                transactionType == .income ? "Payday, freelance…" : "Coffee, rent…",
+                TextField(
+                transactionType == .income ? "Payday, freelance…" : "Coffee 4.50 or Coffee…",
                 text: $title
             )
             .font(InpensoTheme.body(17, weight: .medium))
@@ -301,6 +315,7 @@ struct QuickAddSheet: View {
                 showReceiptScan = true
             } else {
                 pro.openPaywall(plan: .yearly)
+                pro.notifyLimitHit()
             }
         } label: {
             HStack(spacing: InpensoTheme.Space.sm) {
@@ -336,8 +351,40 @@ struct QuickAddSheet: View {
         dismiss()
     }
 
+    private var currencyQuickPicker: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.xs) {
+            Text("Currency")
+                .font(InpensoTheme.label(13))
+                .foregroundStyle(InpensoTheme.muted)
+            Picker("Currency", selection: $selectedCurrencyCode) {
+                ForEach(availableCurrencies, id: \.code) { currency in
+                    Text("\(currency.code) \(currency.symbol)").tag(currency.code)
+                }
+            }
+            .pickerStyle(.menu)
+            .padding(.horizontal, InpensoTheme.Space.md)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
+        }
+    }
+
+    private func applyNaturalLanguage(from rawTitle: String) {
+        guard let draft = NaturalLanguageExpenseParser.parse(rawTitle, categoryStore: categoryStore) else { return }
+        // Only auto-fill amount when the field is empty or still matches a prior parse.
+        if amount.isEmpty || Double(amount.replacingOccurrences(of: ",", with: ".")) == nil {
+            amount = String(format: "%.2f", draft.amount)
+            title = draft.title
+        } else if abs((Double(amount.replacingOccurrences(of: ",", with: ".")) ?? -1) - draft.amount) < 0.001 {
+            title = draft.title
+        }
+        if let categoryID = draft.suggestedCategoryID {
+            selectedCategoryID = categoryID
+        }
+    }
+
     private func applyMerchantRule(for rawTitle: String) {
-        guard pro.isPro else { return }
+        // Starter rules work for everyone; custom rules require Pro for editing only.
         if let categoryID = PremiumDataStore.shared.suggestedCategoryID(forTitle: rawTitle) {
             selectedCategoryID = categoryID
         }
@@ -355,6 +402,19 @@ struct QuickAddSheet: View {
         let legacy = Category.category(from: category.id) ?? .others
         let resolvedTitle = cleanTitle.isEmpty ? category.displayName : cleanTitle
 
+        let tags = Expense.normalizedTags(selectedTags)
+        if !pro.canUseTag(existingUniqueTags: viewModel.allUniqueTags, newTags: tags) {
+            pro.openPaywall(plan: .yearly)
+            pro.notifyLimitHit()
+            return
+        }
+
+        let currency = selectedCurrencyCode.isEmpty ? settingsViewModel.selectedCurrency : selectedCurrencyCode
+        let home = settingsViewModel.selectedCurrency
+        let rate: Double? = currency.uppercased() == home.uppercased()
+            ? nil
+            : ExchangeRateService.rate(from: currency, to: home)
+
         _ = viewModel.addExpense(
             title: resolvedTitle,
             price: price,
@@ -362,7 +422,10 @@ struct QuickAddSheet: View {
             category: legacy,
             type: transactionType,
             categoryID: category.id,
-            accountID: transactionType == .income ? selectedAccountID : nil
+            accountID: transactionType == .income ? selectedAccountID : nil,
+            tags: tags,
+            currencyCode: currency,
+            exchangeRateToHome: rate
         )
         HapticFeedback.success()
         dismiss()

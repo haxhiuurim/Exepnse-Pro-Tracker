@@ -126,8 +126,8 @@ class AnalyticsViewModel: ObservableObject {
         let filteredExpenses = filteredTransactions.filter { $0.type == .expense }
         let filteredIncomes = filteredTransactions.filter { $0.type == .income }
 
-        totalSpent = filteredExpenses.reduce(0) { $0 + $1.price }
-        totalIncome = filteredIncomes.reduce(0) { $0 + $1.price }
+        totalSpent = filteredExpenses.reduce(0) { $0 + $1.homeAmount }
+        totalIncome = filteredIncomes.reduce(0) { $0 + $1.homeAmount }
         netCashflow = totalIncome - totalSpent
 
         spendingByCategory = totalsByCategory(for: filteredExpenses)
@@ -147,7 +147,7 @@ class AnalyticsViewModel: ObservableObject {
     private func totalsByCategory(for transactions: [Expense]) -> [String: Double] {
         var totals: [String: Double] = [:]
         for transaction in transactions {
-            totals[transaction.categoryID, default: 0] += transaction.price
+            totals[transaction.categoryID, default: 0] += transaction.homeAmount
         }
         return totals
     }
@@ -173,7 +173,7 @@ class AnalyticsViewModel: ObservableObject {
         var currentDate = startOfMonth
         while currentDate <= endOfMonth {
             let dayOfMonth = calendar.component(.day, from: currentDate)
-            let amount = groupedByDay[calendar.startOfDay(for: currentDate)]?.reduce(0) { $0 + $1.price } ?? 0
+            let amount = groupedByDay[calendar.startOfDay(for: currentDate)]?.reduce(0) { $0 + $1.homeAmount } ?? 0
 
             dailyData.append(DailySpending(date: currentDate, amount: amount, dayOfMonth: dayOfMonth))
 
@@ -213,7 +213,7 @@ class AnalyticsViewModel: ObservableObject {
                     let expenseYear = calendar.component(.year, from: expense.date)
                     return expense.type == .expense && expenseMonth == month && expenseYear == year
                 }
-                .reduce(0) { $0 + $1.price }
+                .reduce(0) { $0 + $1.homeAmount }
 
             trends.append(MonthlyTrend(month: month, year: year, amount: totalAmount))
         }
@@ -297,7 +297,7 @@ class AnalyticsViewModel: ObservableObject {
                         Calendar.current.component(.month, from: $0.date) == prevMonth &&
                         Calendar.current.component(.year, from: $0.date) == prevYear
                     }
-                    .reduce(0) { $0 + $1.price }
+                    .reduce(0) { $0 + $1.homeAmount }
 
                 if previousMonthSpent > 0 {
                     let percentChange = ((totalSpent - previousMonthSpent) / previousMonthSpent) * 100

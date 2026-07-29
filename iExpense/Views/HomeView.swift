@@ -21,12 +21,23 @@ struct HomeView: View {
     @State private var showReceiptScan = false
     @State private var showInsights = false
     @ObservedObject private var premiumStore = PremiumDataStore.shared
+    @ObservedObject private var onboarding = OnboardingStore.shared
+    @ObservedObject private var recurring = RecurringTransactionService.shared
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
     private var interval: DateInterval { dateSelection.interval() }
     private var periodSpent: Double { PeriodTotals.spent(from: viewModel.expenses, interval: interval) }
     private var periodIncome: Double { PeriodTotals.income(from: viewModel.expenses, interval: interval) }
     private var periodNet: Double { PeriodTotals.net(from: viewModel.expenses, interval: interval) }
+
+    private var availableToday: AvailableTodayResult {
+        AvailableTodayCalculator.compute(
+            expenses: viewModel.expenses,
+            recurring: recurring.items,
+            monthlyIncomeOverride: onboarding.monthlyIncome,
+            monthlySavingsTarget: onboarding.monthlySavingsTarget
+        )
+    }
 
     private var topCategories: [(String, Double)] {
         PeriodTotals.categoryBreakdown(from: viewModel.expenses, interval: interval)
@@ -54,6 +65,7 @@ struct HomeView: View {
                         if !pro.isPro {
                             proUpsell
                         }
+                        availableTodayCard
                         heroCard
                         if abs(premiumStore.netWorth) > 0.001 || !premiumStore.accounts.isEmpty {
                             accountsStrip
@@ -83,7 +95,6 @@ struct HomeView: View {
                 AnalyticsView(analyticsViewModel: analyticsViewModel)
             }
             .onAppear {
-                pro.maybePresentSpecialOffer()
                 if pro.isPro {
                     SpentTodayLiveActivity.startOrUpdate(
                         amount: viewModel.spent(for: .today),
@@ -161,7 +172,7 @@ struct HomeView: View {
                     Text("You're on Free")
                         .font(InpensoTheme.body(15, weight: .semibold))
                         .foregroundStyle(InpensoTheme.ink)
-                    Text("Upgrade for OCR, shortcuts, categories & more")
+                    Text("Upgrade for Insights, OCR, sync & more")
                         .font(InpensoTheme.label(12))
                         .foregroundStyle(InpensoTheme.muted)
                 }
@@ -180,6 +191,64 @@ struct HomeView: View {
             .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Available Today
+
+    private var availableTodayCard: some View {
+        let result = availableToday
+        return VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Available today")
+                        .font(InpensoTheme.label(13, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.muted)
+                    Text(result.amount, format: .currency(code: currencyCode))
+                        .font(InpensoTheme.displayAmount(34))
+                        .foregroundStyle(result.amount >= 0 ? InpensoTheme.tide : InpensoTheme.danger)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                        .contentTransition(.numericText())
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(result.daysRemainingInMonth)d left")
+                        .font(InpensoTheme.label(12, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.slate)
+                    Text("after bills & savings")
+                        .font(InpensoTheme.label(11))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+            }
+
+            if !result.isConfigured {
+                Text("Set income in onboarding or Settings to make this number yours.")
+                    .font(InpensoTheme.label(12))
+                    .foregroundStyle(InpensoTheme.muted)
+            } else {
+                HStack(spacing: InpensoTheme.Space.md) {
+                    miniStat("Bills/mo", result.monthlyBills)
+                    miniStat("Spent", result.spentThisMonth)
+                    miniStat("Pool", result.monthPool)
+                }
+            }
+        }
+        .padding(InpensoTheme.Space.lg)
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
+    }
+
+    private func miniStat(_ title: String, _ value: Double) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(InpensoTheme.label(11))
+                .foregroundStyle(InpensoTheme.muted)
+            Text(value, format: .currency(code: currencyCode))
+                .font(InpensoTheme.displayAmount(13))
+                .foregroundStyle(InpensoTheme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Hero
@@ -345,7 +414,8 @@ struct HomeView: View {
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
             InpensoSectionHeader(title: "Top categories", actionTitle: "Insights") {
-                if pro.isPro {
+                if pro.canUseFullInsights || pro.canUseInsightsOverview {
+                    OnboardingStore.shared.ensureInsightsPreviewStarted()
                     showInsights = true
                 } else {
                     pro.openPaywall(plan: .yearly)

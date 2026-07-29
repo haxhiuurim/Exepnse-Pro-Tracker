@@ -29,24 +29,22 @@ struct MoreHubView: View {
                         }
 
                         hubGroup(title: "Understand") {
-                            if pro.isPro {
-                                hubRow("Insights", "Charts, trends, budgets", "chart.xyaxis.line", InpensoTheme.tide) {
-                                    AnalyticsView(analyticsViewModel: analyticsViewModel)
-                                }
-                            } else {
-                                hubActionRow(
-                                    "Insights",
-                                    "Pro · charts, trends, budgets",
-                                    "chart.xyaxis.line",
-                                    InpensoTheme.tide
-                                ) {
-                                    pro.openPaywall(plan: .yearly)
-                                }
+                            hubRow("Insights", insightsSubtitle, "chart.xyaxis.line", InpensoTheme.tide) {
+                                AnalyticsView(analyticsViewModel: analyticsViewModel)
+                                    .onAppear {
+                                        OnboardingStore.shared.ensureInsightsPreviewStarted()
+                                    }
                             }
                         }
 
                         hubGroup(title: "Plan") {
-                            hubRow("Recurring", "Bills, income & subscriptions", "arrow.triangle.2.circlepath", InpensoTheme.ink) {
+                            hubRow("Available Today", "Income, bills & safe spend", "sun.max", InpensoTheme.tide) {
+                                AvailableTodaySettingsView()
+                            }
+                            hubRow("Subscriptions", "Monthly burn & due soon", "creditcard", InpensoTheme.expenseTint) {
+                                SubscriptionManagerView()
+                            }
+                            hubRow("Recurring", "Bills, income & cadence", "arrow.triangle.2.circlepath", InpensoTheme.ink) {
                                 RecurringTransactionsView(expenseViewModel: expenseViewModel)
                             }
                             if pro.isPro {
@@ -63,11 +61,8 @@ struct MoreHubView: View {
                         }
 
                         hubGroup(title: "Automate") {
-                            hubRow("Merchant rules", "Auto-categorize", "bolt.horizontal", InpensoTheme.tide) {
+                            hubRow("Merchant rules", "Starter rules free · custom Pro", "bolt.horizontal", InpensoTheme.tide) {
                                 MerchantRulesView()
-                            }
-                            hubRow("Household", "Local shared categories", "person.2", InpensoTheme.ink) {
-                                HouseholdLedgerView()
                             }
                             hubRow(
                                 "Categories",
@@ -103,7 +98,7 @@ struct MoreHubView: View {
                     Text(AppBrand.proName)
                         .font(InpensoTheme.body(16, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("OCR · sync · unlimited tools · \(ProPlan.yearly.displayPrice)/yr")
+                    Text("OCR · Insights · sync · unlimited tools · \(ProPlan.yearly.displayPrice)/yr")
                         .font(InpensoTheme.label(12))
                         .foregroundStyle(.white.opacity(0.85))
                 }
@@ -128,6 +123,16 @@ struct MoreHubView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private var insightsSubtitle: String {
+        if pro.isPro {
+            return "Charts, trends, budgets"
+        }
+        if OnboardingStore.shared.insightsPreviewActive {
+            return "Preview · \(OnboardingStore.shared.insightsPreviewDaysRemaining)d left"
+        }
+        return "Overview free · deeper Insights with Pro"
     }
 
     private func hubGroup<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
