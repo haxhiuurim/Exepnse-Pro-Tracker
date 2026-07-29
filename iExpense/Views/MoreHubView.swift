@@ -55,6 +55,9 @@ struct MoreHubView: View {
                             hubRow("Goals", "Targets & envelopes", "target", InpensoTheme.incomeTint) {
                                 SavingsGoalsView()
                             }
+                            hubRow("Debt & EMI", "Payoff plans · no bank link", "creditcard.fill", InpensoTheme.expenseTint) {
+                                DebtTrackerView()
+                            }
                             hubRow("Accounts", "Balances & net worth", "building.columns", InpensoTheme.ink) {
                                 AccountsNetWorthView()
                             }

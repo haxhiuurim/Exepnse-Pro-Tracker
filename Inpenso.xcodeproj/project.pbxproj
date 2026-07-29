@@ -498,7 +498,7 @@
 				DEVELOPMENT_TEAM = 4JKYP9B3CA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iExpenseWidgetExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = iExpenseWidgetExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = Expense;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -527,7 +527,7 @@
 				DEVELOPMENT_TEAM = 4JKYP9B3CA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = iExpenseWidgetExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = iExpenseWidgetExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = Expense;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (

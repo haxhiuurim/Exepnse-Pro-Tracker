@@ -191,7 +191,12 @@ class AnalyticsViewModel: ObservableObject {
         }
 
         if averageDailySpend > 0 {
-            projectedMonthlySpend = averageDailySpend * Double(dailyData.count)
+            // Flux-style: pace from days elapsed so far this month.
+            let today = min(calendar.component(.day, from: Date()), dailyData.count)
+            let elapsed = max(1, today)
+            let spentSoFar = dailyData.prefix(elapsed).reduce(0.0) { $0 + $1.amount }
+            let pacePerDay = spentSoFar / Double(elapsed)
+            projectedMonthlySpend = pacePerDay * Double(dailyData.count)
         } else {
             projectedMonthlySpend = totalSpent
         }

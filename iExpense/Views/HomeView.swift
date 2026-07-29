@@ -66,6 +66,8 @@ struct HomeView: View {
                             proUpsell
                         }
                         availableTodayCard
+                        spendingForecastCard
+                        tripsTeaser
                         heroCard
                         if abs(premiumStore.netWorth) > 0.001 || !premiumStore.accounts.isEmpty {
                             accountsStrip
@@ -95,6 +97,7 @@ struct HomeView: View {
                 AnalyticsView(analyticsViewModel: analyticsViewModel)
             }
             .onAppear {
+                analyticsViewModel.updateExpenses(viewModel.expenses)
                 if pro.isPro {
                     SpentTodayLiveActivity.startOrUpdate(
                         amount: viewModel.spent(for: .today),
@@ -249,6 +252,78 @@ struct HomeView: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var spendingForecastCard: some View {
+        let projected = analyticsViewModel.projectedMonthlySpend
+        let budget = analyticsViewModel.currentBudget
+        guard projected > 0 else { return AnyView(EmptyView()) }
+
+        let over = budget > 0 && projected > budget
+        return AnyView(
+            Button {
+                if pro.canUseFullInsights || pro.canUseInsightsOverview {
+                    OnboardingStore.shared.ensureInsightsPreviewStarted()
+                    showInsights = true
+                } else {
+                    pro.openPaywall(plan: .yearly)
+                }
+            } label: {
+                HStack(alignment: .center, spacing: InpensoTheme.Space.md) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("On track this month")
+                            .font(InpensoTheme.label(12, weight: .semibold))
+                            .foregroundStyle(InpensoTheme.muted)
+                        Text(projected, format: .currency(code: currencyCode))
+                            .font(InpensoTheme.displayAmount(22))
+                            .foregroundStyle(over ? InpensoTheme.danger : InpensoTheme.ink)
+                        Text(over
+                             ? "Pacing over your budget"
+                             : budget > 0 ? "Projected month-end spend" : "Projected from spend so far")
+                            .font(InpensoTheme.label(12))
+                            .foregroundStyle(InpensoTheme.slate)
+                    }
+                    Spacer()
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.tide)
+                }
+                .padding(InpensoTheme.Space.md)
+                .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
+            }
+            .buttonStyle(.plain)
+        )
+    }
+
+    private var tripsTeaser: some View {
+        Button {
+            NotificationCenter.default.post(name: NSNotification.Name("SwitchToTripsTab"), object: nil)
+        } label: {
+            HStack(spacing: InpensoTheme.Space.sm) {
+                Image(systemName: "person.3.fill")
+                    .foregroundStyle(InpensoTheme.tide)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        InpensoTheme.tide.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Shared spend")
+                        .font(InpensoTheme.body(15, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text("Split trips & dinners with friends — Trips tab")
+                        .font(InpensoTheme.label(12))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(InpensoTheme.muted.opacity(0.6))
+            }
+            .padding(InpensoTheme.Space.md)
+            .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Hero

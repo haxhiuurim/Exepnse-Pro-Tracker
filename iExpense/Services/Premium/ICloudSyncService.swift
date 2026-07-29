@@ -21,6 +21,7 @@ final class ICloudSyncService {
         static let recurring = "icloud.recurring"
         static let accounts = "icloud.accounts"
         static let goals = "icloud.goals"
+        static let debts = "icloud.debts"
         static let rules = "icloud.rules"
         static let customCategories = "icloud.customCategories"
         static let categoryCatalogState = "icloud.categoryCatalogState"
@@ -63,6 +64,9 @@ final class ICloudSyncService {
         }
         if let goalsData = try? JSONEncoder().encode(premium.goals) {
             store.set(goalsData, forKey: Keys.goals)
+        }
+        if let debtsData = try? JSONEncoder().encode(premium.debts) {
+            store.set(debtsData, forKey: Keys.debts)
         }
         if let rulesData = try? JSONEncoder().encode(premium.merchantRules) {
             store.set(rulesData, forKey: Keys.rules)
@@ -113,6 +117,13 @@ final class ICloudSyncService {
            let goals = try? JSONDecoder().decode([SavingsGoal].self, from: data) {
             Task { @MainActor in
                 PremiumDataStore.shared.goals = goals
+            }
+        }
+
+        if let data = store.data(forKey: Keys.debts),
+           let debts = try? JSONDecoder().decode([DebtLoan].self, from: data) {
+            Task { @MainActor in
+                PremiumDataStore.shared.debts = debts
             }
         }
 

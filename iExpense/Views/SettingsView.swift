@@ -402,8 +402,30 @@ struct SettingsView: View {
                 Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
                     .foregroundStyle(InpensoTheme.muted)
             }
+            HStack {
+                Text("Stability")
+                    .foregroundStyle(InpensoTheme.ink)
+                Spacer()
+                if let date = CrashReportingService.lastCrashDate {
+                    Text("Last crash \(date.formatted(date: .abbreviated, time: .omitted))")
+                        .foregroundStyle(InpensoTheme.danger)
+                } else {
+                    Text("Crash-free")
+                        .foregroundStyle(InpensoTheme.incomeTint)
+                }
+            }
+            #if DEBUG
+            if CrashReportingService.lastCrashFingerprint != nil {
+                Button("Clear crash record") {
+                    CrashReportingService.clearCrashRecord()
+                }
+            }
+            #endif
         } header: {
             sectionHeader("About")
+        } footer: {
+            Text("Release gate: ship only when Stability shows Crash-free. Run scripts/stability_gate.sh before App Store builds.")
+                .font(InpensoTheme.label(11))
         }
     }
 

@@ -106,7 +106,7 @@ struct OnboardingView: View {
             Text("You’re set")
                 .font(InpensoTheme.brandFont(28, weight: .bold))
                 .foregroundStyle(InpensoTheme.ink)
-            Text("Home shows Available Today after bills and savings. Add spends in a few taps — or type “Coffee 4.50” in Quick Add.")
+            Text("Home shows Available Today. Use the Trips tab to split weekends and dinners with friends. Quick Add accepts “Coffee 4.50”.")
                 .font(InpensoTheme.body(15))
                 .foregroundStyle(InpensoTheme.muted)
 

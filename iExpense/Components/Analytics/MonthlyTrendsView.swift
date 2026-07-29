@@ -197,7 +197,12 @@ struct ProjectionView: View {
     var body: some View {
         SurfacePanel(padding: InpensoTheme.Space.md) {
             VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
-                InpensoSectionHeader(title: "Monthly Projection")
+                InpensoSectionHeader(title: "On track this month")
+
+                Text("Based on spend so far, you’re pacing toward \(projectedMonthlySpend.formatted(.currency(code: currencyCode))) by month end.")
+                    .font(InpensoTheme.body(13))
+                    .foregroundStyle(InpensoTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 0) {
                     metricColumn(title: "Projected", value: projectedMonthlySpend, color: InpensoTheme.ink)

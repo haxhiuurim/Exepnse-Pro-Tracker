@@ -16,7 +16,7 @@
 // Category budgets        | Free 2 / Pro unlimited + alerts ✅
 // Recurring transactions  | Free 3 / Pro unlimited + upcoming calendar ✅
 // Face ID lock            | Optional biometric lock when opening the app ✅
-// Inpenso Pro paywall     | Monthly $2.99 · Yearly $29.99→$14.99 · random 60% offer ✅
+// Expense Pro paywall     | Monthly $2.99 · Yearly $14.99 · Lifetime · limit-hit offers ✅
 // Live Activities         | Dynamic Island “spent today” (Pro) ✅
 // iCloud sync             | Multi-device KVS sync (Pro) ✅
 // Goals / envelopes       | Savings goals (Pro) ✅

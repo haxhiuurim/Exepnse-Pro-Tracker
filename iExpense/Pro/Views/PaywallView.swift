@@ -24,6 +24,7 @@ struct PaywallView: View {
         ("tag.fill", "Tags & categories", "Unlimited tags and custom categories"),
         ("square.and.arrow.up", "CSV / OFX / PDF", "Export for taxes and records"),
         ("target", "Savings goals", "Track targets and envelopes"),
+        ("creditcard.fill", "Debt & EMI", "Payoff plans without bank sync"),
         ("bolt.horizontal.fill", "Custom merchant rules", "Auto-categorize by payee name"),
         ("widget.small", "Live Activities", "Spent Today on Lock Screen")
     ]
@@ -112,7 +113,7 @@ struct PaywallView: View {
                 .foregroundStyle(InpensoTheme.ink)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("No ads. Personal expenses stay on device. Trips use an optional server when you opt in. Subscribe for sync, exports, and advanced tools.")
+            Text("No ads. Personal expenses stay on your device. Shared Trips (free) use an optional server when you invite friends. Subscribe for sync, exports, and advanced tools.")
                 .font(InpensoTheme.body(15))
                 .foregroundStyle(InpensoTheme.slate)
                 .fixedSize(horizontal: false, vertical: true)

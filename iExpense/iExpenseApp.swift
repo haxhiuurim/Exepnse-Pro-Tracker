@@ -11,6 +11,7 @@ import Foundation
 @main
 struct iExpenseApp: App {
     init() {
+        CrashReportingService.install()
         syncSettingsToSharedDefaults()
         configureGlobalAppearance()
     }

@@ -257,6 +257,26 @@ struct SharedTripSummary: Identifiable, Hashable {
     let totalSpent: Double
     let isOwner: Bool
 
+    init(
+        id: Int,
+        name: String,
+        inviteCode: String,
+        currency: String,
+        memberCount: Int,
+        expenseCount: Int,
+        totalSpent: Double,
+        isOwner: Bool
+    ) {
+        self.id = id
+        self.name = name
+        self.inviteCode = inviteCode
+        self.currency = currency
+        self.memberCount = memberCount
+        self.expenseCount = expenseCount
+        self.totalSpent = totalSpent
+        self.isOwner = isOwner
+    }
+
     init?(dict: [String: Any]) {
         guard let id = dict["id"] as? Int ?? (dict["id"] as? String).flatMap(Int.init) else { return nil }
         self.id = id
@@ -324,11 +344,35 @@ struct SharedTripDetail {
 
     init?(dict: [String: Any]) {
         let tripDict = (dict["trip"] as? [String: Any]) ?? dict
-        guard let trip = SharedTripSummary(dict: tripDict) else { return nil }
-        self.trip = trip
+        guard var trip = SharedTripSummary(dict: tripDict) else { return nil }
         self.members = (dict["members"] as? [[String: Any]] ?? []).compactMap(SharedTripMember.init(dict:))
         self.expenses = (dict["expenses"] as? [[String: Any]] ?? []).compactMap(SharedTripExpense.init(dict:))
         self.myMemberID = dict["my_member_id"] as? Int
             ?? members.first(where: { $0.name == SharedTripAPI.shared.displayName })?.id
+        // Prefer explicit ownership from API when present on the envelope.
+        if let isOwner = dict["is_owner"] as? Bool {
+            trip = SharedTripSummary(
+                id: trip.id,
+                name: trip.name,
+                inviteCode: trip.inviteCode,
+                currency: trip.currency,
+                memberCount: max(trip.memberCount, members.count),
+                expenseCount: max(trip.expenseCount, expenses.count),
+                totalSpent: trip.totalSpent > 0 ? trip.totalSpent : expenses.reduce(0) { $0 + $1.amount },
+                isOwner: isOwner
+            )
+        } else if trip.memberCount == 0 || trip.expenseCount == 0 {
+            trip = SharedTripSummary(
+                id: trip.id,
+                name: trip.name,
+                inviteCode: trip.inviteCode,
+                currency: trip.currency,
+                memberCount: max(trip.memberCount, members.count),
+                expenseCount: max(trip.expenseCount, expenses.count),
+                totalSpent: trip.totalSpent > 0 ? trip.totalSpent : expenses.reduce(0) { $0 + $1.amount },
+                isOwner: trip.isOwner
+            )
+        }
+        self.trip = trip
     }
 }

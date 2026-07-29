@@ -83,7 +83,7 @@ class SettingsViewModel: ObservableObject {
         }
     }
     
-    @Published var exportFileName: String = "iExpense_export_\(Date().formatted(.dateTime.year().month().day()))"
+    @Published var exportFileName: String = "\(AppBrand.name)_export_\(Date().formatted(.dateTime.year().month().day()))"
     
     init() {
         // Get the shared UserDefaults for settings

@@ -4,15 +4,15 @@
 
 ## Introduction
 
-Inpenso ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our mobile application ("App").
+Expense ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our mobile application ("App").
 
-By using Inpenso, you agree to the collection and use of information in accordance with this policy.
+By using Expense, you agree to the collection and use of information in accordance with this policy.
 
 ## Information We Collect
 
 ### Personal Financial Data
 
-Inpenso collects the following types of data that you voluntarily provide:
+Expense collects the following types of data that you voluntarily provide:
 
 - **Expense Information**: Title, amount, date, category, and optional notes for each expense you record
 - **Budget Information**: Monthly budget amounts you set for tracking purposes
@@ -97,11 +97,11 @@ You have complete control over your data:
 
 ## Third-Party Services
 
-Inpenso does not integrate with any third-party services, analytics platforms, advertising networks, or cloud storage providers. The app operates entirely offline and uses only Apple's native frameworks and APIs.
+Expense does not integrate with any third-party services, analytics platforms, advertising networks, or cloud storage providers. The app operates entirely offline and uses only Apple's native frameworks and APIs.
 
 ## Children's Privacy
 
-Inpenso is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.
+Expense is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately.
 
 ## Data Retention
 
@@ -114,7 +114,7 @@ We do not maintain copies of your data on external servers, so deletion from you
 
 ## International Data Transfers
 
-Since all data is stored locally on your device and never transmitted externally, there are no international data transfers involved in using Inpenso.
+Since all data is stored locally on your device and never transmitted externally, there are no international data transfers involved in using Expense.
 
 ## Changes to This Privacy Policy
 
@@ -127,7 +127,7 @@ You are advised to review this Privacy Policy periodically for any changes. Chan
 
 ## Your Consent
 
-By using Inpenso, you consent to this Privacy Policy. If you do not agree with this policy, please do not use the app.
+By using Expense, you consent to this Privacy Policy. If you do not agree with this policy, please do not use the app.
 
 ## Compliance
 
@@ -142,7 +142,7 @@ This Privacy Policy is designed to comply with:
 If you have any questions about this Privacy Policy or our data practices, please contact us:
 
 - **Email**: dmindrescu03@gmail.com
-- **GitHub**: [https://github.com/VintusS/Inpenso](https://github.com/VintusS/Inpenso)
+- **GitHub**: [https://github.com/VintusS/Expense](https://github.com/VintusS/Expense)
 
 ## Summary
 
@@ -155,12 +155,12 @@ If you have any questions about this Privacy Policy or our data practices, pleas
 - Secure encryption using iOS mechanisms
 - Data accessible only to you and the app
 
-Your privacy is our priority. Inpenso is designed with privacy-first principles, ensuring your financial data remains private and secure on your device.
+Your privacy is our priority. Expense is designed with privacy-first principles, ensuring your financial data remains private and secure on your device.
 
 ---
 
 **Developer:** Dragomir Mindrescu  
-**App Name:** Inpenso  
+**App Name:** Expense  
 **Version:** 5  
 **Platform:** iOS 18.0+
 

@@ -58,7 +58,7 @@ enum ExportService {
         <STMTRS>
         <CURDEF>\(currencyCode)
         <BANKACCTFROM>
-        <BANKID>INPENSO
+        <BANKID>EXPENSE
         <ACCTID>LEDGER
         <ACCTTYPE>CHECKING
         </BANKACCTFROM>

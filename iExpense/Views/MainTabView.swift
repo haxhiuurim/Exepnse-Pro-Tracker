@@ -31,8 +31,6 @@ struct MainTabView: View {
     @State private var quickAddRequest: QuickAddRequest?
     @Environment(\.scenePhase) private var scenePhase
 
-    private var showsFloatingAdd: Bool { true }
-
     var body: some View {
         Group {
             if onboarding.hasCompletedOnboarding {
@@ -86,13 +84,6 @@ struct MainTabView: View {
             .tint(InpensoTheme.ink)
             .id(settingsViewModel.selectedCurrency)
             .preferredColorScheme(settingsViewModel.selectedTheme.colorScheme)
-            .overlay(alignment: .bottom) {
-                if showsFloatingAdd && biometricLock.isUnlocked {
-                    floatingAddButton
-                        .padding(.bottom, 8)
-                        .transition(.scale.combined(with: .opacity))
-                }
-            }
             .sheet(item: $quickAddRequest) { request in
                 QuickAddSheet(viewModel: viewModel, initialType: request.type)
                     .id(request.id)
@@ -237,32 +228,6 @@ struct MainTabView: View {
                 openQuickAdd(type)
             }
         }
-    }
-
-    private var floatingAddButton: some View {
-        Menu {
-            Button {
-                openQuickAdd(.expense)
-            } label: {
-                Label("Add expense", systemImage: "minus.circle")
-            }
-            Button {
-                openQuickAdd(.income)
-            } label: {
-                Label("Add income", systemImage: "plus.circle")
-            }
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .fill(InpensoTheme.tide)
-                )
-        }
-        .accessibilityLabel("Add transaction")
-        .padding(.bottom, 52)
     }
 
     private func configureTabBarAppearance() {

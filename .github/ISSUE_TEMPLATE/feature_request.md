@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Inpenso
+about: Suggest an idea for Expense
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''
@@ -15,7 +15,7 @@ A clear and concise description of what you want to happen.
 **Describe alternatives you've considered**
 A clear and concise description of any alternative solutions or features you've considered.
 
-**How would this feature benefit most Inpenso users?**
+**How would this feature benefit most Expense users?**
 Explain why this would be valuable to implement for the broader user base.
 
 **Additional context**
