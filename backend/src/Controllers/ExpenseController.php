@@ -46,7 +46,7 @@ final class ExpenseController
             Response::error('title is required', 422);
         }
 
-        if (mb_strlen($title) > 200) {
+        if (Response::charLength($title) > 200) {
             Response::error('title must be 200 characters or fewer', 422);
         }
 

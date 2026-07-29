@@ -41,6 +41,11 @@ final class Router
         $path = parse_url($uri, PHP_URL_PATH) ?: '/';
         $path = rtrim($path, '/') ?: '/';
 
+        // Normalize hosts that expose the public/ directory in the URL.
+        if (str_starts_with($path, '/public/')) {
+            $path = substr($path, strlen('/public')) ?: '/';
+        }
+
         foreach ($this->routes as $route) {
             if ($route['method'] !== $method) {
                 continue;

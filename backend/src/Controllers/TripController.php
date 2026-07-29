@@ -30,7 +30,7 @@ final class TripController
             Response::error('name is required', 422);
         }
 
-        if (mb_strlen($name) > 200) {
+        if (Response::charLength($name) > 200) {
             Response::error('name must be 200 characters or fewer', 422);
         }
 

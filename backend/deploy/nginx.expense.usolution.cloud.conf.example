@@ -89,6 +89,22 @@ server {
     rewrite ^ /public/landing.php last;
   }
 
+  # Send all API routes through the front controller (do not require /public in the URL).
+  location ^~ /api/ {
+    include fastcgi_params;
+    fastcgi_intercept_errors on;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_FILENAME $document_root/public/index.php;
+    fastcgi_param SCRIPT_NAME /public/index.php;
+    fastcgi_param REQUEST_URI $request_uri;
+    fastcgi_read_timeout 3600;
+    fastcgi_send_timeout 3600;
+    fastcgi_param HTTPS "on";
+    fastcgi_param SERVER_PORT 443;
+    fastcgi_pass 127.0.0.1:{{php_fpm_port}};
+    fastcgi_param PHP_VALUE "{{php_settings}}";
+  }
+
   location / {
     try_files $uri $uri/ /public/index.php?$query_string;
   }

@@ -9,6 +9,15 @@ final class Response
     /** Max JSON request body size (64 KiB). */
     public const MAX_BODY_BYTES = 65536;
 
+    public static function charLength(string $value): int
+    {
+        if (function_exists('mb_strlen')) {
+            return (int) mb_strlen($value);
+        }
+
+        return strlen($value);
+    }
+
     public static function json(mixed $data, int $status = 200): void
     {
         http_response_code($status);

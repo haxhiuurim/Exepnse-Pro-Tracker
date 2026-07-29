@@ -26,7 +26,7 @@ final class AuthController
             Response::error('display_name is required', 422);
         }
 
-        if (mb_strlen($displayName) > 100) {
+        if (Response::charLength($displayName) > 100) {
             Response::error('display_name must be 100 characters or fewer', 422);
         }
 
