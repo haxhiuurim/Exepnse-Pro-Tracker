@@ -83,20 +83,12 @@ struct ExpensesListView: View {
         return result
     }
 
-    private var groupedExpenses: [String: [Expense]] {
-        Dictionary(grouping: filteredExpenses) { $0.categoryID }
-    }
-
     private var filterCategories: [FinanceCategory] {
         categoryStore.categoriesForFilter(usedCategoryIDs: Set(viewModel.expenses.map(\.categoryID)))
     }
 
     private var filterCategoryIDs: [String] {
         filterCategories.map(\.id)
-    }
-
-    private var visibleCategoryIDs: [String] {
-        categoryStore.orderedCategoryIDs(for: Set(groupedExpenses.keys))
     }
 
     var body: some View {
@@ -365,89 +357,40 @@ struct ExpensesListView: View {
         if filteredExpenses.isEmpty {
             emptyState
         } else {
-            VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
-                ForEach(visibleCategoryIDs, id: \.self) { categoryID in
-                    let category = categoryStore.category(for: categoryID)
-                    let items = groupedExpenses[categoryID] ?? []
-                    categorySection(category: category, items: items)
-                }
-            }
+            transactionsList(filteredExpenses)
         }
     }
 
-    private func categorySection(category: FinanceCategory, items: [Expense]) -> some View {
-        let spent = items.filter { $0.type == .expense }.reduce(0) { $0 + $1.price }
-        let income = items.filter { $0.type == .income }.reduce(0) { $0 + $1.price }
-        let isOthers = category.id == Category.others.categoryID
-
-        return VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-            HStack(spacing: InpensoTheme.Space.sm) {
-                Image(systemName: category.iconName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(category.color)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        category.color.opacity(0.12),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+    private func transactionsList(_ items: [Expense]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, expense in
+                Button {
+                    selectedExpenseToEdit = expense
+                } label: {
+                    TransactionRowView(
+                        expense: expense,
+                        currencyCode: currencyCode,
+                        category: categoryStore.category(for: expense)
                     )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(category.displayName)
-                        .font(InpensoTheme.label(13, weight: .bold))
-                        .foregroundStyle(InpensoTheme.ink)
-                    Text("\(items.count) transaction\(items.count == 1 ? "" : "s")")
-                        .font(InpensoTheme.label(11))
-                        .foregroundStyle(InpensoTheme.muted)
+                    .padding(.horizontal, InpensoTheme.Space.md)
+                    .padding(.vertical, InpensoTheme.Space.sm)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button { selectedExpenseToEdit = expense } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) { deleteExpenseByID(expense) } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
 
-                Spacer()
-
-                if !isOthers {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        if spent > 0 {
-                            Text(spent, format: .currency(code: currencyCode))
-                                .font(InpensoTheme.displayAmount(13))
-                                .foregroundStyle(InpensoTheme.expenseTint)
-                        }
-                        if income > 0 {
-                            Text(income, format: .currency(code: currencyCode))
-                                .font(InpensoTheme.displayAmount(12))
-                                .foregroundStyle(InpensoTheme.incomeTint)
-                        }
-                    }
+                if index < items.count - 1 {
+                    Divider().overlay(InpensoTheme.hairline).padding(.leading, 68)
                 }
             }
-
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, expense in
-                    Button {
-                        selectedExpenseToEdit = expense
-                    } label: {
-                        TransactionRowView(
-                            expense: expense,
-                            currencyCode: currencyCode,
-                            category: categoryStore.category(for: expense)
-                        )
-                        .padding(.horizontal, InpensoTheme.Space.md)
-                        .padding(.vertical, InpensoTheme.Space.sm)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button { selectedExpenseToEdit = expense } label: {
-                            Label("Edit", systemImage: "pencil")
-                        }
-                        Button(role: .destructive) { deleteExpenseByID(expense) } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-
-                    if index < items.count - 1 {
-                        Divider().overlay(InpensoTheme.hairline).padding(.leading, 68)
-                    }
-                }
-            }
-            .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
         }
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
     }
 
     private var emptyState: some View {
