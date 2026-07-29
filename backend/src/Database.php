@@ -38,8 +38,11 @@ final class Database
             } else {
                 $path = $config['sqlite_path'];
                 $dir = dirname($path);
-                if (!is_dir($dir)) {
-                    mkdir($dir, 0755, true);
+                if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+                    throw new RuntimeException('Cannot create database directory: ' . $dir);
+                }
+                if (!is_writable($dir)) {
+                    throw new RuntimeException('Database directory is not writable: ' . $dir);
                 }
 
                 self::$connection = new PDO('sqlite:' . $path, null, null, [
@@ -52,7 +55,47 @@ final class Database
             throw new RuntimeException('Database connection failed: ' . $e->getMessage(), 0, $e);
         }
 
+        try {
+            self::ensureSchema(self::$connection, $driver);
+        } catch (PDOException $e) {
+            throw new RuntimeException('Database schema setup failed: ' . $e->getMessage(), 0, $e);
+        }
+
         return self::$connection;
+    }
+
+    /**
+     * Create tables if missing so /api/trips works after deploy without a manual migrate.
+     */
+    public static function ensureSchema(PDO $db, string $driver): void
+    {
+        if (self::tableExists($db, $driver, 'users')) {
+            return;
+        }
+
+        Schema::apply($db, $driver);
+    }
+
+    private static function tableExists(PDO $db, string $driver, string $table): bool
+    {
+        try {
+            if ($driver === 'mysql') {
+                $stmt = $db->prepare(
+                    'SELECT 1 FROM information_schema.tables
+                     WHERE table_schema = DATABASE() AND table_name = :table LIMIT 1'
+                );
+                $stmt->execute(['table' => $table]);
+                return (bool) $stmt->fetchColumn();
+            }
+
+            $stmt = $db->prepare(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :table LIMIT 1"
+            );
+            $stmt->execute(['table' => $table]);
+            return (bool) $stmt->fetchColumn();
+        } catch (PDOException) {
+            return false;
+        }
     }
 
     public static function reset(): void

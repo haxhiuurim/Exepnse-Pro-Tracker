@@ -191,18 +191,20 @@ final class SharedTripAPI {
         body: [String: Any]?,
         authed: Bool
     ) async throws -> Any {
-        guard isConfigured, var base = URL(string: baseURLString) else {
+        guard isConfigured else {
             throw SharedTripAPIError.notConfigured
         }
-        // Trim trailing slash
-        if base.absoluteString.hasSuffix("/") {
-            base = base.deletingLastPathComponent()
-            // deletingLastPathComponent on http://host:8080/ removes port path oddly — rebuild
-            if let rebuilt = URL(string: baseURLString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))) {
-                base = rebuilt
-            }
+
+        let normalizedBase = baseURLString
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let base = URL(string: normalizedBase) else {
+            throw SharedTripAPIError.notConfigured
         }
-        guard let url = URL(string: path, relativeTo: base)?.absoluteURL else {
+
+        // Always join as host + absolute API path (e.g. /api/trips), never /public/api/...
+        let apiPath = path.hasPrefix("/") ? path : "/" + path
+        guard let url = URL(string: apiPath, relativeTo: base)?.absoluteURL else {
             throw SharedTripAPIError.notConfigured
         }
 

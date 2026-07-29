@@ -53,21 +53,8 @@ if (!is_readable($schemaFile)) {
     exit(1);
 }
 
-$sql = file_get_contents($schemaFile);
-if ($sql === false) {
-    fwrite(STDERR, "Could not read schema file.\n");
-    exit(1);
-}
-
-$statements = array_filter(array_map('trim', explode(';', $sql)));
-
 try {
-    foreach ($statements as $statement) {
-        if ($statement === '' || str_starts_with($statement, '--')) {
-            continue;
-        }
-        $db->exec($statement);
-    }
+    \Inpenso\Schema::apply($db, $driver);
 } catch (Throwable $e) {
     fwrite(STDERR, 'Migration failed: ' . $e->getMessage() . PHP_EOL);
     exit(1);

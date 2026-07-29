@@ -43,6 +43,8 @@ Copy `.env.example` to `.env` and adjust as needed.
 4. Run `php scripts/migrate.php` once (SSH or host panel cron).
 5. Copy `.env.example` to `.env` if you need MySQL or custom settings.
 
+Migrations also auto-run on the first API request if the `users` table is missing (so `/api/trips` works after upload even if you forgot `migrate.php`). Running `php scripts/migrate.php` once is still recommended.
+
 If you cannot change the document root, use the included root `.htaccess` to forward requests into `public/`.
 
 ### Apache virtual host example

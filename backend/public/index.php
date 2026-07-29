@@ -32,6 +32,13 @@ $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $path = parse_url($uri, PHP_URL_PATH) ?: '/';
 $path = rtrim($path, '/') ?: '/';
 
+// Hosts that keep document root above public/ may expose /public/api/... — normalize.
+if (str_starts_with($path, '/public/')) {
+    $path = substr($path, strlen('/public')) ?: '/';
+    $query = parse_url($uri, PHP_URL_QUERY);
+    $uri = $path . ($query ? ('?' . $query) : '');
+}
+
 if ($method === 'GET' && $path === '/') {
     require __DIR__ . '/landing.php';
     exit;
@@ -100,8 +107,18 @@ $router->delete('/api/trips/{id}/expenses/{expenseId}', static function (string 
 try {
     $router->dispatch($method, $uri);
 } catch (Throwable $e) {
-    if ($config['debug']) {
-        Response::error($e->getMessage(), 500);
+    $message = $e->getMessage();
+    $looksLikeSchema = stripos($message, 'no such table') !== false
+        || stripos($message, "doesn't exist") !== false
+        || stripos($message, 'undefined table') !== false;
+
+    if ($config['debug'] || $looksLikeSchema) {
+        Response::error(
+            $looksLikeSchema
+                ? 'Database is not migrated. Run: php scripts/migrate.php'
+                : $message,
+            500
+        );
     }
 
     Response::error('Internal server error', 500);
