@@ -76,6 +76,11 @@ final class RemoteConfigService: ObservableObject {
         if let stored = defaults.string(forKey: Keys.bannedMessage), !stored.isEmpty {
             bannedMessage = stored
         }
+        // Ban locks without a live session can't be re-verified — drop the stale lock
+        // so an unbanned user isn't stuck after a force-quit.
+        if isAccountBanned && !SharedTripAPI.shared.isLoggedIn {
+            clearAccountBan()
+        }
     }
 
     var needsForceUpdate: Bool {
@@ -99,7 +104,7 @@ final class RemoteConfigService: ObservableObject {
         serverPremium = false
         serverPremiumUntil = nil
         ProEntitlementManager.shared.applyServerPremium(false)
-        SharedTripAPI.shared.revokeSessionLocally()
+        // Keep the session token so heartbeat can unlock automatically after an admin unban.
     }
 
     func clearAccountBan() {
@@ -121,6 +126,10 @@ final class RemoteConfigService: ObservableObject {
                 meUntil = me.premiumUntil
                 serverPremium = me.premium
                 serverPremiumUntil = me.premiumUntil
+                // /me only succeeds for non-banned accounts.
+                if isAccountBanned {
+                    clearAccountBan()
+                }
             } catch let SharedTripAPIError.accountBanned(message) {
                 applyAccountBan(message: message)
                 return
@@ -143,7 +152,11 @@ final class RemoteConfigService: ObservableObject {
                 return
             }
 
-            // Successful authed heartbeat means the account is not banned.
+            // Server says not banned — clear a previous lock (e.g. after admin unban).
+            if isAccountBanned {
+                clearAccountBan()
+            }
+
             if SharedTripAPI.shared.isLoggedIn || AuthSession.shared.isLoggedIn {
                 // Prefer explicit /me result; otherwise trust heartbeat when it reports premium.
                 let granted = mePremium ?? payload.premium

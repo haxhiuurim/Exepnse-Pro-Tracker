@@ -10,6 +10,8 @@ import SwiftUI
 struct AccountBannedView: View {
     @ObservedObject var remote: RemoteConfigService
     @ObservedObject private var auth = AuthSession.shared
+    @State private var isChecking = false
+    @State private var checkMessage: String?
 
     var body: some View {
         ZStack {
@@ -44,6 +46,27 @@ struct AccountBannedView: View {
                         .padding(.top, 4)
                 }
 
+                if let checkMessage {
+                    Text(checkMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(InpensoTheme.danger)
+                }
+
+                Button {
+                    Task { await checkAgain() }
+                } label: {
+                    Group {
+                        if isChecking {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text("Try again")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(InpensoPrimaryButtonStyle())
+                .disabled(isChecking)
+
                 Button {
                     if let url = URL(string: "mailto:\(remote.config.supportEmail)") {
                         UIApplication.shared.open(url)
@@ -52,7 +75,7 @@ struct AccountBannedView: View {
                     Text("Contact support")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(InpensoPrimaryButtonStyle())
+                .buttonStyle(InpensoSecondaryButtonStyle())
 
                 Button {
                     Task {
@@ -70,5 +93,26 @@ struct AccountBannedView: View {
             .padding(20)
         }
         .interactiveDismissDisabled()
+        .task {
+            // Re-check on appear (covers admin unban + app reopen).
+            await checkAgain()
+        }
+    }
+
+    private func checkAgain() async {
+        isChecking = true
+        checkMessage = nil
+        defer { isChecking = false }
+
+        if !SharedTripAPI.shared.isLoggedIn {
+            // No session left to re-verify — unlock so they can sign in again.
+            remote.clearAccountBan()
+            return
+        }
+
+        await remote.refresh()
+        if remote.isAccountBanned {
+            checkMessage = "This account is still suspended."
+        }
     }
 }
