@@ -9,6 +9,7 @@ import SwiftUI
 
 struct TripQuickAddSheet: View {
     let tripID: Int
+    let tripName: String
     let currency: String
     let members: [SharedTripMember]
     let defaultPayerID: Int?
@@ -16,16 +17,30 @@ struct TripQuickAddSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var categoryStore: CategoryStore
+    @EnvironmentObject private var expenseViewModel: ExpenseViewModel
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @ObservedObject private var accountsStore = PremiumDataStore.shared
+
     @State private var amount = ""
     @State private var title = ""
     @State private var paidByMemberID: Int?
     @State private var splitMemberIDs: Set<Int> = []
     @State private var selectedCategoryID: String = FinanceCategory.fallback.id
+    @State private var deductFromAccount = true
+    @State private var selectedAccountID: UUID?
     @State private var isSaving = false
     @State private var errorMessage: String?
     @FocusState private var focused: Field?
 
     private enum Field { case amount, title }
+
+    private var liquidAccounts: [FinanceAccount] {
+        accountsStore.accounts.filter(\.isLiquid)
+    }
+
+    private var selectedAccount: FinanceAccount? {
+        liquidAccounts.first { $0.id == selectedAccountID } ?? accountsStore.primaryLiquidAccount
+    }
 
     private var isValid: Bool {
         guard let value = Double(amount.replacingOccurrences(of: ",", with: ".")), value > 0 else { return false }
@@ -92,6 +107,10 @@ struct TripQuickAddSheet: View {
                             .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
                         }
 
+                        if !liquidAccounts.isEmpty {
+                            walletDeductRow
+                        }
+
                         splitWithSection
 
                         if let errorMessage {
@@ -125,11 +144,73 @@ struct TripQuickAddSheet: View {
                 paidByMemberID = defaultPayerID ?? members.first?.id
                 splitMemberIDs = Set(members.map(\.id))
                 selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
+                selectedAccountID = accountsStore.primaryLiquidAccount?.id ?? liquidAccounts.first?.id
+                deductFromAccount = true
                 focused = .amount
+            }
+            .onChange(of: paidByMemberID) { _, newValue in
+                // Default on when you paid; off when recording someone else's payment.
+                deductFromAccount = (newValue ?? defaultPayerID) == defaultPayerID
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    /// Compact single-line “also deduct from Wallet / checking”.
+    private var walletDeductRow: some View {
+        HStack(spacing: 8) {
+            Button {
+                HapticFeedback.selection()
+                deductFromAccount.toggle()
+            } label: {
+                Image(systemName: deductFromAccount ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(deductFromAccount ? InpensoTheme.tide : InpensoTheme.muted)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(deductFromAccount ? "Deduct from account on" : "Deduct from account off")
+
+            Text("From")
+                .font(InpensoTheme.label(12))
+                .foregroundStyle(InpensoTheme.muted)
+
+            Menu {
+                ForEach(liquidAccounts) { account in
+                    Button {
+                        selectedAccountID = account.id
+                        deductFromAccount = true
+                        HapticFeedback.selection()
+                    } label: {
+                        Label {
+                            Text("\(account.name) · \(account.balance.formatted(.currency(code: settingsViewModel.selectedCurrency)))")
+                        } icon: {
+                            Image(systemName: account.kind.iconName)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: selectedAccount?.kind.iconName ?? "wallet.pass")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(selectedAccount?.name ?? "Wallet")
+                        .font(InpensoTheme.label(12, weight: .semibold))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                }
+                .foregroundStyle(deductFromAccount ? InpensoTheme.ink : InpensoTheme.muted)
+            }
+            .disabled(!deductFromAccount)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .opacity(deductFromAccount ? 1 : 0.65)
+        .inpensoPanelBackground(radius: InpensoTheme.Radius.sm)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Optionally deduct this trip expense from a personal account")
     }
 
     private var categoryWrap: some View {
@@ -231,11 +312,16 @@ struct TripQuickAddSheet: View {
         isSaving = true
         errorMessage = nil
         let category = categoryStore.category(for: selectedCategoryID)
+        let resolvedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Expense"
+            : title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldDeduct = deductFromAccount
+        let accountID = selectedAccount?.id
         Task {
             do {
                 try await SharedTripAPI.shared.addExpense(
                     tripID: tripID,
-                    title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Expense" : title,
+                    title: resolvedTitle,
                     amount: value,
                     paidByMemberID: payer,
                     splitMemberIDs: Array(splitMemberIDs),
@@ -243,6 +329,16 @@ struct TripQuickAddSheet: View {
                     categoryName: category.displayName
                 )
                 try? await SharedTripAPI.shared.heartbeat(markDataChange: true)
+
+                if shouldDeduct, let accountID {
+                    applyLocalWalletDeduction(
+                        title: resolvedTitle,
+                        amount: value,
+                        category: category,
+                        accountID: accountID
+                    )
+                }
+
                 HapticFeedback.success()
                 onSaved()
                 dismiss()
@@ -252,5 +348,36 @@ struct TripQuickAddSheet: View {
             }
             isSaving = false
         }
+    }
+
+    @MainActor
+    private func applyLocalWalletDeduction(
+        title: String,
+        amount: Double,
+        category: FinanceCategory,
+        accountID: UUID
+    ) {
+        let legacy = Category.category(from: category.id) ?? .others
+        let home = settingsViewModel.selectedCurrency
+        let rate: Double? = currency.uppercased() == home.uppercased()
+            ? nil
+            : ExchangeRateService.rate(from: currency, to: home)
+        let note = tripName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Trip expense"
+            : "Trip · \(tripName)"
+
+        _ = expenseViewModel.addExpense(
+            title: title,
+            price: amount,
+            date: Date(),
+            category: legacy,
+            type: .expense,
+            categoryID: category.id,
+            notes: note,
+            accountID: accountID,
+            applyToAccount: true,
+            currencyCode: currency,
+            exchangeRateToHome: rate
+        )
     }
 }

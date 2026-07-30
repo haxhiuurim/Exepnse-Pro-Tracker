@@ -597,6 +597,7 @@ struct SharedTripDetailView: View {
             if let detail {
                 TripQuickAddSheet(
                     tripID: tripID,
+                    tripName: detail.trip.name,
                     currency: detail.trip.currency,
                     members: detail.members,
                     defaultPayerID: detail.myMemberID,
