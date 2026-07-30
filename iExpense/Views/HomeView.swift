@@ -207,14 +207,25 @@ struct HomeView: View {
             }
             .accessibilityLabel("Scan receipt")
 
-            Menu {
-                Button { onAddTransaction(.expense) } label: {
-                    Label("Add expense", systemImage: "arrow.down.circle")
-                }
-                Button { onAddTransaction(.income) } label: {
-                    Label("Add income", systemImage: "arrow.up.circle")
-                }
-            } label: {
+            Button { onAddTransaction(.expense) } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(
+                        Circle().fill(
+                            LinearGradient(
+                                colors: [InpensoTheme.expenseTint, Color(inpensoHex: "#C9443A")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    )
+                    .shadow(color: InpensoTheme.expenseTint.opacity(0.35), radius: 10, y: 4)
+            }
+            .accessibilityLabel("Add expense")
+
+            Button { onAddTransaction(.income) } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
@@ -222,15 +233,15 @@ struct HomeView: View {
                     .background(
                         Circle().fill(
                             LinearGradient(
-                                colors: [InpensoTheme.tide, Color(inpensoHex: "#0B7A58")],
+                                colors: [InpensoTheme.incomeTint, Color(inpensoHex: "#0B7A58")],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                     )
-                    .shadow(color: InpensoTheme.tide.opacity(0.35), radius: 10, y: 4)
+                    .shadow(color: InpensoTheme.incomeTint.opacity(0.35), radius: 10, y: 4)
             }
-            .accessibilityLabel("Add")
+            .accessibilityLabel("Add income")
         }
     }
 
