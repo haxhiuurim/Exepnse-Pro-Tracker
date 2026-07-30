@@ -12,6 +12,7 @@ import SwiftUI
 struct iExpenseWidgetExtensionBundle: WidgetBundle {
     var body: some Widget {
         iExpenseWidgetExtension()
+        TripSummaryWidget()
         SpentTodayLiveActivityWidget()
     }
 }

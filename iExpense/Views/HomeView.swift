@@ -30,6 +30,8 @@ struct HomeView: View {
     @ObservedObject private var premiumStore = PremiumDataStore.shared
     @ObservedObject private var onboarding = OnboardingStore.shared
     @ObservedObject private var recurring = RecurringTransactionService.shared
+    @ObservedObject private var tripShortcuts = TripShortcutsStore.shared
+    @State private var openTripID: Int?
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
     private var interval: DateInterval { dateSelection.interval() }
@@ -51,7 +53,8 @@ struct HomeView: View {
             expenses: viewModel.expenses,
             recurring: recurring.items,
             monthlyIncomeOverride: onboarding.monthlyIncome,
-            monthlySavingsTarget: onboarding.monthlySavingsTarget
+            monthlySavingsTarget: onboarding.monthlySavingsTarget,
+            liquidCash: premiumStore.availableCash
         )
     }
 
@@ -121,6 +124,11 @@ struct HomeView: View {
                         shortcutsRow
                             .reveal(appeared, delay: 0.12)
 
+                        if !tripShortcuts.shortcuts.isEmpty {
+                            tripShortcutsRow
+                                .reveal(appeared, delay: 0.14)
+                        }
+
                         feed
                             .reveal(appeared, delay: 0.16)
                     }
@@ -148,6 +156,14 @@ struct HomeView: View {
             }
             .navigationDestination(isPresented: $showSubscriptions) {
                 SubscriptionManagerView()
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { openTripID != nil },
+                set: { if !$0 { openTripID = nil } }
+            )) {
+                if let id = openTripID {
+                    SharedTripDetailView(tripID: id)
+                }
             }
             .onAppear {
                 syncAnalytics()
@@ -470,6 +486,45 @@ struct HomeView: View {
             }
             shortcutChip(title: "Cash", systemImage: "building.columns.fill", tint: InpensoTheme.ink) {
                 showAccounts = true
+            }
+        }
+    }
+
+    private var tripShortcutsRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Pinned trips")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(InpensoTheme.ink)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(tripShortcuts.shortcuts) { trip in
+                        Button {
+                            openTripID = trip.id
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Image(systemName: "person.3.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(InpensoTheme.tide)
+                                Text(trip.name)
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(InpensoTheme.ink)
+                                    .lineLimit(1)
+                                Text(trip.inviteCode)
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .foregroundStyle(InpensoTheme.muted)
+                            }
+                            .padding(12)
+                            .frame(width: 140, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(InpensoTheme.panelFill)
+                                    .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
         }
     }

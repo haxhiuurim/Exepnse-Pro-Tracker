@@ -27,17 +27,34 @@ struct MainTabView: View {
     @ObservedObject private var biometricLock = BiometricLockService.shared
     @ObservedObject private var pro = ProEntitlementManager.shared
     @ObservedObject private var onboarding = OnboardingStore.shared
+    @ObservedObject private var remote = RemoteConfigService.shared
     @State private var selectedTab = AppTab.home.rawValue
     @State private var quickAddRequest: QuickAddRequest?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
-            if onboarding.hasCompletedOnboarding {
+            if remote.blocksApp {
+                RemoteGateView(remote: remote)
+            } else if onboarding.hasCompletedOnboarding {
                 mainShell
             } else {
                 OnboardingView(store: onboarding, settings: settingsViewModel)
             }
+        }
+        .task {
+            await remote.refresh()
+        }
+        .alert(
+            remote.config.announcement.title.isEmpty ? "Update" : remote.config.announcement.title,
+            isPresented: $remote.showAnnouncement
+        ) {
+            Button("OK", role: .cancel) {}
+            if let url = URL(string: remote.config.appStoreURL) {
+                Button("App Store") { UIApplication.shared.open(url) }
+            }
+        } message: {
+            Text(remote.config.announcement.message)
         }
     }
 
@@ -113,10 +130,9 @@ struct MainTabView: View {
             if biometricLock.isEnabled {
                 biometricLock.lockIfNeeded()
             }
-            if PremiumDataStore.shared.iCloudSyncEnabled {
-                ICloudSyncService.shared.pullIfAvailable()
-            }
             Task {
+                await CloudSyncService.shared.pullIfAvailable()
+                await remote.refresh()
                 await pro.refresh()
                 await evaluateBudgetAlerts()
             }
@@ -148,7 +164,7 @@ struct MainTabView: View {
             }
 
             NotificationCenter.default.addObserver(
-                forName: .inpensoICloudDidPull,
+                forName: .expenseCloudDidPull,
                 object: nil,
                 queue: .main
             ) { _ in
@@ -165,10 +181,9 @@ struct MainTabView: View {
                     currencyCode: settingsViewModel.selectedCurrency,
                     isPro: true
                 )
-                if PremiumDataStore.shared.iCloudSyncEnabled {
-                    ICloudSyncService.shared.pushAll()
-                }
             }
+            CloudSyncService.shared.schedulePush()
+            Task { await remote.refresh(markDataChange: true) }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -176,11 +191,12 @@ struct MainTabView: View {
                 viewModel.loadExpenses()
                 processRecurring()
                 consumePendingQuickAdd()
-                if PremiumDataStore.shared.iCloudSyncEnabled {
-                    ICloudSyncService.shared.pullIfAvailable()
-                    ICloudSyncService.shared.pushAll()
+                Task {
+                    await CloudSyncService.shared.pullIfAvailable()
+                    await CloudSyncService.shared.pushAll()
+                    await remote.refresh(markDataChange: true)
+                    await evaluateBudgetAlerts()
                 }
-                Task { await evaluateBudgetAlerts() }
             case .inactive, .background:
                 biometricLock.lockIfNeeded()
             @unknown default:
@@ -226,6 +242,19 @@ struct MainTabView: View {
             selectedTab = AppTab.home.rawValue
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 openQuickAdd(type)
+            }
+        }
+
+        if let tripID = defaults?.object(forKey: "pendingTripQuickAddID") as? Int, tripID > 0 {
+            defaults?.removeObject(forKey: "pendingTripQuickAddID")
+            defaults?.synchronize()
+            selectedTab = AppTab.trips.rawValue
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("OpenSharedTrip"),
+                    object: nil,
+                    userInfo: ["tripID": tripID]
+                )
             }
         }
     }

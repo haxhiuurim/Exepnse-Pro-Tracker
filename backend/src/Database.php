@@ -98,6 +98,7 @@ final class Database
     public static function ensureSchema(PDO $db, string $driver = 'sqlite'): void
     {
         if (self::schemaReady($db, $driver)) {
+            self::applyUpgrades($db, $driver);
             return;
         }
 
@@ -130,6 +131,27 @@ final class Database
             throw new RuntimeException(
                 'Database tables are still missing after auto-migrate. Check storage permissions and run php scripts/migrate.php'
             );
+        }
+
+        self::applyUpgrades($db, $driver);
+    }
+
+    private static function applyUpgrades(PDO $db, string $driver): void
+    {
+        $file = $driver === 'mysql'
+            ? dirname(__DIR__) . '/database/upgrades.mysql.php'
+            : dirname(__DIR__) . '/database/upgrades.sqlite.php';
+        if (!is_readable($file)) {
+            return;
+        }
+        /** @var list<string> $upgrades */
+        $upgrades = require $file;
+        foreach ($upgrades as $sql) {
+            try {
+                $db->exec($sql);
+            } catch (Throwable) {
+                // Already applied.
+            }
         }
     }
 

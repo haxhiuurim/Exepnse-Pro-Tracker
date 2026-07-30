@@ -17,6 +17,7 @@ struct MoreHubView: View {
     @ObservedObject private var premiumStore = PremiumDataStore.shared
     @ObservedObject private var onboarding = OnboardingStore.shared
     @ObservedObject private var recurring = RecurringTransactionService.shared
+    @ObservedObject private var auth = AuthSession.shared
 
     private var currencyCode: String { settingsViewModel.selectedCurrency }
 
@@ -25,7 +26,8 @@ struct MoreHubView: View {
             expenses: expenseViewModel.expenses,
             recurring: recurring.items,
             monthlyIncomeOverride: onboarding.monthlyIncome,
-            monthlySavingsTarget: onboarding.monthlySavingsTarget
+            monthlySavingsTarget: onboarding.monthlySavingsTarget,
+            liquidCash: premiumStore.availableCash
         )
     }
 
@@ -145,6 +147,20 @@ struct MoreHubView: View {
                         }
 
                         hubGroup(title: "App") {
+                            hubRow(
+                                auth.isLoggedIn
+                                    ? (auth.displayName.isEmpty ? "Account" : auth.displayName)
+                                    : "Sign in",
+                                auth.isLoggedIn
+                                    ? (auth.email.isEmpty ? "Synced · Trips unlocked" : auth.email)
+                                    : "Backup & Trips require an account",
+                                "person.crop.circle",
+                                InpensoTheme.tide,
+                                trailing: auth.isLoggedIn ? "Signed in" : nil
+                            ) {
+                                AccountHubView()
+                            }
+                            shareAppRow
                             hubRow("Settings", "Currency, lock, data, Pro", "gearshape", InpensoTheme.slate) {
                                 SettingsView()
                             }
@@ -251,6 +267,44 @@ struct MoreHubView: View {
                     .fill(InpensoTheme.panelFill)
                     .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 12, y: 4)
             )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var shareAppRow: some View {
+        Button {
+            let url = RemoteConfigService.shared.config.appStoreURL
+            let text = "Track spending with \(AppBrand.name): \(url)"
+            let activity = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let root = scene.windows.first?.rootViewController {
+                root.present(activity, animated: true)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.tide)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        InpensoTheme.tide.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Share app")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text("Invite friends via App Store link")
+                        .font(.system(size: 12))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(InpensoTheme.muted)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
         .buttonStyle(.plain)
     }

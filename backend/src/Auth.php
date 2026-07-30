@@ -40,7 +40,6 @@ final class Auth
             return null;
         }
 
-        // Reject obviously malformed tokens early (hex, 64 chars for new tokens).
         if (strlen($token) > 128) {
             return null;
         }
@@ -48,12 +47,24 @@ final class Auth
         $hash = self::hashToken($token);
 
         $stmt = $db->prepare(
-            'SELECT id, display_name, api_token, created_at FROM users WHERE api_token = :token LIMIT 1'
+            'SELECT id, display_name, email, api_token, created_at,
+                    is_admin, is_banned, premium_until, premium_note,
+                    last_seen_at, last_data_at, app_version, ios_version, device_model, notes
+             FROM users WHERE api_token = :token LIMIT 1'
         );
-        $stmt->execute(['token' => $hash]);
-        $user = $stmt->fetch();
 
-        // Legacy plaintext tokens: upgrade to hash on successful auth.
+        try {
+            $stmt->execute(['token' => $hash]);
+            $user = $stmt->fetch();
+        } catch (\PDOException) {
+            // Older schema without admin columns.
+            $stmt = $db->prepare(
+                'SELECT id, display_name, email, api_token, created_at FROM users WHERE api_token = :token LIMIT 1'
+            );
+            $stmt->execute(['token' => $hash]);
+            $user = $stmt->fetch();
+        }
+
         if (!$user) {
             $stmt->execute(['token' => $token]);
             $user = $stmt->fetch();
@@ -75,6 +86,19 @@ final class Auth
         $user = self::authenticate($db);
         if ($user === null) {
             Response::error('Unauthorized', 401);
+        }
+        if ((int) ($user['is_banned'] ?? 0) === 1) {
+            Response::error('This account has been suspended.', 403);
+        }
+
+        return $user;
+    }
+
+    public static function requireAdmin(PDO $db): array
+    {
+        $user = self::requireUser($db);
+        if ((int) ($user['is_admin'] ?? 0) !== 1) {
+            Response::error('Admin access required', 403);
         }
 
         return $user;

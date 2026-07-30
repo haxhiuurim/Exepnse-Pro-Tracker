@@ -233,19 +233,34 @@ final class PremiumDataStore: ObservableObject {
     }
 
     func setiCloudSync(_ enabled: Bool, isPro: Bool) -> Bool {
-        guard isPro || !enabled else { return false }
-        iCloudSyncEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: Keys.iCloud)
-        if enabled {
-            ICloudSyncService.shared.pushAll()
-        }
-        return true
+        // iCloud sync removed — cloud backup uses account login instead.
+        iCloudSyncEnabled = false
+        UserDefaults.standard.set(false, forKey: Keys.iCloud)
+        return false
+    }
+
+    func replaceAccounts(_ value: [FinanceAccount]) {
+        accounts = value
+        persist(accounts, key: Keys.accounts)
+    }
+
+    func replaceGoals(_ value: [SavingsGoal]) {
+        goals = value
+        persist(goals, key: Keys.goals)
+    }
+
+    func replaceDebts(_ value: [DebtLoan]) {
+        debts = value
+        persist(debts, key: Keys.debts)
+    }
+
+    func replaceMerchantRules(_ value: [MerchantRule]) {
+        merchantRules = value
+        persist(merchantRules, key: Keys.rules)
     }
 
     private func syncIfNeeded() {
-        if iCloudSyncEnabled {
-            ICloudSyncService.shared.pushAll()
-        }
+        CloudSyncService.shared.schedulePush()
     }
 
     // MARK: - Persistence helpers

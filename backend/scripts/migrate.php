@@ -118,6 +118,23 @@ if (!Database::schemaReady($db, $driver)) {
 echo "Migration complete.\n";
 echo "Schema ready: yes\n";
 
+// Apply incremental upgrades for existing databases.
+$upgradeFile = dirname(__DIR__) . '/database/upgrades.sqlite.php';
+if (is_readable($upgradeFile)) {
+    /** @var list<string> $upgrades */
+    $upgrades = require $upgradeFile;
+    $applied = 0;
+    foreach ($upgrades as $sql) {
+        try {
+            $db->exec($sql);
+            $applied++;
+        } catch (Throwable) {
+            // Column/table may already exist.
+        }
+    }
+    echo "Upgrades attempted: {$applied}\n";
+}
+
 if ($driver === 'mysql') {
     try {
         $db->exec('ALTER TABLE trips MODIFY invite_code VARCHAR(16) NOT NULL');

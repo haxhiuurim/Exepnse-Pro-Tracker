@@ -18,7 +18,7 @@ struct PaywallView: View {
     private let features: [(icon: String, title: String, detail: String)] = [
         ("sun.max.fill", "Available Today depth", "Forecasts, alerts, and unlimited budgets"),
         ("doc.text.viewfinder", "Receipt scans", "OCR without a monthly cap"),
-        ("icloud.fill", "Encrypted iCloud sync", "Optional backup — personal ledger stays private"),
+        ("icloud.and.arrow.up", "Account backup", "Sign in to sync your ledger to our servers"),
         ("chart.bar.doc.horizontal", "Full Insights", "Trends, patterns, heatmap, projections"),
         ("creditcard.fill", "Subscriptions", "Unlimited recurring & burn alerts"),
         ("tag.fill", "Tags & categories", "Unlimited tags and custom categories"),

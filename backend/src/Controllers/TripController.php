@@ -48,8 +48,8 @@ final class TripController
             $this->db->beginTransaction();
 
             $stmt = $this->db->prepare(
-                'INSERT INTO trips (name, currency, start_date, end_date, invite_code, owner_id, created_at)
-                 VALUES (:name, :currency, :start_date, :end_date, :invite_code, :owner_id, :created_at)'
+                'INSERT INTO trips (name, currency, start_date, end_date, invite_code, owner_id, require_join_approval, created_at)
+                 VALUES (:name, :currency, :start_date, :end_date, :invite_code, :owner_id, 1, :created_at)'
             );
             $stmt->execute([
                 'name' => $name,
@@ -114,24 +114,168 @@ final class TripController
         }
 
         $tripId = (int) $trip['id'];
+        $userId = (int) $user['id'];
 
-        $existing = $this->db->prepare(
-            'SELECT id FROM trip_members WHERE trip_id = :trip_id AND user_id = :user_id LIMIT 1'
-        );
-        $existing->execute(['trip_id' => $tripId, 'user_id' => (int) $user['id']]);
+        if ($this->userIsMember($tripId, $userId)) {
+            Response::success([
+                'status' => 'already_member',
+                'trip' => $this->getTripDetail($tripId, $userId),
+            ]);
+        }
 
-        if (!$existing->fetch()) {
+        $requiresApproval = (int) ($trip['require_join_approval'] ?? 1) === 1;
+
+        if (!$requiresApproval) {
             $insert = $this->db->prepare(
                 'INSERT INTO trip_members (trip_id, user_id, joined_at) VALUES (:trip_id, :user_id, :joined_at)'
             );
             $insert->execute([
                 'trip_id' => $tripId,
-                'user_id' => (int) $user['id'],
+                'user_id' => $userId,
                 'joined_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+            Response::success([
+                'status' => 'joined',
+                'trip' => $this->getTripDetail($tripId, $userId),
             ]);
         }
 
-        Response::success($this->getTripDetail($tripId, (int) $user['id']));
+        // Upsert pending join request
+        $existing = $this->db->prepare(
+            'SELECT id, status FROM trip_join_requests WHERE trip_id = :trip_id AND user_id = :user_id LIMIT 1'
+        );
+        $existing->execute(['trip_id' => $tripId, 'user_id' => $userId]);
+        $request = $existing->fetch();
+
+        if ($request && $request['status'] === 'pending') {
+            Response::success([
+                'status' => 'pending',
+                'message' => 'Join request already pending owner approval',
+                'trip' => $this->formatTrip($trip),
+            ]);
+        }
+
+        if ($request && $request['status'] === 'declined') {
+            $upd = $this->db->prepare(
+                'UPDATE trip_join_requests SET status = :status, created_at = :created_at, resolved_at = NULL
+                 WHERE id = :id'
+            );
+            $upd->execute([
+                'status' => 'pending',
+                'created_at' => gmdate('Y-m-d H:i:s'),
+                'id' => (int) $request['id'],
+            ]);
+        } elseif (!$request) {
+            $ins = $this->db->prepare(
+                'INSERT INTO trip_join_requests (trip_id, user_id, status, created_at)
+                 VALUES (:trip_id, :user_id, :status, :created_at)'
+            );
+            $ins->execute([
+                'trip_id' => $tripId,
+                'user_id' => $userId,
+                'status' => 'pending',
+                'created_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+        }
+
+        Response::success([
+            'status' => 'pending',
+            'message' => 'Join request sent. Waiting for the trip owner to approve.',
+            'trip' => $this->formatTrip($trip),
+        ], 202);
+    }
+
+    public function listJoinRequests(string $tripId): void
+    {
+        $user = Auth::requireUser($this->db);
+        $id = (int) $tripId;
+        $trip = $this->fetchTripById($id);
+        if ($trip === null || (int) $trip['owner_id'] !== (int) $user['id']) {
+            Response::error('Only the trip owner can view join requests', 403);
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT r.id, r.trip_id, r.user_id, r.status, r.created_at, u.display_name, u.email
+             FROM trip_join_requests r
+             INNER JOIN users u ON u.id = r.user_id
+             WHERE r.trip_id = :trip_id AND r.status = :status
+             ORDER BY r.created_at ASC'
+        );
+        $stmt->execute(['trip_id' => $id, 'status' => 'pending']);
+        $rows = $stmt->fetchAll();
+
+        Response::success(array_map(static fn (array $row): array => [
+            'id' => (int) $row['id'],
+            'trip_id' => (int) $row['trip_id'],
+            'user_id' => (int) $row['user_id'],
+            'display_name' => $row['display_name'],
+            'email' => $row['email'],
+            'status' => $row['status'],
+            'created_at' => $row['created_at'],
+        ], $rows));
+    }
+
+    public function acceptJoinRequest(string $tripId, string $requestId): void
+    {
+        $this->resolveJoinRequest($tripId, $requestId, true);
+    }
+
+    public function declineJoinRequest(string $tripId, string $requestId): void
+    {
+        $this->resolveJoinRequest($tripId, $requestId, false);
+    }
+
+    private function resolveJoinRequest(string $tripId, string $requestId, bool $accept): void
+    {
+        $user = Auth::requireUser($this->db);
+        $id = (int) $tripId;
+        $reqId = (int) $requestId;
+
+        $trip = $this->fetchTripById($id);
+        if ($trip === null || (int) $trip['owner_id'] !== (int) $user['id']) {
+            Response::error('Only the trip owner can manage join requests', 403);
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT * FROM trip_join_requests WHERE id = :id AND trip_id = :trip_id LIMIT 1'
+        );
+        $stmt->execute(['id' => $reqId, 'trip_id' => $id]);
+        $request = $stmt->fetch();
+        if (!$request || $request['status'] !== 'pending') {
+            Response::error('Join request not found', 404);
+        }
+
+        $now = gmdate('Y-m-d H:i:s');
+        if ($accept) {
+            if (!$this->userIsMember($id, (int) $request['user_id'])) {
+                $insert = $this->db->prepare(
+                    'INSERT INTO trip_members (trip_id, user_id, joined_at) VALUES (:trip_id, :user_id, :joined_at)'
+                );
+                $insert->execute([
+                    'trip_id' => $id,
+                    'user_id' => (int) $request['user_id'],
+                    'joined_at' => $now,
+                ]);
+            }
+            $status = 'accepted';
+        } else {
+            $status = 'declined';
+        }
+
+        $upd = $this->db->prepare(
+            'UPDATE trip_join_requests SET status = :status, resolved_at = :resolved_at WHERE id = :id'
+        );
+        $upd->execute([
+            'status' => $status,
+            'resolved_at' => $now,
+            'id' => $reqId,
+        ]);
+
+        Response::success([
+            'status' => $status,
+            'request_id' => $reqId,
+            'trip' => $this->getTripDetail($id, (int) $user['id']),
+        ]);
     }
 
     public function list(): void
@@ -430,6 +574,7 @@ final class TripController
             'end_date' => $trip['end_date'],
             'invite_code' => $trip['invite_code'],
             'owner_id' => (int) $trip['owner_id'],
+            'require_join_approval' => (int) ($trip['require_join_approval'] ?? 1) === 1,
             'created_at' => $trip['created_at'],
         ];
     }

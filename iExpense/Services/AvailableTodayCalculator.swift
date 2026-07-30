@@ -8,8 +8,10 @@
 import Foundation
 
 struct AvailableTodayResult: Equatable {
-    /// Safe daily spend remaining for today.
+    /// Safe daily spend remaining for today (capped by liquid cash when provided).
     var amount: Double
+    /// Pace-based daily amount before cash cap.
+    var paceAmount: Double
     /// Full month discretionary pool after bills & savings.
     var monthPool: Double
     /// Already spent this calendar month (expenses only).
@@ -19,9 +21,11 @@ struct AvailableTodayResult: Equatable {
     var monthlyIncome: Double
     var monthlySavingsTarget: Double
     var daysRemainingInMonth: Int
+    /// Liquid cash used as a hard ceiling (nil = no cap).
+    var liquidCash: Double?
 
     var isConfigured: Bool {
-        monthlyIncome > 0.01 || monthlyBills > 0.01
+        monthlyIncome > 0.01 || monthlyBills > 0.01 || (liquidCash ?? 0) > 0.01
     }
 }
 
@@ -31,6 +35,7 @@ enum AvailableTodayCalculator {
         recurring: [RecurringTransaction],
         monthlyIncomeOverride: Double,
         monthlySavingsTarget: Double,
+        liquidCash: Double? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> AvailableTodayResult {
@@ -61,16 +66,25 @@ enum AvailableTodayCalculator {
         let daysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
         let daysRemaining = max(1, daysInMonth - day + 1)
 
-        let availableToday = remainingPool / Double(daysRemaining)
+        let paceAmount = remainingPool / Double(daysRemaining)
+        // Never suggest spending more than cash on hand.
+        let capped: Double
+        if let liquidCash {
+            capped = min(paceAmount, max(0, liquidCash))
+        } else {
+            capped = paceAmount
+        }
 
         return AvailableTodayResult(
-            amount: availableToday,
+            amount: capped,
+            paceAmount: paceAmount,
             monthPool: pool,
             spentThisMonth: spentThisMonth,
             monthlyBills: monthlyBills,
             monthlyIncome: monthlyIncome,
             monthlySavingsTarget: monthlySavingsTarget,
-            daysRemainingInMonth: daysRemaining
+            daysRemainingInMonth: daysRemaining,
+            liquidCash: liquidCash
         )
     }
 

@@ -26,6 +26,16 @@ final class Router
         $this->add('DELETE', $pattern, $handler);
     }
 
+    public function put(string $pattern, Closure $handler): void
+    {
+        $this->add('PUT', $pattern, $handler);
+    }
+
+    public function patch(string $pattern, Closure $handler): void
+    {
+        $this->add('PATCH', $pattern, $handler);
+    }
+
     private function add(string $method, string $pattern, Closure $handler): void
     {
         $this->routes[] = [

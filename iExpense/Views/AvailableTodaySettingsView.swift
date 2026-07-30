@@ -9,6 +9,7 @@ struct AvailableTodaySettingsView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @ObservedObject private var onboarding = OnboardingStore.shared
     @ObservedObject private var recurring = RecurringTransactionService.shared
+    @ObservedObject private var premiumStore = PremiumDataStore.shared
     @EnvironmentObject private var expenseViewModel: ExpenseViewModel
 
     @State private var incomeText = ""
@@ -21,7 +22,8 @@ struct AvailableTodaySettingsView: View {
             expenses: expenseViewModel.expenses,
             recurring: recurring.items,
             monthlyIncomeOverride: onboarding.monthlyIncome,
-            monthlySavingsTarget: onboarding.monthlySavingsTarget
+            monthlySavingsTarget: onboarding.monthlySavingsTarget,
+            liquidCash: premiumStore.availableCash
         )
     }
 
@@ -37,13 +39,35 @@ struct AvailableTodaySettingsView: View {
                         Text(result.amount, format: .currency(code: currencyCode))
                             .font(InpensoTheme.displayAmount(36))
                             .foregroundStyle(InpensoTheme.tide)
-                        Text("Income − bills − savings − spent, split across remaining days.")
+
+                        Text("Income − bills − savings − spent, split across remaining days — then capped by cash on hand.")
                             .font(InpensoTheme.body(14))
                             .foregroundStyle(InpensoTheme.muted)
+
+                        if let cash = result.liquidCash, result.paceAmount > cash + 0.01 {
+                            Text("Pace would be \(result.paceAmount.formatted(.currency(code: currencyCode))), but cash is only \(cash.formatted(.currency(code: currencyCode))).")
+                                .font(InpensoTheme.body(13, weight: .medium))
+                                .foregroundStyle(InpensoTheme.slate)
+                        }
                     }
                     .padding(InpensoTheme.Space.lg)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Cash on hand")
+                            .font(InpensoTheme.sectionLabel())
+                            .foregroundStyle(InpensoTheme.muted)
+                        Text(premiumStore.availableCash, format: .currency(code: currencyCode))
+                            .font(InpensoTheme.displayAmount(22))
+                            .foregroundStyle(InpensoTheme.ink)
+                        Text("Update Wallet / checking in More → Accounts.")
+                            .font(InpensoTheme.label(12))
+                            .foregroundStyle(InpensoTheme.muted)
+                    }
+                    .padding(InpensoTheme.Space.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
 
                     VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
                         Text("Inputs")

@@ -1,10 +1,22 @@
--- Inpenso Shared Trip Spending Schema (MySQL)
+-- Expense backend schema (MySQL)
 
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) UNIQUE,
+    password_hash VARCHAR(255) NULL,
     display_name VARCHAR(100) NOT NULL,
     api_token VARCHAR(64) NOT NULL UNIQUE,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS sync_documents (
+    user_id INT NOT NULL,
+    doc_type VARCHAR(64) NOT NULL,
+    payload LONGTEXT NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, doc_type),
+    CONSTRAINT fk_sync_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS trips (
@@ -15,6 +27,7 @@ CREATE TABLE IF NOT EXISTS trips (
     end_date DATE NULL,
     invite_code VARCHAR(16) NOT NULL UNIQUE,
     owner_id INT NOT NULL,
+    require_join_approval TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_trips_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -27,6 +40,27 @@ CREATE TABLE IF NOT EXISTS trip_members (
     UNIQUE KEY uniq_trip_user (trip_id, user_id),
     CONSTRAINT fk_members_trip FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
     CONSTRAINT fk_members_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS trip_join_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    trip_id INT NOT NULL,
+    user_id INT NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME NULL,
+    UNIQUE KEY uniq_join_trip_user (trip_id, user_id),
+    CONSTRAINT fk_join_trip FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
+    CONSTRAINT fk_join_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS trip_shortcuts (
+    user_id INT NOT NULL,
+    trip_id INT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, trip_id),
+    CONSTRAINT fk_shortcut_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_shortcut_trip FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS expenses (
@@ -56,5 +90,6 @@ CREATE INDEX idx_trips_owner ON trips(owner_id);
 CREATE INDEX idx_trips_invite_code ON trips(invite_code);
 CREATE INDEX idx_trip_members_trip ON trip_members(trip_id);
 CREATE INDEX idx_trip_members_user ON trip_members(user_id);
+CREATE INDEX idx_join_requests_trip ON trip_join_requests(trip_id);
 CREATE INDEX idx_expenses_trip ON expenses(trip_id);
 CREATE INDEX idx_expense_splits_expense ON expense_splits(expense_id);

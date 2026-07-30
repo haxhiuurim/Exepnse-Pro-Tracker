@@ -6,8 +6,8 @@ namespace Inpenso;
 
 final class Response
 {
-    /** Max JSON request body size (64 KiB). */
-    public const MAX_BODY_BYTES = 65536;
+    /** Max JSON request body size (2 MiB — ledger sync payloads). */
+    public const MAX_BODY_BYTES = 2097152;
 
     public static function json(mixed $data, int $status = 200): void
     {

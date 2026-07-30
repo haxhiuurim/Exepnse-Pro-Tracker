@@ -24,6 +24,8 @@ struct SettingsView: View {
     @State private var showingExportSuccess = false
     @State private var biometricError: String?
     @State private var exportFormat: ExportFormat = .csv
+    @State private var showAuth = false
+    @ObservedObject private var auth = AuthSession.shared
 
     private enum ExportFormat { case csv, ofx, pdf }
 
@@ -34,6 +36,7 @@ struct SettingsView: View {
     var body: some View {
         List {
             appHeader
+            accountSection
             proSection
             appearanceSection
             securitySection
@@ -57,6 +60,9 @@ struct SettingsView: View {
         .listSectionSpacing(InpensoTheme.Space.lg)
         .contentMargins(.horizontal, InpensoTheme.Space.screen, for: .scrollContent)
         .contentMargins(.vertical, InpensoTheme.Space.md, for: .scrollContent)
+        .sheet(isPresented: $showAuth) {
+            AccountAuthView()
+        }
         .sheet(isPresented: $showingImportFilePicker) {
             documentPicker
         }
@@ -110,6 +116,44 @@ struct SettingsView: View {
         }
     }
 
+    private var accountSection: some View {
+        Section {
+            if auth.isLoggedIn {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(auth.displayName.isEmpty ? "Signed in" : auth.displayName)
+                        .font(InpensoTheme.body(16, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text(auth.email)
+                        .font(InpensoTheme.label(12))
+                        .foregroundStyle(InpensoTheme.muted)
+                }
+                Button("Sync now") {
+                    Task {
+                        await CloudSyncService.shared.pushAll()
+                        await CloudSyncService.shared.pullIfAvailable()
+                    }
+                }
+                Button("Sign out", role: .destructive) {
+                    Task { await SharedTripAPI.shared.logout() }
+                }
+            } else {
+                Button {
+                    showAuth = true
+                } label: {
+                    Label("Sign in or create account", systemImage: "person.crop.circle")
+                }
+            }
+        } header: {
+            sectionHeader("Account")
+        } footer: {
+            Text(auth.isLoggedIn
+                 ? "Your ledger syncs to \(AppBrand.name) servers. Trips require this account."
+                 : "Sign in to back up data and use Trips. Guest data stays only on this device.")
+                .font(InpensoTheme.body(12))
+                .foregroundStyle(InpensoTheme.muted)
+        }
+    }
+
     private var proSection: some View {
         Section {
             if pro.isPro {
@@ -145,23 +189,12 @@ struct SettingsView: View {
                     }
                 }
             }
-
-            Toggle("iCloud sync", isOn: Binding(
-                get: { premiumStore.iCloudSyncEnabled },
-                set: { enabled in
-                    if !premiumStore.setiCloudSync(enabled, isPro: pro.isPro) {
-                        pro.openPaywall()
-                    } else if enabled {
-                        ICloudSyncService.shared.pushAll()
-                    }
-                }
-            ))
         } header: {
             sectionHeader("Pro")
         } footer: {
             Text(pro.isPro
                  ? "All Pro features are enabled."
-                 : "Pro adds OCR, sync, goals, exports, and unlimited recurring items.")
+                 : "Pro adds OCR, goals, exports, and unlimited recurring items.")
                 .font(InpensoTheme.body(12))
                 .foregroundStyle(InpensoTheme.muted)
         }
@@ -351,7 +384,7 @@ struct SettingsView: View {
             sectionHeader("Data")
         }
         footer: {
-            Text("Personal ledger stays on device. Optional Pro iCloud sync backs up your data. Shared Trips use a server only when you create or join a trip.")
+            Text("Your ledger syncs when signed in. Guest data stays on this device. Trips always use your account.")
                 .font(InpensoTheme.label(11))
         }
     }

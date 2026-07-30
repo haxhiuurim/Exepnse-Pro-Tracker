@@ -109,6 +109,11 @@ final class ProEntitlementManager: ObservableObject {
     @Published var showSpecialOffer = false
     @Published var selectedPaywallPlan: ProPlan = .yearly
 
+    /// StoreKit entitlement (purchase / restore).
+    private var storePro = false
+    /// Admin-granted premium from the backend.
+    private var serverPro = false
+
     private var updatesTask: Task<Void, Never>?
 
     private enum Keys {
@@ -117,16 +122,35 @@ final class ProEntitlementManager: ObservableObject {
         static let specialOfferDismissCount = "specialOfferDismissCount"
         static let receiptScanMonth = "receiptScanMonthKey"
         static let receiptScanCount = "receiptScanCount"
+        static let serverPro = "serverGrantedPro"
     }
 
     init() {
+        serverPro = UserDefaults.standard.bool(forKey: Keys.serverPro)
         #if DEBUG
         if UserDefaults.standard.bool(forKey: Keys.debugPro) {
             isPro = true
         }
         #endif
+        recomputePro()
         updatesTask = listenForTransactions()
         Task { await refresh() }
+    }
+
+    func applyServerPremium(_ granted: Bool) {
+        serverPro = granted
+        UserDefaults.standard.set(granted, forKey: Keys.serverPro)
+        recomputePro()
+    }
+
+    private func recomputePro() {
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: Keys.debugPro) {
+            isPro = true
+            return
+        }
+        #endif
+        isPro = storePro || serverPro
     }
 
     // MARK: - Entitlement
@@ -152,7 +176,8 @@ final class ProEntitlementManager: ObservableObject {
                 break
             }
         }
-        isPro = entitled
+        storePro = entitled
+        recomputePro()
     }
 
     func loadProducts() async {

@@ -2,35 +2,56 @@
 //  SharedTripsView.swift
 //  iExpense
 //
-//  Trips tab — Obsidian + Jade banking language (matches Home / Activity / More).
+//  Trips tab — requires backend login. Search/sort, join approval, code-only share.
 //
 
 import SwiftUI
 
+private enum TripSort: String, CaseIterable, Identifiable {
+    case recent = "Recent"
+    case name = "Name"
+    case spend = "Spend"
+
+    var id: String { rawValue }
+}
+
 struct SharedTripsView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @ObservedObject private var auth = AuthSession.shared
     @StateObject private var model = SharedTripsViewModel()
-    @FocusState private var nameFieldFocused: Bool
-
-    @State private var nameDraft = SharedTripAPI.shared.displayName
-    @State private var requiresNameSetup =
-        SharedTripAPI.shared.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     @State private var pendingTripID: Int?
+    @State private var showAuth = false
+    @State private var searchText = ""
+    @State private var sort: TripSort = .recent
+    @State private var deepLinkTripID: Int?
+
+    private var filteredTrips: [SharedTripSummary] {
+        var list = model.trips
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !q.isEmpty {
+            list = list.filter {
+                $0.name.localizedCaseInsensitiveContains(q)
+                    || $0.inviteCode.localizedCaseInsensitiveContains(q)
+            }
+        }
+        switch sort {
+        case .recent: break
+        case .name: list.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .spend: list.sort { $0.totalSpent > $1.totalSpent }
+        }
+        return list
+    }
 
     private var totalSharedSpend: Double {
         model.trips.reduce(0) { $0 + $1.totalSpent }
-    }
-
-    private var totalMembers: Int {
-        model.trips.reduce(0) { $0 + $1.memberCount }
     }
 
     var body: some View {
         ZStack {
             AtmosphereBackground()
 
-            if requiresNameSetup {
-                displayNameGate
+            if !auth.isLoggedIn {
+                loginGate
             } else {
                 tripsContent
             }
@@ -39,12 +60,15 @@ struct SharedTripsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            guard !requiresNameSetup else { return }
+            guard auth.isLoggedIn else { return }
             await model.refresh()
         }
         .refreshable {
-            guard !requiresNameSetup else { return }
+            guard auth.isLoggedIn else { return }
             await model.refresh()
+        }
+        .onChange(of: auth.isLoggedIn) { _, loggedIn in
+            if loggedIn { Task { await model.refresh() } }
         }
         .alert("Create trip", isPresented: $model.showCreate) {
             TextField("Trip name", text: $model.newTripName)
@@ -57,29 +81,47 @@ struct SharedTripsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("You'll get an invite code to share. Friends split fairly — no bank linking.")
+            Text("You'll get an invite code. Friends request to join — you approve them.")
         }
         .navigationDestination(isPresented: Binding(
             get: { pendingTripID != nil },
             set: { if !$0 { pendingTripID = nil } }
         )) {
             if let id = pendingTripID {
-                SharedTripDetailView(tripID: id, autoShareInvite: true)
+                SharedTripDetailView(tripID: id)
             }
         }
         .alert("Join trip", isPresented: $model.showJoin) {
             TextField("Invite code", text: $model.joinCode)
                 .textInputAutocapitalization(.characters)
-            Button("Join") { Task { await model.joinTrip() } }
+            Button("Request join") { Task { await model.joinTrip() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Enter the code your friend shared.")
+            Text("The owner must approve before you can see the trip.")
+        }
+        .sheet(isPresented: $showAuth) {
+            AccountAuthView(onSuccess: {
+                Task { await model.refresh() }
+            })
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { deepLinkTripID != nil },
+            set: { if !$0 { deepLinkTripID = nil } }
+        )) {
+            if let id = deepLinkTripID {
+                SharedTripDetailView(tripID: id)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenSharedTrip"))) { note in
+            if let id = note.userInfo?["tripID"] as? Int {
+                deepLinkTripID = id
+            }
         }
     }
 
-    // MARK: - Display name gate
+    // MARK: - Login gate
 
-    private var displayNameGate: some View {
+    private var loginGate: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Trips")
@@ -87,42 +129,28 @@ struct SharedTripsView: View {
                     .foregroundStyle(InpensoTheme.ink)
 
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("YOUR NAME")
+                    Text("ACCOUNT REQUIRED")
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .tracking(0.8)
                         .foregroundStyle(.white.opacity(0.55))
 
-                    Text("How friends see you")
+                    Text("Sign in to split trips")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
 
-                    Text("This name appears on shared balances. Trips is where you split weekends, roommates, and dinners — no bank linking.")
+                    Text("Shared trips use your \(AppBrand.name) account. Create or sign in to make trips, share codes, and approve join requests.")
                         .font(.system(size: 14))
                         .foregroundStyle(.white.opacity(0.72))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    TextField("Your name", text: $nameDraft)
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(InpensoTheme.ink)
-                        .padding(14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(.white)
-                        )
-                        .focused($nameFieldFocused)
-                        .submitLabel(.continue)
-                        .onSubmit { continueWithName() }
-
-                    Button(action: continueWithName) {
-                        Text("Continue")
+                    Button { showAuth = true } label: {
+                        Text("Sign in or register")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundStyle(InpensoTheme.ink)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                             .background(Capsule().fill(.white))
                     }
-                    .disabled(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .opacity(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
                 }
                 .padding(20)
                 .background(BankingHeroBackground())
@@ -131,22 +159,6 @@ struct SharedTripsView: View {
             .padding(.top, 4)
             .padding(.bottom, InpensoTheme.Space.bottomClearance)
         }
-        .onAppear { nameFieldFocused = true }
-    }
-
-    private func continueWithName() {
-        let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        nameDraft = trimmed
-        model.displayName = trimmed
-        SharedTripAPI.shared.displayName = trimmed
-        requiresNameSetup = false
-        Task { await model.refresh() }
-    }
-
-    private func editDisplayName() {
-        nameDraft = model.displayName
-        requiresNameSetup = true
     }
 
     // MARK: - Main content
@@ -156,9 +168,13 @@ struct SharedTripsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 header
                 heroCard
+                searchAndSort
                 tripsList
                 if let error = model.errorMessage {
                     errorBanner(error)
+                }
+                if let info = model.infoMessage {
+                    infoBanner(info)
                 }
             }
             .padding(.horizontal, 20)
@@ -173,26 +189,12 @@ struct SharedTripsView: View {
                 Text("Trips")
                     .font(.system(size: 24, weight: .heavy, design: .rounded))
                     .foregroundStyle(InpensoTheme.ink)
-                Text("Shared spend with friends")
+                Text(auth.displayName.isEmpty ? auth.email : auth.displayName)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(InpensoTheme.muted)
             }
 
             Spacer()
-
-            Button { editDisplayName() } label: {
-                Text(model.displayName)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(InpensoTheme.ink)
-                    .lineLimit(1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule().fill(InpensoTheme.panelFill)
-                            .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 8, y: 2)
-                    )
-            }
-            .accessibilityLabel("Edit display name")
 
             Button { model.showCreate = true } label: {
                 Image(systemName: "plus")
@@ -226,18 +228,6 @@ struct SharedTripsView: View {
                 .foregroundStyle(.white)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
-                .contentTransition(.numericText())
-
-            HStack(spacing: 10) {
-                metaBadge(
-                    title: "Trips",
-                    value: "\(model.trips.count)"
-                )
-                metaBadge(
-                    title: "People",
-                    value: "\(totalMembers)"
-                )
-            }
 
             HStack(spacing: 8) {
                 Button { model.showCreate = true } label: {
@@ -268,26 +258,26 @@ struct SharedTripsView: View {
         .background(BankingHeroBackground())
     }
 
-    private func metaBadge(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .tracking(0.6)
-                .foregroundStyle(.white.opacity(0.48))
-            Text(value)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(InpensoTheme.seafoam)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.white.opacity(0.08))
-        )
-    }
+    private var searchAndSort: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(InpensoTheme.muted)
+                TextField("Search trips", text: $searchText)
+                    .textInputAutocapitalization(.never)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(InpensoTheme.panelFill)
+            )
 
-    // MARK: - List
+            Picker("Sort", selection: $sort) {
+                ForEach(TripSort.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
 
     private var tripsList: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -296,157 +286,65 @@ struct SharedTripsView: View {
                 .foregroundStyle(InpensoTheme.ink)
 
             if model.isLoading && model.trips.isEmpty {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding(.vertical, 28)
-                    Spacer()
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
+            } else if filteredTrips.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(searchText.isEmpty ? "No trips yet" : "No matches")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(InpensoTheme.ink)
+                    Text(searchText.isEmpty
+                         ? "Create a trip or join with a code."
+                         : "Try a different search.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(InpensoTheme.muted)
                 }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(InpensoTheme.panelFill)
-                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
                 )
-            } else if model.trips.isEmpty {
-                tripsEmptyState
             } else {
-                VStack(spacing: 10) {
-                    ForEach(model.trips) { trip in
-                        NavigationLink {
-                            SharedTripDetailView(tripID: trip.id)
-                        } label: {
-                            tripCard(trip)
-                        }
-                        .buttonStyle(.plain)
+                ForEach(filteredTrips) { trip in
+                    NavigationLink {
+                        SharedTripDetailView(tripID: trip.id)
+                    } label: {
+                        tripRow(trip)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .padding(.top, 2)
     }
 
-    private var tripsEmptyState: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "suitcase.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(InpensoTheme.tide)
-                .frame(width: 40, height: 40)
-                .background(
-                    InpensoTheme.tide.opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                )
-
-            Text("No trips yet")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(InpensoTheme.ink)
-
-            Text("Create a trip for weekends, roommates, or dinners — invite with a code and settle fairly.")
-                .font(.system(size: 14))
-                .foregroundStyle(InpensoTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 10) {
-                Button { model.showCreate = true } label: {
-                    Text("Create trip")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: [InpensoTheme.tide, Color(inpensoHex: "#0B7A58")],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        )
-                }
-                Button { model.showJoin = true } label: {
-                    Text("Join")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(InpensoTheme.ink)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule().stroke(InpensoTheme.hairline, lineWidth: 1.5)
-                        )
-                }
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(InpensoTheme.panelFill)
-                .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 12, y: 4)
-        )
-    }
-
-    private func tripCard(_ trip: SharedTripSummary) -> some View {
+    private func tripRow(_ trip: SharedTripSummary) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "suitcase.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(InpensoTheme.tide)
-                .frame(width: 40, height: 40)
-                .background(
-                    InpensoTheme.tide.opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                )
-
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(trip.name)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(InpensoTheme.ink)
-                        .lineLimit(1)
-                    if trip.isOwner {
-                        Text("Owner")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(InpensoTheme.tide)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(InpensoTheme.tide.opacity(0.12), in: Capsule())
-                    }
-                }
-
-                HStack(spacing: 6) {
-                    Label("\(trip.memberCount)", systemImage: "person.2")
-                    if trip.expenseCount > 0 {
-                        Text("·")
-                        Text("\(trip.expenseCount) expenses")
-                    }
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(InpensoTheme.muted)
-                .lineLimit(1)
-            }
-
-            Spacer(minLength: 8)
-
-            if trip.totalSpent > 0 {
-                Text(trip.totalSpent, format: .currency(code: trip.currency))
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                Text(trip.name)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(InpensoTheme.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                Text("\(trip.memberCount) people · \(trip.inviteCode)")
+                    .font(.system(size: 12))
+                    .foregroundStyle(InpensoTheme.muted)
             }
-
+            Spacer()
+            Text(trip.totalSpent, format: .currency(code: trip.currency))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(InpensoTheme.ink)
             Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(InpensoTheme.muted.opacity(0.5))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(InpensoTheme.muted)
         }
-        .padding(16)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(InpensoTheme.panelFill)
-                .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 12, y: 4)
+                .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
         )
-        .contentShape(Rectangle())
     }
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill")
                 .foregroundStyle(InpensoTheme.expenseTint)
             Text(message)
@@ -461,6 +359,23 @@ struct SharedTripsView: View {
                 .fill(InpensoTheme.expenseTint.opacity(0.08))
         )
     }
+
+    private func infoBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(InpensoTheme.tide)
+            Text(message)
+                .font(.system(size: 14))
+                .foregroundStyle(InpensoTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(InpensoTheme.tide.opacity(0.08))
+        )
+    }
 }
 
 // MARK: - View model
@@ -468,28 +383,22 @@ struct SharedTripsView: View {
 @MainActor
 final class SharedTripsViewModel: ObservableObject {
     @Published var trips: [SharedTripSummary] = []
-    @Published var displayName: String = SharedTripAPI.shared.displayName
-    @Published var baseURL: String = SharedTripAPI.shared.baseURLString
     @Published var errorMessage: String?
+    @Published var infoMessage: String?
     @Published var isLoading = false
     @Published var showCreate = false
     @Published var showJoin = false
     @Published var newTripName = ""
     @Published var joinCode = ""
-    @Published var lastCreatedInvite: String?
 
     func refresh() async {
-        SharedTripAPI.shared.displayName = displayName
         isLoading = true
         defer { isLoading = false }
         do {
-            try await SharedTripAPI.shared.ensureRegistered(displayName: displayName)
             trips = try await SharedTripAPI.shared.fetchTrips()
             errorMessage = nil
         } catch is CancellationError {
-            // SwiftUI cancels `.task` / refresh when the view updates — ignore.
         } catch let urlError as URLError where urlError.code == .cancelled {
-            // Same as above for URLSession cancellation.
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -498,13 +407,12 @@ final class SharedTripsViewModel: ObservableObject {
     @discardableResult
     func createTrip(currency: String) async -> Int? {
         do {
-            try await SharedTripAPI.shared.ensureRegistered(displayName: displayName)
             let trip = try await SharedTripAPI.shared.createTrip(name: newTripName, currency: currency)
             newTripName = ""
             trips.insert(trip, at: 0)
-            lastCreatedInvite = trip.inviteCode
             UIPasteboard.general.string = trip.inviteCode
             errorMessage = nil
+            infoMessage = "Invite code \(trip.inviteCode) copied."
             return trip.id
         } catch is CancellationError {
             return nil
@@ -518,13 +426,18 @@ final class SharedTripsViewModel: ObservableObject {
 
     func joinTrip() async {
         do {
-            try await SharedTripAPI.shared.ensureRegistered(displayName: displayName)
-            let trip = try await SharedTripAPI.shared.joinTrip(inviteCode: joinCode)
+            let result = try await SharedTripAPI.shared.joinTrip(inviteCode: joinCode)
             joinCode = ""
-            if !trips.contains(where: { $0.id == trip.id }) {
-                trips.insert(trip, at: 0)
-            }
             errorMessage = nil
+            switch result {
+            case .joined(let trip), .alreadyMember(let trip):
+                if !trips.contains(where: { $0.id == trip.id }) {
+                    trips.insert(trip, at: 0)
+                }
+                infoMessage = nil
+            case .pending(let message):
+                infoMessage = message
+            }
         } catch is CancellationError {
             return
         } catch let urlError as URLError where urlError.code == .cancelled {
@@ -539,18 +452,16 @@ final class SharedTripsViewModel: ObservableObject {
 
 struct SharedTripDetailView: View {
     let tripID: Int
-    var autoShareInvite: Bool = false
 
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var shortcuts = TripShortcutsStore.shared
     @State private var detail: SharedTripDetail?
     @State private var errorMessage: String?
     @State private var showAdd = false
-    @State private var expenseTitle = ""
-    @State private var expenseAmount = ""
-    @State private var paidByMemberID: Int?
     @State private var sharePayload: SharePayload?
     @State private var showLeaveConfirm = false
     @State private var showDeleteConfirm = false
+    @State private var joinRequests: [TripJoinRequest] = []
 
     private struct SharePayload: Identifiable {
         let id = UUID()
@@ -569,6 +480,9 @@ struct SharedTripDetailView: View {
                 if let detail {
                     VStack(alignment: .leading, spacing: 14) {
                         tripHero(detail)
+                        if detail.trip.isOwner, !joinRequests.isEmpty {
+                            joinRequestsPanel
+                        }
                         settleUpPanel(detail)
                         balancesPanel(detail)
                         expensesPanel(detail)
@@ -577,23 +491,17 @@ struct SharedTripDetailView: View {
                     .padding(.top, 4)
                     .padding(.bottom, 120)
                 } else if let errorMessage {
-                    VStack(spacing: 12) {
-                        Image(systemName: "wifi.exclamationmark")
-                            .font(.system(size: 28))
-                            .foregroundStyle(InpensoTheme.expenseTint)
-                        Text(errorMessage)
-                            .font(.system(size: 14))
-                            .foregroundStyle(InpensoTheme.ink)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(20)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(InpensoTheme.panelFill)
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.top, 40)
+                    Text(errorMessage)
+                        .font(.system(size: 14))
+                        .foregroundStyle(InpensoTheme.ink)
+                        .padding(20)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(InpensoTheme.panelFill)
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 40)
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity)
@@ -611,7 +519,17 @@ struct SharedTripDetailView: View {
                     Button {
                         if let detail { presentShare(for: detail) }
                     } label: {
-                        Label("Share invite", systemImage: "square.and.arrow.up")
+                        Label("Share code", systemImage: "square.and.arrow.up")
+                    }
+                    if let detail {
+                        Button {
+                            shortcuts.toggle(trip: detail.trip)
+                        } label: {
+                            Label(
+                                shortcuts.isPinned(detail.trip.id) ? "Remove Home shortcut" : "Add to Home",
+                                systemImage: shortcuts.isPinned(detail.trip.id) ? "pin.slash" : "pin"
+                            )
+                        }
                     }
                     Button("Leave trip", role: .destructive) {
                         showLeaveConfirm = true
@@ -629,21 +547,21 @@ struct SharedTripDetailView: View {
         }
         .task {
             await load()
-            if autoShareInvite, let detail {
-                presentShare(for: detail)
+            let defaults = UserDefaults(suiteName: StorageService.appGroupID)
+            if defaults?.bool(forKey: "pendingTripShowAdd") == true {
+                defaults?.set(false, forKey: "pendingTripShowAdd")
+                showAdd = true
             }
         }
-        .alert("Add shared expense", isPresented: $showAdd) {
-            TextField("Title", text: $expenseTitle)
-            TextField("Amount", text: $expenseAmount)
-                .keyboardType(.decimalPad)
-            Button("Add") { Task { await addExpense() } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
+        .sheet(isPresented: $showAdd) {
             if let detail {
-                let payer = detail.members.first(where: { $0.id == (paidByMemberID ?? detail.myMemberID) })?.name
-                    ?? "you"
-                Text("Logged as paid by \(payer).")
+                TripQuickAddSheet(
+                    tripID: tripID,
+                    currency: detail.trip.currency,
+                    members: detail.members,
+                    defaultPayerID: detail.myMemberID,
+                    onSaved: { Task { await load() } }
+                )
             }
         }
         .sheet(item: $sharePayload) { payload in
@@ -658,8 +576,6 @@ struct SharedTripDetailView: View {
             Button("Cancel", role: .cancel) {}
         }
     }
-
-    // MARK: - Hero
 
     private func tripHero(_ detail: SharedTripDetail) -> some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -715,7 +631,50 @@ struct SharedTripDetailView: View {
         .background(BankingHeroBackground())
     }
 
-    // MARK: - Panels
+    private var joinRequestsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Join requests")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(InpensoTheme.ink)
+
+            VStack(spacing: 0) {
+                ForEach(Array(joinRequests.enumerated()), id: \.element.id) { index, request in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(request.displayName)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(InpensoTheme.ink)
+                            if let email = request.email, !email.isEmpty {
+                                Text(email)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(InpensoTheme.muted)
+                            }
+                        }
+                        Spacer()
+                        Button("Decline") {
+                            Task { await resolveJoin(request, accept: false) }
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(InpensoTheme.danger)
+                        Button("Accept") {
+                            Task { await resolveJoin(request, accept: true) }
+                        }
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(InpensoTheme.tide)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    if index < joinRequests.count - 1 {
+                        Divider().overlay(InpensoTheme.hairline).padding(.leading, 14)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(InpensoTheme.panelFill)
+            )
+        }
+    }
 
     private func settleUpPanel(_ detail: SharedTripDetail) -> some View {
         let creditors = detail.members.filter { $0.net > 0.01 }.sorted { $0.net > $1.net }
@@ -766,7 +725,6 @@ struct SharedTripDetailView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(InpensoTheme.panelFill)
-                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
                 )
             }
         )
@@ -800,7 +758,6 @@ struct SharedTripDetailView: View {
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(InpensoTheme.panelFill)
-                    .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
             )
 
             Text("Positive = owed · Negative = owes")
@@ -818,9 +775,6 @@ struct SharedTripDetailView: View {
                     .foregroundStyle(InpensoTheme.ink)
                 Spacer()
                 Button {
-                    if paidByMemberID == nil {
-                        paidByMemberID = detail.myMemberID ?? detail.members.first?.id
-                    }
                     showAdd = true
                 } label: {
                     Image(systemName: "plus")
@@ -838,31 +792,6 @@ struct SharedTripDetailView: View {
                         )
                 }
                 .accessibilityLabel("Add shared expense")
-            }
-
-            if detail.members.count > 1 {
-                HStack {
-                    Text("Paid by")
-                        .font(.system(size: 13))
-                        .foregroundStyle(InpensoTheme.muted)
-                    Spacer()
-                    Picker("Paid by", selection: Binding(
-                        get: { paidByMemberID ?? detail.myMemberID ?? detail.members.first?.id ?? 0 },
-                        set: { paidByMemberID = $0 }
-                    )) {
-                        ForEach(detail.members) { member in
-                            Text(member.name).tag(member.id)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .tint(InpensoTheme.tide)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(InpensoTheme.panelFill)
-                )
             }
 
             if detail.expenses.isEmpty {
@@ -897,7 +826,6 @@ struct SharedTripDetailView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(InpensoTheme.panelFill)
-                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
                 )
             }
         }
@@ -933,42 +861,35 @@ struct SharedTripDetailView: View {
         .padding(.vertical, 11)
     }
 
-    // MARK: - Data
-
     private func presentShare(for detail: SharedTripDetail) {
-        let text = "Join my trip “\(detail.trip.name)” in \(AppBrand.name). Invite code: \(detail.trip.inviteCode)"
-        UIPasteboard.general.string = detail.trip.inviteCode
-        sharePayload = SharePayload(text: text)
+        let code = detail.trip.inviteCode
+        UIPasteboard.general.string = code
+        sharePayload = SharePayload(text: code)
     }
 
     private func load() async {
         do {
-            detail = try await SharedTripAPI.shared.tripDetail(id: tripID)
-            if paidByMemberID == nil {
-                paidByMemberID = detail?.myMemberID ?? detail?.members.first?.id
+            let loaded = try await SharedTripAPI.shared.tripDetail(id: tripID)
+            detail = loaded
+            TripShortcutsStore.shared.updateCache(from: loaded)
+            if loaded.trip.isOwner {
+                joinRequests = try await SharedTripAPI.shared.fetchJoinRequests(tripID: tripID)
+            } else {
+                joinRequests = []
             }
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    private func addExpense() async {
-        guard
-            let detail,
-            let amount = Double(expenseAmount.replacingOccurrences(of: ",", with: ".")),
-            amount > 0
-        else { return }
-        let memberID = paidByMemberID ?? detail.myMemberID ?? detail.members.first?.id
-        guard let memberID else { return }
+    private func resolveJoin(_ request: TripJoinRequest, accept: Bool) async {
         do {
-            try await SharedTripAPI.shared.addExpense(
-                tripID: tripID,
-                title: expenseTitle.isEmpty ? "Expense" : expenseTitle,
-                amount: amount,
-                paidByMemberID: memberID
-            )
-            expenseTitle = ""
-            expenseAmount = ""
+            if accept {
+                try await SharedTripAPI.shared.acceptJoinRequest(tripID: tripID, requestID: request.id)
+            } else {
+                try await SharedTripAPI.shared.declineJoinRequest(tripID: tripID, requestID: request.id)
+            }
             await load()
         } catch {
             errorMessage = error.localizedDescription
