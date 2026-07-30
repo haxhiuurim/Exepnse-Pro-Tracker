@@ -2,7 +2,7 @@
 //  SharedTripsView.swift
 //  iExpense
 //
-//  Primary Trips tab — split spendings with friends via invite code.
+//  Trips tab — Obsidian + Jade banking language (matches Home / Activity / More).
 //
 
 import SwiftUI
@@ -17,7 +17,13 @@ struct SharedTripsView: View {
         SharedTripAPI.shared.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     @State private var pendingTripID: Int?
 
-    private let screenInset = InpensoTheme.Space.screen
+    private var totalSharedSpend: Double {
+        model.trips.reduce(0) { $0 + $1.totalSpent }
+    }
+
+    private var totalMembers: Int {
+        model.trips.reduce(0) { $0 + $1.memberCount }
+    }
 
     var body: some View {
         ZStack {
@@ -75,46 +81,54 @@ struct SharedTripsView: View {
 
     private var displayNameGate: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Trips")
-                        .font(InpensoTheme.brandFont(28, weight: .heavy))
-                        .foregroundStyle(InpensoTheme.ink)
-                    Text("Set how friends see you")
-                        .font(InpensoTheme.label(13))
-                        .foregroundStyle(InpensoTheme.muted)
-                }
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Trips")
+                    .font(.system(size: 24, weight: .heavy, design: .rounded))
+                    .foregroundStyle(InpensoTheme.ink)
 
-                VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
-                    Text("Your name for friends")
-                        .font(InpensoTheme.brandFont(22, weight: .bold))
-                        .foregroundStyle(InpensoTheme.ink)
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("YOUR NAME")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.55))
 
-                    Text("This is how you appear on shared balances. Trips is \(AppBrand.name)’s place to split group spend — weekends, roommates, dinners.")
-                        .font(InpensoTheme.body(14))
-                        .foregroundStyle(InpensoTheme.muted)
+                    Text("How friends see you")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+
+                    Text("This name appears on shared balances. Trips is where you split weekends, roommates, and dinners — no bank linking.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.72))
                         .fixedSize(horizontal: false, vertical: true)
 
                     TextField("Your name", text: $nameDraft)
-                        .font(InpensoTheme.body(17, weight: .medium))
-                        .padding(InpensoTheme.Space.md)
-                        .background(InpensoTheme.mist, in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.md, style: .continuous))
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(InpensoTheme.ink)
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(.white)
+                        )
                         .focused($nameFieldFocused)
                         .submitLabel(.continue)
                         .onSubmit { continueWithName() }
 
                     Button(action: continueWithName) {
                         Text("Continue")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(InpensoTheme.ink)
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Capsule().fill(.white))
                     }
-                    .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.tide))
                     .disabled(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .opacity(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
                 }
-                .padding(InpensoTheme.Space.lg)
-                .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
+                .padding(20)
+                .background(BankingHeroBackground())
             }
-            .padding(.horizontal, screenInset)
-            .padding(.top, InpensoTheme.Space.sm)
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
             .padding(.bottom, InpensoTheme.Space.bottomClearance)
         }
         .onAppear { nameFieldFocused = true }
@@ -139,97 +153,164 @@ struct SharedTripsView: View {
 
     private var tripsContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
-                tripsBrandHeader
-                primaryActions
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                heroCard
                 tripsList
                 if let error = model.errorMessage {
                     errorBanner(error)
                 }
             }
-            .padding(.horizontal, screenInset)
-            .padding(.top, InpensoTheme.Space.sm)
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
             .padding(.bottom, InpensoTheme.Space.bottomClearance)
         }
     }
 
-    // MARK: - Header
-
-    private var tripsBrandHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
+    private var header: some View {
+        HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Trips")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .heavy, design: .rounded))
                     .foregroundStyle(InpensoTheme.ink)
                 Text("Shared spend with friends")
-                    .font(.system(size: 13))
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(InpensoTheme.muted)
             }
 
-            Spacer(minLength: 8)
+            Spacer()
 
-            HStack(spacing: 8) {
+            Button { editDisplayName() } label: {
                 Text(model.displayName)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(InpensoTheme.ink)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.white.opacity(0.7)))
                     .lineLimit(1)
-
-                Button {
-                    editDisplayName()
-                } label: {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(InpensoTheme.ink)
-                        .frame(width: 40, height: 40)
-                        .background(Circle().fill(Color.white.opacity(0.7)))
-                }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule().fill(InpensoTheme.panelFill)
+                            .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 8, y: 2)
+                    )
             }
+            .accessibilityLabel("Edit display name")
+
+            Button { model.showCreate = true } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(
+                        Circle().fill(
+                            LinearGradient(
+                                colors: [InpensoTheme.tide, Color(inpensoHex: "#0B7A58")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    )
+                    .shadow(color: InpensoTheme.tide.opacity(0.35), radius: 10, y: 4)
+            }
+            .accessibilityLabel("Create trip")
         }
     }
 
-    // MARK: - Actions
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("SHARED SPEND")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .tracking(1.0)
+                .foregroundStyle(.white.opacity(0.55))
 
-    private var primaryActions: some View {
-        HStack(spacing: InpensoTheme.Space.sm) {
-            Button {
-                model.showCreate = true
-            } label: {
-                Label("Create trip", systemImage: "plus")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.tide))
+            Text(totalSharedSpend, format: .currency(code: settingsViewModel.selectedCurrency))
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+                .contentTransition(.numericText())
 
-            Button {
-                model.showJoin = true
-            } label: {
-                Label("Join", systemImage: "person.badge.plus")
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: 10) {
+                metaBadge(
+                    title: "Trips",
+                    value: "\(model.trips.count)"
+                )
+                metaBadge(
+                    title: "People",
+                    value: "\(totalMembers)"
+                )
             }
-            .buttonStyle(InpensoSecondaryButtonStyle())
+
+            HStack(spacing: 8) {
+                Button { model.showCreate = true } label: {
+                    Label("Create", systemImage: "plus")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(InpensoTheme.ink)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(.white))
+                }
+                .buttonStyle(.plain)
+
+                Button { model.showJoin = true } label: {
+                    Label("Join", systemImage: "person.badge.plus")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(.white.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+            }
         }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(BankingHeroBackground())
+    }
+
+    private func metaBadge(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .tracking(0.6)
+                .foregroundStyle(.white.opacity(0.48))
+            Text(value)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(InpensoTheme.seafoam)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.white.opacity(0.08))
+        )
     }
 
     // MARK: - List
 
     private var tripsList: some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-            InpensoSectionHeader(title: "Your trips")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your trips")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(InpensoTheme.ink)
 
             if model.isLoading && model.trips.isEmpty {
                 HStack {
                     Spacer()
                     ProgressView()
-                        .padding(.vertical, InpensoTheme.Space.xl)
+                        .padding(.vertical, 28)
                     Spacer()
                 }
-                .inpensoPanelBackground()
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(InpensoTheme.panelFill)
+                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
+                )
             } else if model.trips.isEmpty {
                 tripsEmptyState
             } else {
-                VStack(spacing: InpensoTheme.Space.sm) {
+                VStack(spacing: 10) {
                     ForEach(model.trips) { trip in
                         NavigationLink {
                             SharedTripDetailView(tripID: trip.id)
@@ -241,86 +322,87 @@ struct SharedTripsView: View {
                 }
             }
         }
+        .padding(.top, 2)
     }
 
     private var tripsEmptyState: some View {
-        VStack(spacing: InpensoTheme.Space.md) {
-            Image(systemName: "suitcase")
-                .font(.system(size: 40, weight: .medium))
-                .foregroundStyle(InpensoTheme.tide.opacity(0.6))
-                .frame(width: 72, height: 72)
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: "suitcase.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(InpensoTheme.tide)
+                .frame(width: 40, height: 40)
                 .background(
-                    InpensoTheme.tide.opacity(0.1),
-                    in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+                    InpensoTheme.tide.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
 
-            VStack(spacing: InpensoTheme.Space.xs) {
-                Text("No trips yet")
-                    .font(InpensoTheme.brandFont(20, weight: .bold))
-                    .foregroundStyle(InpensoTheme.ink)
+            Text("No trips yet")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(InpensoTheme.ink)
 
-                Text("Create a trip for weekends, roommates, or dinners — invite with a code and settle fairly. No bank linking.")
-                    .font(InpensoTheme.body(14))
-                    .foregroundStyle(InpensoTheme.muted)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text("Create a trip for weekends, roommates, or dinners — invite with a code and settle fairly.")
+                .font(.system(size: 14))
+                .foregroundStyle(InpensoTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: InpensoTheme.Space.sm) {
-                Button {
-                    model.showCreate = true
-                } label: {
+            HStack(spacing: 10) {
+                Button { model.showCreate = true } label: {
                     Text("Create trip")
-                        .font(InpensoTheme.label(14, weight: .bold))
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(
-                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                                .fill(InpensoTheme.tide)
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [InpensoTheme.tide, Color(inpensoHex: "#0B7A58")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                         )
                 }
-
-                Button {
-                    model.showJoin = true
-                } label: {
-                    Text("Join with code")
-                        .font(InpensoTheme.label(14, weight: .bold))
+                Button { model.showJoin = true } label: {
+                    Text("Join")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(InpensoTheme.ink)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(
-                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                                .stroke(InpensoTheme.hairline, lineWidth: 1.5)
+                            Capsule().stroke(InpensoTheme.hairline, lineWidth: 1.5)
                         )
                 }
             }
-            .padding(.top, InpensoTheme.Space.xs)
         }
-        .padding(InpensoTheme.Space.xl)
-        .frame(maxWidth: .infinity)
-        .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(InpensoTheme.panelFill)
+                .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 12, y: 4)
+        )
     }
 
     private func tripCard(_ trip: SharedTripSummary) -> some View {
-        HStack(spacing: InpensoTheme.Space.md) {
+        HStack(spacing: 12) {
             Image(systemName: "suitcase.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(InpensoTheme.tide)
-                .frame(width: 48, height: 48)
+                .frame(width: 40, height: 40)
                 .background(
                     InpensoTheme.tide.opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(trip.name)
-                        .font(InpensoTheme.body(16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(InpensoTheme.ink)
+                        .lineLimit(1)
                     if trip.isOwner {
                         Text("Owner")
-                            .font(InpensoTheme.label(10, weight: .bold))
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
                             .foregroundStyle(InpensoTheme.tide)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -328,52 +410,55 @@ struct SharedTripsView: View {
                     }
                 }
 
-                HStack(spacing: InpensoTheme.Space.xs) {
+                HStack(spacing: 6) {
                     Label("\(trip.memberCount)", systemImage: "person.2")
                     if trip.expenseCount > 0 {
                         Text("·")
                         Text("\(trip.expenseCount) expenses")
                     }
-                    if trip.totalSpent > 0 {
-                        Text("·")
-                        Text(trip.totalSpent, format: .currency(code: trip.currency))
-                    }
                 }
-                .font(InpensoTheme.label(12))
+                .font(.system(size: 12))
                 .foregroundStyle(InpensoTheme.muted)
                 .lineLimit(1)
             }
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
+
+            if trip.totalSpent > 0 {
+                Text(trip.totalSpent, format: .currency(code: trip.currency))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(InpensoTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(InpensoTheme.muted.opacity(0.6))
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(InpensoTheme.muted.opacity(0.5))
         }
-        .padding(InpensoTheme.Space.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
-        .contentShape(RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous))
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(InpensoTheme.panelFill)
+                .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 12, y: 4)
+        )
+        .contentShape(Rectangle())
     }
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(spacing: InpensoTheme.Space.sm) {
+        HStack(spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill")
                 .foregroundStyle(InpensoTheme.expenseTint)
             Text(message)
-                .font(InpensoTheme.body(14))
+                .font(.system(size: 14))
                 .foregroundStyle(InpensoTheme.ink)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(InpensoTheme.Space.md)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(InpensoTheme.expenseTint.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: InpensoTheme.Radius.lg, style: .continuous)
-                        .stroke(InpensoTheme.expenseTint.opacity(0.2), lineWidth: 1)
-                )
         )
     }
 }
@@ -453,11 +538,13 @@ struct SharedTripDetailView: View {
     @State private var showLeaveConfirm = false
     @State private var showDeleteConfirm = false
 
-    private let screenInset = InpensoTheme.Space.screen
-
     private struct SharePayload: Identifiable {
         let id = UUID()
         let text: String
+    }
+
+    private var totalSpent: Double {
+        detail?.expenses.reduce(0) { $0 + $1.amount } ?? detail?.trip.totalSpent ?? 0
     }
 
     var body: some View {
@@ -466,48 +553,49 @@ struct SharedTripDetailView: View {
 
             ScrollView(showsIndicators: false) {
                 if let detail {
-                    VStack(alignment: .leading, spacing: InpensoTheme.Space.section) {
-                        inviteCodePanel(detail)
+                    VStack(alignment: .leading, spacing: 14) {
+                        tripHero(detail)
                         settleUpPanel(detail)
                         balancesPanel(detail)
                         expensesPanel(detail)
                     }
-                    .padding(.horizontal, screenInset)
-                    .padding(.top, InpensoTheme.Space.sm)
-                    .padding(.bottom, InpensoTheme.Space.xxl)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 120)
                 } else if let errorMessage {
-                    VStack(spacing: InpensoTheme.Space.md) {
+                    VStack(spacing: 12) {
                         Image(systemName: "wifi.exclamationmark")
-                            .font(.system(size: 32))
+                            .font(.system(size: 28))
                             .foregroundStyle(InpensoTheme.expenseTint)
                         Text(errorMessage)
-                            .font(InpensoTheme.body(14))
+                            .font(.system(size: 14))
                             .foregroundStyle(InpensoTheme.ink)
                             .multilineTextAlignment(.center)
                     }
-                    .padding(InpensoTheme.Space.xl)
+                    .padding(20)
                     .frame(maxWidth: .infinity)
-                    .inpensoPanelBackground()
-                    .padding(.horizontal, screenInset)
-                    .padding(.top, InpensoTheme.Space.xxl)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(InpensoTheme.panelFill)
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 40)
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity)
-                        .padding(.top, InpensoTheme.Space.xxl)
+                        .padding(.top, 80)
                 }
             }
         }
         .navigationTitle(detail?.trip.name ?? "Trip")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
-                        if let detail {
-                            presentShare(for: detail)
-                        }
+                        if let detail { presentShare(for: detail) }
                     } label: {
                         Label("Share invite", systemImage: "square.and.arrow.up")
                     }
@@ -535,16 +623,13 @@ struct SharedTripDetailView: View {
             TextField("Title", text: $expenseTitle)
             TextField("Amount", text: $expenseAmount)
                 .keyboardType(.decimalPad)
-            if let detail, detail.members.count > 1 {
-                // Picker in alert is limited — default to selected member; list below in sheet would be better.
-            }
             Button("Add") { Task { await addExpense() } }
             Button("Cancel", role: .cancel) {}
         } message: {
             if let detail {
                 let payer = detail.members.first(where: { $0.id == (paidByMemberID ?? detail.myMemberID) })?.name
                     ?? "you"
-                Text("Logged as paid by \(payer). Change payer below before adding if needed.")
+                Text("Logged as paid by \(payer).")
             }
         }
         .sheet(item: $sharePayload) { payload in
@@ -560,45 +645,63 @@ struct SharedTripDetailView: View {
         }
     }
 
-    // MARK: - Panels
+    // MARK: - Hero
 
-    private func inviteCodePanel(_ detail: SharedTripDetail) -> some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-            Text("Invite friends")
-                .font(InpensoTheme.sectionLabel())
-                .foregroundStyle(InpensoTheme.muted)
+    private func tripHero(_ detail: SharedTripDetail) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("TRIP TOTAL")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .tracking(1.0)
+                .foregroundStyle(.white.opacity(0.55))
 
-            HStack(alignment: .center) {
-                Text(detail.trip.inviteCode)
-                    .font(InpensoTheme.displayAmount(28))
-                    .foregroundStyle(InpensoTheme.ink)
-                    .tracking(2)
+            Text(totalSpent, format: .currency(code: detail.trip.currency))
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
 
-                Spacer()
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("INVITE")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .tracking(0.6)
+                        .foregroundStyle(.white.opacity(0.48))
+                    Text(detail.trip.inviteCode)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(InpensoTheme.seafoam)
+                        .tracking(1.5)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(.white.opacity(0.08))
+                )
 
                 Button {
                     presentShare(for: detail)
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up")
-                        .font(InpensoTheme.label(14, weight: .bold))
-                        .foregroundStyle(InpensoTheme.tide)
-                        .padding(.horizontal, InpensoTheme.Space.md)
-                        .padding(.vertical, InpensoTheme.Space.sm)
-                        .background(
-                            InpensoTheme.tide.opacity(0.1),
-                            in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                        )
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(InpensoTheme.ink)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                        .background(Capsule().fill(.white))
                 }
+                .buttonStyle(.plain)
             }
 
-            Text("Share this code so friends can join and log shared spend in \(AppBrand.name).")
-                .font(InpensoTheme.body(13))
-                .foregroundStyle(InpensoTheme.muted)
+            Text("\(detail.members.count) people · \(detail.expenses.count) expenses")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.7))
         }
-        .padding(InpensoTheme.Space.lg)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .inpensoPanelBackground(radius: InpensoTheme.Radius.hero)
+        .background(BankingHeroBackground())
     }
+
+    // MARK: - Panels
 
     private func settleUpPanel(_ detail: SharedTripDetail) -> some View {
         let creditors = detail.members.filter { $0.net > 0.01 }.sorted { $0.net > $1.net }
@@ -623,73 +726,112 @@ struct SharedTripDetailView: View {
         }
 
         return AnyView(
-            VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-                InpensoSectionHeader(title: "Settle up")
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Settle up")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(InpensoTheme.ink)
+
                 VStack(spacing: 0) {
                     ForEach(Array(suggestions.enumerated()), id: \.offset) { index, tip in
                         HStack {
                             Text("\(tip.from) → \(tip.to)")
-                                .font(InpensoTheme.body(14, weight: .medium))
+                                .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(InpensoTheme.ink)
                             Spacer()
                             Text(tip.amount, format: .currency(code: detail.trip.currency))
-                                .font(InpensoTheme.displayAmount(14))
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
                                 .foregroundStyle(InpensoTheme.tide)
                         }
-                        .padding(.vertical, InpensoTheme.Space.row)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                         if index < suggestions.count - 1 {
-                            Divider().overlay(InpensoTheme.hairline)
+                            Divider().overlay(InpensoTheme.hairline).padding(.leading, 14)
                         }
                     }
                 }
-                .padding(.horizontal, InpensoTheme.Space.md)
-                .padding(.vertical, InpensoTheme.Space.xs)
-                .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(InpensoTheme.panelFill)
+                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
+                )
             }
         )
     }
 
     private func balancesPanel(_ detail: SharedTripDetail) -> some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-            InpensoSectionHeader(title: "Balances")
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Balances")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(InpensoTheme.ink)
 
             VStack(spacing: 0) {
                 ForEach(Array(detail.members.enumerated()), id: \.element.id) { index, member in
                     HStack {
                         Text(member.name)
-                            .font(InpensoTheme.body(15, weight: .medium))
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(InpensoTheme.ink)
                         Spacer()
                         Text(member.net, format: .currency(code: detail.trip.currency))
-                            .font(InpensoTheme.displayAmount(16))
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundStyle(member.net >= 0 ? InpensoTheme.incomeTint : InpensoTheme.expenseTint)
                     }
-                    .padding(.vertical, InpensoTheme.Space.row)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
 
                     if index < detail.members.count - 1 {
-                        Divider().overlay(InpensoTheme.hairline)
+                        Divider().overlay(InpensoTheme.hairline).padding(.leading, 14)
                     }
                 }
             }
-            .padding(.horizontal, InpensoTheme.Space.md)
-            .padding(.vertical, InpensoTheme.Space.xs)
-            .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(InpensoTheme.panelFill)
+                    .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
+            )
 
-            Text("Positive = others owe them · Negative = they owe.")
-                .font(InpensoTheme.label(12))
+            Text("Positive = owed · Negative = owes")
+                .font(.system(size: 12))
                 .foregroundStyle(InpensoTheme.muted)
+                .padding(.horizontal, 4)
         }
     }
 
     private func expensesPanel(_ detail: SharedTripDetail) -> some View {
-        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
-            InpensoSectionHeader(title: "Shared expenses")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Shared expenses")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(InpensoTheme.ink)
+                Spacer()
+                Button {
+                    if paidByMemberID == nil {
+                        paidByMemberID = detail.myMemberID ?? detail.members.first?.id
+                    }
+                    showAdd = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle().fill(
+                                LinearGradient(
+                                    colors: [InpensoTheme.tide, Color(inpensoHex: "#0B7A58")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        )
+                }
+                .accessibilityLabel("Add shared expense")
+            }
 
             if detail.members.count > 1 {
-                VStack(alignment: .leading, spacing: 6) {
+                HStack {
                     Text("Paid by")
-                        .font(InpensoTheme.label(12))
+                        .font(.system(size: 13))
                         .foregroundStyle(InpensoTheme.muted)
+                    Spacer()
                     Picker("Paid by", selection: Binding(
                         get: { paidByMemberID ?? detail.myMemberID ?? detail.members.first?.id ?? 0 },
                         set: { paidByMemberID = $0 }
@@ -699,83 +841,82 @@ struct SharedTripDetailView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .padding(.horizontal, InpensoTheme.Space.md)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
+                    .tint(InpensoTheme.tide)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(InpensoTheme.panelFill)
+                )
             }
 
             if detail.expenses.isEmpty {
-                VStack(spacing: InpensoTheme.Space.sm) {
-                    Image(systemName: "receipt")
-                        .font(.system(size: 28))
-                        .foregroundStyle(InpensoTheme.muted.opacity(0.5))
+                VStack(alignment: .leading, spacing: 8) {
                     Text("No shared expenses yet")
-                        .font(InpensoTheme.body(15, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(InpensoTheme.ink)
                     Text("Log what someone paid for the group.")
-                        .font(InpensoTheme.body(13))
+                        .font(.system(size: 13))
                         .foregroundStyle(InpensoTheme.muted)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(InpensoTheme.Space.xl)
-                .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(InpensoTheme.panelFill)
+                )
             } else {
-                VStack(spacing: InpensoTheme.Space.sm) {
-                    ForEach(detail.expenses) { expense in
+                VStack(spacing: 0) {
+                    ForEach(Array(detail.expenses.enumerated()), id: \.element.id) { index, expense in
                         sharedExpenseRow(expense, currency: detail.trip.currency)
                             .contextMenu {
                                 Button("Delete", role: .destructive) {
                                     Task { await deleteExpense(expense.id) }
                                 }
                             }
+                        if index < detail.expenses.count - 1 {
+                            Divider().overlay(InpensoTheme.hairline).padding(.leading, 66)
+                        }
                     }
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(InpensoTheme.panelFill)
+                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 10, y: 3)
+                )
             }
-
-            Button {
-                if paidByMemberID == nil {
-                    paidByMemberID = detail.myMemberID ?? detail.members.first?.id
-                }
-                showAdd = true
-            } label: {
-                Text("Add shared expense")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(InpensoPrimaryButtonStyle(tint: InpensoTheme.tide))
         }
     }
 
     private func sharedExpenseRow(_ expense: SharedTripExpense, currency: String) -> some View {
-        HStack(alignment: .top, spacing: InpensoTheme.Space.sm) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: "receipt")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(InpensoTheme.tide)
                 .frame(width: 40, height: 40)
                 .background(
-                    InpensoTheme.tide.opacity(0.1),
-                    in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                    InpensoTheme.tide.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(expense.title)
-                    .font(InpensoTheme.body(15, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(InpensoTheme.ink)
                 Text("Paid by \(expense.paidByName)")
-                    .font(InpensoTheme.label(12))
+                    .font(.system(size: 12))
                     .foregroundStyle(InpensoTheme.muted)
             }
 
             Spacer(minLength: 4)
 
             Text(expense.amount, format: .currency(code: currency))
-                .font(InpensoTheme.displayAmount(15))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(InpensoTheme.ink)
         }
-        .padding(InpensoTheme.Space.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .inpensoPanelBackground(radius: InpensoTheme.Radius.lg)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
     }
 
     // MARK: - Data
