@@ -31,10 +31,52 @@ use Inpenso\Database;
 $driver = $config['db_driver'] ?? 'sqlite';
 $fresh = in_array('--fresh', $argv ?? [], true);
 
-echo "Inpenso migrate\n";
+echo "Expense migrate\n";
 echo "Driver: {$driver}\n";
 
-$db = Database::connection($config);
+// Bypass ensureSchema so --fresh can drop first.
+Database::reset();
+
+$path = $config['sqlite_path'] ?? '';
+if ($driver === 'sqlite') {
+    $dir = dirname($path);
+    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+        fwrite(STDERR, "Cannot create storage dir: {$dir}\n");
+        exit(1);
+    }
+    if (!is_writable($dir)) {
+        fwrite(STDERR, "Storage dir not writable: {$dir}\nMake it writable: chmod -R 775 storage\n");
+        exit(1);
+    }
+}
+
+try {
+    // Connect without auto-schema by temporarily using raw PDO path for fresh drops.
+    if ($driver === 'sqlite') {
+        $db = new PDO('sqlite:' . $path, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $db->exec('PRAGMA foreign_keys = ON');
+    } else {
+        $mysql = $config['mysql'];
+        $dsn = sprintf(
+            'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+            $mysql['host'],
+            $mysql['port'],
+            $mysql['database'],
+            $mysql['charset']
+        );
+        $db = new PDO($dsn, $mysql['username'], $mysql['password'], [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    }
+} catch (Throwable $e) {
+    fwrite(STDERR, 'Connection failed: ' . $e->getMessage() . PHP_EOL);
+    exit(1);
+}
 
 if ($fresh && $driver === 'sqlite') {
     echo "Dropping existing SQLite tables...\n";
@@ -59,13 +101,8 @@ if ($sql === false) {
     exit(1);
 }
 
-$statements = array_filter(array_map('trim', explode(';', $sql)));
-
 try {
-    foreach ($statements as $statement) {
-        if ($statement === '' || str_starts_with($statement, '--')) {
-            continue;
-        }
+    foreach (Database::splitSqlStatements($sql) as $statement) {
         $db->exec($statement);
     }
 } catch (Throwable $e) {
@@ -73,14 +110,19 @@ try {
     exit(1);
 }
 
+if (!Database::schemaReady($db, $driver)) {
+    fwrite(STDERR, "Migration finished but users table is still missing.\n");
+    exit(1);
+}
+
 echo "Migration complete.\n";
+echo "Schema ready: yes\n";
 
 if ($driver === 'mysql') {
     try {
         $db->exec('ALTER TABLE trips MODIFY invite_code VARCHAR(16) NOT NULL');
         echo "Ensured trips.invite_code is VARCHAR(16).\n";
     } catch (Throwable $e) {
-        // Column may already be correct on fresh installs.
         echo "invite_code column check skipped: " . $e->getMessage() . PHP_EOL;
     }
 }
@@ -93,5 +135,6 @@ if (!is_dir($rateDir) && !mkdir($rateDir, 0755, true) && !is_dir($rateDir)) {
 }
 
 if ($driver === 'sqlite') {
-    echo 'Database file: ' . $config['sqlite_path'] . PHP_EOL;
+    echo 'Database file: ' . $path . PHP_EOL;
+    echo "Tip: ensure the web user can write this file (chmod -R 775 storage).\n";
 }

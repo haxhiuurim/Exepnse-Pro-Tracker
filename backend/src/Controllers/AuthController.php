@@ -33,14 +33,22 @@ final class AuthController
         $token = Auth::generateToken();
         $tokenHash = Auth::hashToken($token);
 
-        $stmt = $this->db->prepare(
-            'INSERT INTO users (display_name, api_token, created_at) VALUES (:display_name, :api_token, :created_at)'
-        );
-        $stmt->execute([
-            'display_name' => $displayName,
-            'api_token' => $tokenHash,
-            'created_at' => gmdate('Y-m-d H:i:s'),
-        ]);
+        try {
+            $stmt = $this->db->prepare(
+                'INSERT INTO users (display_name, api_token, created_at) VALUES (:display_name, :api_token, :created_at)'
+            );
+            $stmt->execute([
+                'display_name' => $displayName,
+                'api_token' => $tokenHash,
+                'created_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+        } catch (\PDOException $e) {
+            $hint = strtolower($e->getMessage());
+            if (str_contains($hint, 'no such table') || str_contains($hint, "doesn't exist")) {
+                Response::error('Database not migrated. Run: php scripts/migrate.php', 500);
+            }
+            Response::error('Registration failed: ' . $e->getMessage(), 500);
+        }
 
         $userId = (int) $this->db->lastInsertId();
 

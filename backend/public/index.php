@@ -40,7 +40,8 @@ if ($method === 'GET' && $path === '/') {
 try {
     $db = Database::connection($config);
 } catch (Throwable $e) {
-    Response::error($config['debug'] ? $e->getMessage() : 'Service unavailable', 503);
+    // Permission / migrate issues should stay visible so hosts can fix them quickly.
+    Response::error($e->getMessage(), 503);
 }
 
 $authController = new AuthController($db);
@@ -49,12 +50,15 @@ $expenseController = new ExpenseController($db);
 
 $router = new Router();
 
-$router->get('/api/health', static function () use ($config): void {
+$router->get('/api/health', static function () use ($config, $db): void {
+    $driver = $config['db_driver'] ?? 'sqlite';
+    $ready = Database::schemaReady($db, $driver);
     Response::success([
-        'status' => 'ok',
+        'status' => $ready ? 'ok' : 'needs_migration',
         'time' => gmdate('c'),
-        'driver' => $config['db_driver'] ?? 'sqlite',
-    ]);
+        'driver' => $driver,
+        'schema_ready' => $ready,
+    ], $ready ? 200 : 503);
 });
 
 $router->post('/api/auth/register', static function () use ($authController): void {
@@ -100,8 +104,18 @@ $router->delete('/api/trips/{id}/expenses/{expenseId}', static function (string 
 try {
     $router->dispatch($method, $uri);
 } catch (Throwable $e) {
-    if ($config['debug']) {
-        Response::error($e->getMessage(), 500);
+    $message = $e->getMessage();
+    $isSchema = str_contains(strtolower($message), 'no such table')
+        || str_contains(strtolower($message), "doesn't exist")
+        || str_contains(strtolower($message), 'base table or view not found');
+
+    if ($config['debug'] || $isSchema) {
+        Response::error(
+            $isSchema
+                ? 'Database not migrated. SSH to the server and run: php scripts/migrate.php'
+                : $message,
+            500
+        );
     }
 
     Response::error('Internal server error', 500);

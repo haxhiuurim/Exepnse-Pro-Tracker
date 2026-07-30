@@ -77,7 +77,12 @@ final class TripController
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
             }
-            Response::error('Failed to create trip', 500);
+            $hint = $e->getMessage();
+            if (str_contains(strtolower($hint), 'no such table')
+                || str_contains(strtolower($hint), "doesn't exist")) {
+                Response::error('Database not migrated. Run: php scripts/migrate.php', 500);
+            }
+            Response::error('Failed to create trip: ' . $hint, 500);
         }
 
         $trip = $this->fetchTripById($tripId);

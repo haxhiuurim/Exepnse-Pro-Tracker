@@ -480,12 +480,16 @@ final class SharedTripsViewModel: ObservableObject {
 
     func refresh() async {
         SharedTripAPI.shared.displayName = displayName
-        errorMessage = nil
         isLoading = true
         defer { isLoading = false }
         do {
             try await SharedTripAPI.shared.ensureRegistered(displayName: displayName)
             trips = try await SharedTripAPI.shared.fetchTrips()
+            errorMessage = nil
+        } catch is CancellationError {
+            // SwiftUI cancels `.task` / refresh when the view updates — ignore.
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            // Same as above for URLSession cancellation.
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -500,7 +504,12 @@ final class SharedTripsViewModel: ObservableObject {
             trips.insert(trip, at: 0)
             lastCreatedInvite = trip.inviteCode
             UIPasteboard.general.string = trip.inviteCode
+            errorMessage = nil
             return trip.id
+        } catch is CancellationError {
+            return nil
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            return nil
         } catch {
             errorMessage = error.localizedDescription
             return nil
@@ -515,6 +524,11 @@ final class SharedTripsViewModel: ObservableObject {
             if !trips.contains(where: { $0.id == trip.id }) {
                 trips.insert(trip, at: 0)
             }
+            errorMessage = nil
+        } catch is CancellationError {
+            return
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            return
         } catch {
             errorMessage = error.localizedDescription
         }
