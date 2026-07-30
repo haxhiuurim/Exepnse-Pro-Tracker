@@ -24,6 +24,23 @@ return [
 
     "ALTER TABLE trips ADD COLUMN require_join_approval INTEGER NOT NULL DEFAULT 1",
 
+    "ALTER TABLE trip_members ADD COLUMN display_name VARCHAR(100)",
+    "ALTER TABLE trip_members ADD COLUMN is_manual INTEGER NOT NULL DEFAULT 0",
+
+    "ALTER TABLE expenses ADD COLUMN category_id VARCHAR(64)",
+    "ALTER TABLE expenses ADD COLUMN category_name VARCHAR(100)",
+    "ALTER TABLE expenses ADD COLUMN is_settled INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE expenses ADD COLUMN settled_at DATETIME",
+
+    "CREATE TABLE IF NOT EXISTS trip_settlements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trip_id INTEGER NOT NULL,
+        settled_by_user_id INTEGER NOT NULL,
+        note TEXT NULL,
+        snapshot TEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )",
+
     "CREATE TABLE IF NOT EXISTS sync_documents (
         user_id INTEGER NOT NULL,
         doc_type VARCHAR(64) NOT NULL,

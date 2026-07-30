@@ -51,7 +51,6 @@ if ($driver === 'sqlite') {
 }
 
 try {
-    // Connect without auto-schema by temporarily using raw PDO path for fresh drops.
     if ($driver === 'sqlite') {
         $db = new PDO('sqlite:' . $path, null, null, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -80,7 +79,11 @@ try {
 
 if ($fresh && $driver === 'sqlite') {
     echo "Dropping existing SQLite tables...\n";
-    $tables = ['expense_splits', 'expenses', 'trip_members', 'trips', 'users'];
+    $tables = [
+        'expense_splits', 'expenses', 'trip_settlements', 'trip_join_requests',
+        'trip_shortcuts', 'trip_members', 'trips', 'sync_documents',
+        'admin_audit_log', 'app_config', 'devices', 'users',
+    ];
     foreach ($tables as $table) {
         $db->exec("DROP TABLE IF EXISTS {$table}");
     }
@@ -101,39 +104,67 @@ if ($sql === false) {
     exit(1);
 }
 
-try {
-    foreach (Database::splitSqlStatements($sql) as $statement) {
-        $db->exec($statement);
+$statements = Database::splitSqlStatements($sql);
+$tables = [];
+$indexes = [];
+foreach ($statements as $statement) {
+    if (preg_match('/^\s*CREATE\s+INDEX\b/i', $statement) === 1) {
+        $indexes[] = $statement;
+    } else {
+        $tables[] = $statement;
     }
-} catch (Throwable $e) {
-    fwrite(STDERR, 'Migration failed: ' . $e->getMessage() . PHP_EOL);
-    exit(1);
 }
+
+// 1) Create tables (IF NOT EXISTS — safe on existing DBs)
+$tableOk = 0;
+foreach ($tables as $statement) {
+    try {
+        $db->exec($statement);
+        $tableOk++;
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'Table step skipped: ' . $e->getMessage() . PHP_EOL);
+    }
+}
+echo "Schema tables applied: {$tableOk}/" . count($tables) . "\n";
 
 if (!Database::schemaReady($db, $driver)) {
     fwrite(STDERR, "Migration finished but users table is still missing.\n");
     exit(1);
 }
 
-echo "Migration complete.\n";
-echo "Schema ready: yes\n";
-
-// Apply incremental upgrades for existing databases.
-$upgradeFile = dirname(__DIR__) . '/database/upgrades.sqlite.php';
+// 2) Incremental column/table upgrades BEFORE indexes that need those columns
+$upgradeFile = $driver === 'mysql'
+    ? dirname(__DIR__) . '/database/upgrades.mysql.php'
+    : dirname(__DIR__) . '/database/upgrades.sqlite.php';
 if (is_readable($upgradeFile)) {
     /** @var list<string> $upgrades */
     $upgrades = require $upgradeFile;
     $applied = 0;
-    foreach ($upgrades as $sql) {
+    foreach ($upgrades as $upgradeSql) {
         try {
-            $db->exec($sql);
+            $db->exec($upgradeSql);
             $applied++;
         } catch (Throwable) {
-            // Column/table may already exist.
+            // Column/table/index may already exist.
         }
     }
     echo "Upgrades attempted: {$applied}\n";
 }
+
+// 3) Indexes last (columns now exist on upgraded DBs)
+$indexOk = 0;
+foreach ($indexes as $statement) {
+    try {
+        $db->exec($statement);
+        $indexOk++;
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'Index step skipped: ' . $e->getMessage() . PHP_EOL);
+    }
+}
+echo "Schema indexes applied: {$indexOk}/" . count($indexes) . "\n";
+
+echo "Migration complete.\n";
+echo "Schema ready: yes\n";
 
 if ($driver === 'mysql') {
     try {

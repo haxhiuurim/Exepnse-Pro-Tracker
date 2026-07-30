@@ -43,7 +43,7 @@ struct AccountHubView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(InpensoTheme.foam, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .sheet(isPresented: $showAuth) {
+        .fullScreenCover(isPresented: $showAuth) {
             AccountAuthView()
         }
     }

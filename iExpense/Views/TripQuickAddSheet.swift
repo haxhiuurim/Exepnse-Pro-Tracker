@@ -15,9 +15,12 @@ struct TripQuickAddSheet: View {
     var onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var categoryStore: CategoryStore
     @State private var amount = ""
     @State private var title = ""
     @State private var paidByMemberID: Int?
+    @State private var splitMemberIDs: Set<Int> = []
+    @State private var selectedCategoryID: String = FinanceCategory.fallback.id
     @State private var isSaving = false
     @State private var errorMessage: String?
     @FocusState private var focused: Field?
@@ -26,7 +29,8 @@ struct TripQuickAddSheet: View {
 
     private var isValid: Bool {
         guard let value = Double(amount.replacingOccurrences(of: ",", with: ".")), value > 0 else { return false }
-        return (paidByMemberID ?? defaultPayerID ?? members.first?.id) != nil
+        guard (paidByMemberID ?? defaultPayerID ?? members.first?.id) != nil else { return false }
+        return !splitMemberIDs.isEmpty
     }
 
     var body: some View {
@@ -68,25 +72,27 @@ struct TripQuickAddSheet: View {
                                 .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
                         }
 
-                        if members.count > 1 {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Paid by")
-                                    .font(InpensoTheme.label(13))
-                                    .foregroundStyle(InpensoTheme.muted)
-                                Picker("Paid by", selection: Binding(
-                                    get: { paidByMemberID ?? defaultPayerID ?? members.first?.id ?? 0 },
-                                    set: { paidByMemberID = $0 }
-                                )) {
-                                    ForEach(members) { member in
-                                        Text(member.name).tag(member.id)
-                                    }
+                        categoryWrap
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Paid by")
+                                .font(InpensoTheme.label(13))
+                                .foregroundStyle(InpensoTheme.muted)
+                            Picker("Paid by", selection: Binding(
+                                get: { paidByMemberID ?? defaultPayerID ?? members.first?.id ?? 0 },
+                                set: { paidByMemberID = $0 }
+                            )) {
+                                ForEach(members) { member in
+                                    Text(member.name).tag(member.id)
                                 }
-                                .pickerStyle(.menu)
-                                .padding(InpensoTheme.Space.md)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
                             }
+                            .pickerStyle(.menu)
+                            .padding(InpensoTheme.Space.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .inpensoPanelBackground(radius: InpensoTheme.Radius.md)
                         }
+
+                        splitWithSection
 
                         if let errorMessage {
                             Text(errorMessage)
@@ -117,10 +123,100 @@ struct TripQuickAddSheet: View {
             }
             .onAppear {
                 paidByMemberID = defaultPayerID ?? members.first?.id
+                splitMemberIDs = Set(members.map(\.id))
+                selectedCategoryID = categoryStore.preferredCategoryID(for: selectedCategoryID)
                 focused = .amount
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var categoryWrap: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            Text("Category")
+                .font(InpensoTheme.label(13))
+                .foregroundStyle(InpensoTheme.muted)
+
+            FlowLayout(spacing: InpensoTheme.Space.xs, lineSpacing: InpensoTheme.Space.xs) {
+                ForEach(categoryStore.visibleCategories) { category in
+                    let selected = selectedCategoryID == category.id
+                    Button {
+                        HapticFeedback.selection()
+                        selectedCategoryID = category.id
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: category.iconName)
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(category.displayName)
+                                .font(InpensoTheme.label(13, weight: .semibold))
+                        }
+                        .foregroundStyle(selected ? .white : InpensoTheme.slate)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                .fill(selected ? category.color : InpensoTheme.mist)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var splitWithSection: some View {
+        VStack(alignment: .leading, spacing: InpensoTheme.Space.sm) {
+            HStack {
+                Text("Split with")
+                    .font(InpensoTheme.label(13))
+                    .foregroundStyle(InpensoTheme.muted)
+                Spacer()
+                Button(splitMemberIDs.count == members.count ? "Clear" : "Select all") {
+                    if splitMemberIDs.count == members.count {
+                        splitMemberIDs = Set([paidByMemberID ?? defaultPayerID ?? members.first?.id].compactMap { $0 })
+                    } else {
+                        splitMemberIDs = Set(members.map(\.id))
+                    }
+                }
+                .font(InpensoTheme.label(12, weight: .semibold))
+                .foregroundStyle(InpensoTheme.tide)
+            }
+
+            FlowLayout(spacing: InpensoTheme.Space.xs, lineSpacing: InpensoTheme.Space.xs) {
+                ForEach(members) { member in
+                    let selected = splitMemberIDs.contains(member.id)
+                    Button {
+                        HapticFeedback.selection()
+                        toggleSplit(member.id)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(member.name)
+                                .font(InpensoTheme.label(13, weight: .semibold))
+                        }
+                        .foregroundStyle(selected ? .white : InpensoTheme.slate)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
+                                .fill(selected ? InpensoTheme.tide : InpensoTheme.mist)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func toggleSplit(_ memberID: Int) {
+        if splitMemberIDs.contains(memberID) {
+            guard splitMemberIDs.count > 1 else { return }
+            splitMemberIDs.remove(memberID)
+        } else {
+            splitMemberIDs.insert(memberID)
+        }
     }
 
     private var currencySymbol: String {
@@ -131,16 +227,22 @@ struct TripQuickAddSheet: View {
         guard let value = Double(amount.replacingOccurrences(of: ",", with: ".")), value > 0 else { return }
         let payer = paidByMemberID ?? defaultPayerID ?? members.first?.id
         guard let payer else { return }
+        guard !splitMemberIDs.isEmpty else { return }
         isSaving = true
         errorMessage = nil
+        let category = categoryStore.category(for: selectedCategoryID)
         Task {
             do {
                 try await SharedTripAPI.shared.addExpense(
                     tripID: tripID,
                     title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Expense" : title,
                     amount: value,
-                    paidByMemberID: payer
+                    paidByMemberID: payer,
+                    splitMemberIDs: Array(splitMemberIDs),
+                    categoryID: category.id,
+                    categoryName: category.displayName
                 )
+                try? await SharedTripAPI.shared.heartbeat(markDataChange: true)
                 HapticFeedback.success()
                 onSaved()
                 dismiss()

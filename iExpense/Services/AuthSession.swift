@@ -71,6 +71,13 @@ final class AuthSession: ObservableObject {
         isLoggedIn = false
     }
 
+    /// Persist email for UI (e.g. banned lock screen) without creating a session.
+    func rememberEmail(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        email = trimmed
+        defaults.set(trimmed, forKey: Keys.email)
+    }
+
     func updateDisplayName(_ name: String) {
         displayName = name
         defaults.set(name, forKey: Keys.displayName)

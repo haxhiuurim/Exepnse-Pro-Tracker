@@ -2,7 +2,9 @@
 //  AccountAuthView.swift
 //  iExpense
 //
-//  Login / register — Obsidian + Jade banking style.
+//  Login / register — full-screen Obsidian + Jade banking style.
+//  Present with .fullScreenCover for the intended full-bleed look; if presented
+//  as a .sheet, pair with .presentationDetents([.large]) and a visible drag indicator.
 //
 
 import SwiftUI
@@ -42,78 +44,98 @@ struct AccountAuthView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AtmosphereBackground()
+        ZStack {
+            BankingHeroBackground(radius: 0)
+                .ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        hero
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    closeRow
 
-                        modeSwitcher
+                    hero
 
-                        formFields
+                    modeSwitcher
 
-                        if let errorMessage {
-                            Text(errorMessage)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(InpensoTheme.danger)
-                                .padding(.horizontal, 4)
-                        }
+                    formFields
 
-                        if showsGuestHint {
-                            Text("Without an account, data stays only on this device and can be lost.")
-                                .font(.system(size: 13))
-                                .foregroundStyle(InpensoTheme.muted)
-                                .padding(.horizontal, 4)
-                        }
-
-                        Button(action: submit) {
-                            Group {
-                                if isWorking {
-                                    ProgressView().tint(.white)
-                                } else {
-                                    Text(mode == .login ? "Sign in" : "Create account")
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(InpensoPrimaryButtonStyle(enabled: canSubmit && !isWorking))
-                        .disabled(!canSubmit || isWorking)
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(InpensoTheme.danger)
+                            .padding(.horizontal, 4)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 40)
+
+                    if showsGuestHint {
+                        Text("Without an account, data stays only on this device and can be lost.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(.horizontal, 4)
+                    }
+
+                    Button(action: submit) {
+                        Group {
+                            if isWorking {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text(mode == .login ? "Sign in" : "Create account")
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(InpensoPrimaryButtonStyle(enabled: canSubmit && !isWorking, tint: InpensoTheme.tide))
+                    .disabled(!canSubmit || isWorking)
                 }
-                .scrollDismissesKeyboard(.interactively)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 40)
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                        .foregroundStyle(InpensoTheme.ink)
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { focusedField = nil }
-                }
-            }
-            .onAppear {
-                mode = initialMode
-                // Prefill email/name only — never password (avoids sticky autofill).
-                if email.isEmpty { email = auth.email }
-                if displayName.isEmpty { displayName = auth.displayName }
-                password = ""
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    focusedField = mode == .register ? .name : .email
-                }
-            }
-            .onChange(of: mode) { _, _ in
-                password = ""
-                errorMessage = nil
-                showPassword = false
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .navigationBarHidden(true)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focusedField = nil }
             }
         }
+        .onAppear {
+            mode = initialMode
+            // Prefill email/name only — never password (avoids sticky autofill).
+            if email.isEmpty { email = auth.email }
+            if displayName.isEmpty { displayName = auth.displayName }
+            password = ""
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                focusedField = mode == .register ? .name : .email
+            }
+        }
+        .onChange(of: mode) { _, _ in
+            password = ""
+            errorMessage = nil
+            showPassword = false
+        }
+    }
+
+    private var closeRow: some View {
+        HStack {
+            Text(AppBrand.name)
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .tracking(1.4)
+                .foregroundStyle(InpensoTheme.seafoam)
+
+            Spacer()
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(.white.opacity(0.14)))
+            }
+            .accessibilityLabel("Close")
+        }
+        .padding(.top, 4)
     }
 
     private var hero: some View {
@@ -124,7 +146,7 @@ struct AccountAuthView: View {
                 .foregroundStyle(.white.opacity(0.55))
 
             Text(mode == .login ? "Welcome back" : "Create your account")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
 
             Text("Trips and cloud backup need an \(AppBrand.name) account. Your ledger syncs when you’re signed in.")
@@ -132,9 +154,8 @@ struct AccountAuthView: View {
                 .foregroundStyle(.white.opacity(0.72))
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(BankingHeroBackground())
+        .padding(.top, 12)
+        .padding(.bottom, 6)
     }
 
     private var modeSwitcher: some View {
@@ -145,12 +166,12 @@ struct AccountAuthView: View {
                 } label: {
                     Text(item.title)
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(mode == item ? .white : InpensoTheme.ink)
+                        .foregroundStyle(mode == item ? InpensoTheme.ink : .white.opacity(0.85))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(mode == item ? InpensoTheme.ink : InpensoTheme.panelFill)
+                                .fill(mode == item ? Color.white : Color.white.opacity(0.12))
                         )
                 }
                 .buttonStyle(.plain)
@@ -219,7 +240,7 @@ struct AccountAuthView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(InpensoTheme.muted)
+                .foregroundStyle(.white.opacity(0.6))
             content()
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(InpensoTheme.ink)
@@ -227,7 +248,7 @@ struct AccountAuthView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(InpensoTheme.panelFill)
-                        .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 8, y: 2)
+                        .shadow(color: Color.black.opacity(0.18), radius: 10, y: 4)
                 )
         }
     }
@@ -253,10 +274,21 @@ struct AccountAuthView: View {
                         displayName: name.isEmpty ? String(email.split(separator: "@").first ?? "User") : name
                     )
                 }
-                await CloudSyncService.shared.pushAll()
-                await CloudSyncService.shared.pullIfAvailable()
-                HapticFeedback.success()
+                // Apply caller state (e.g. onboarding cash/income) before any sync.
                 onSuccess?()
+                // Upload local ledger first so a pull cannot wipe freshly applied onboarding values.
+                await CloudSyncService.shared.pushAll()
+                if mode == .login {
+                    await CloudSyncService.shared.pullIfAvailable()
+                }
+                // Refresh remote config + admin-granted Pro entitlement.
+                await RemoteConfigService.shared.refresh()
+                HapticFeedback.success()
+                dismiss()
+            } catch let SharedTripAPIError.accountBanned(message) {
+                AuthSession.shared.rememberEmail(email)
+                RemoteConfigService.shared.applyAccountBan(message: message)
+                HapticFeedback.error()
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription

@@ -115,8 +115,18 @@ final class Database
             throw new RuntimeException('Could not read schema file.');
         }
 
+        $tables = [];
+        $indexes = [];
+        foreach (self::splitSqlStatements($sql) as $statement) {
+            if (preg_match('/^\s*CREATE\s+INDEX\b/i', $statement) === 1) {
+                $indexes[] = $statement;
+            } else {
+                $tables[] = $statement;
+            }
+        }
+
         try {
-            foreach (self::splitSqlStatements($sql) as $statement) {
+            foreach ($tables as $statement) {
                 $db->exec($statement);
             }
         } catch (PDOException $e) {
@@ -133,7 +143,16 @@ final class Database
             );
         }
 
+        // Add missing columns on partially-upgraded DBs before indexes that need them.
         self::applyUpgrades($db, $driver);
+
+        foreach ($indexes as $statement) {
+            try {
+                $db->exec($statement);
+            } catch (Throwable) {
+                // Index may already exist or column still missing — upgrades cover retries.
+            }
+        }
     }
 
     private static function applyUpgrades(PDO $db, string $driver): void

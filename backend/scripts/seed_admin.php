@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 /**
- * Create or promote the super-admin account from .env:
- *   ADMIN_EMAIL=you@example.com
- *   ADMIN_PASSWORD=strong-password
- *   ADMIN_NAME=Super Admin
+ * Create or promote the default super-admin.
+ *
+ * Defaults (override with .env):
+ *   ADMIN_EMAIL=admin@expense.app
+ *   ADMIN_PASSWORD=adminadmin
+ *   ADMIN_NAME=Admin
  *
  * Usage: php scripts/seed_admin.php
  */
@@ -28,16 +30,16 @@ spl_autoload_register(static function (string $class): void {
 use Inpenso\Auth;
 use Inpenso\Database;
 
-$email = strtolower(trim((string) ($_ENV['ADMIN_EMAIL'] ?? getenv('ADMIN_EMAIL') ?: '')));
-$password = (string) ($_ENV['ADMIN_PASSWORD'] ?? getenv('ADMIN_PASSWORD') ?: '');
-$name = trim((string) ($_ENV['ADMIN_NAME'] ?? getenv('ADMIN_NAME') ?: 'Super Admin'));
+$email = strtolower(trim((string) ($_ENV['ADMIN_EMAIL'] ?? getenv('ADMIN_EMAIL') ?: 'admin@expense.app')));
+$password = (string) ($_ENV['ADMIN_PASSWORD'] ?? getenv('ADMIN_PASSWORD') ?: 'adminadmin');
+$name = trim((string) ($_ENV['ADMIN_NAME'] ?? getenv('ADMIN_NAME') ?: 'Admin'));
 
 if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    fwrite(STDERR, "Set ADMIN_EMAIL in .env to a valid email.\n");
+    fwrite(STDERR, "ADMIN_EMAIL must be a valid email (default admin@expense.app).\n");
     exit(1);
 }
-if (strlen($password) < 10) {
-    fwrite(STDERR, "Set ADMIN_PASSWORD in .env (min 10 characters).\n");
+if (strlen($password) < 8) {
+    fwrite(STDERR, "ADMIN_PASSWORD must be at least 8 characters (default adminadmin).\n");
     exit(1);
 }
 
@@ -63,13 +65,14 @@ if ($existing) {
         'updated' => $now,
         'id' => (int) $existing['id'],
     ]);
-    echo "Promoted existing user #{$existing['id']} ({$email}) to super-admin.\n";
+    echo "Updated super-admin #{$existing['id']} ({$email}).\n";
 } else {
-    $ins = $db->prepare(
-        'INSERT INTO users (email, password_hash, display_name, api_token, is_admin, is_banned, created_at, updated_at)
-         VALUES (:email, :ph, :name, :token, 1, 0, :created, :updated)'
-    );
+    // Prefer full column set; fall back if older schema.
     try {
+        $ins = $db->prepare(
+            'INSERT INTO users (email, password_hash, display_name, api_token, is_admin, is_banned, created_at, updated_at)
+             VALUES (:email, :ph, :name, :token, 1, 0, :created, :updated)'
+        );
         $ins->execute([
             'email' => $email,
             'ph' => $passHash,
@@ -79,11 +82,13 @@ if ($existing) {
             'updated' => $now,
         ]);
     } catch (Throwable $e) {
-        // Schema may still lack is_admin — run migrate first.
-        fwrite(STDERR, "Insert failed (run php scripts/migrate.php first): " . $e->getMessage() . "\n");
+        fwrite(STDERR, "Insert failed — run php scripts/migrate.php first.\n" . $e->getMessage() . "\n");
         exit(1);
     }
     echo "Created super-admin {$email} (id " . $db->lastInsertId() . ").\n";
 }
 
-echo "Open https://your-host/admin and sign in with that email/password.\n";
+echo "\nSign in at /admin with:\n";
+echo "  Email:    {$email}\n";
+echo "  Password: {$password}\n";
+echo "Change the password after first login (Users → open admin → or re-run seed with new ADMIN_PASSWORD).\n";

@@ -34,7 +34,9 @@ struct MainTabView: View {
 
     var body: some View {
         Group {
-            if remote.blocksApp {
+            if remote.isAccountBanned {
+                AccountBannedView(remote: remote)
+            } else if remote.blocksApp {
                 RemoteGateView(remote: remote)
             } else if onboarding.hasCompletedOnboarding {
                 mainShell

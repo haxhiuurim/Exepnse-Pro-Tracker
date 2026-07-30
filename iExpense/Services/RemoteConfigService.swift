@@ -54,18 +54,27 @@ final class RemoteConfigService: ObservableObject {
     @Published private(set) var serverPremium = false
     @Published private(set) var serverPremiumUntil: String?
     @Published private(set) var lastHeartbeatAt: Date?
+    @Published private(set) var isAccountBanned = false
+    @Published private(set) var bannedMessage =
+        "This account has been suspended. Contact support if you believe this is a mistake."
     @Published var showAnnouncement = false
 
     private let defaults = UserDefaults.standard
     private enum Keys {
         static let cache = "remoteAppConfigCache"
         static let announcementSeen = "remoteAnnouncementFingerprint"
+        static let accountBanned = "remoteAccountBanned"
+        static let bannedMessage = "remoteBannedMessage"
     }
 
     private init() {
         if let data = defaults.data(forKey: Keys.cache),
            let cached = try? JSONDecoder().decode(CodableConfig.self, from: data) {
             config = cached.asModel
+        }
+        isAccountBanned = defaults.bool(forKey: Keys.accountBanned)
+        if let stored = defaults.string(forKey: Keys.bannedMessage), !stored.isEmpty {
+            bannedMessage = stored
         }
     }
 
@@ -76,10 +85,50 @@ final class RemoteConfigService: ObservableObject {
     }
 
     var blocksApp: Bool {
-        config.maintenanceMode || needsForceUpdate
+        isAccountBanned || config.maintenanceMode || needsForceUpdate
+    }
+
+    func applyAccountBan(message: String? = nil) {
+        let text = (message?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap {
+            $0.isEmpty ? nil : $0
+        } ?? "This account has been suspended. Contact support if you believe this is a mistake."
+        isAccountBanned = true
+        bannedMessage = text
+        defaults.set(true, forKey: Keys.accountBanned)
+        defaults.set(text, forKey: Keys.bannedMessage)
+        serverPremium = false
+        serverPremiumUntil = nil
+        ProEntitlementManager.shared.applyServerPremium(false)
+        SharedTripAPI.shared.revokeSessionLocally()
+    }
+
+    func clearAccountBan() {
+        isAccountBanned = false
+        defaults.set(false, forKey: Keys.accountBanned)
+        defaults.removeObject(forKey: Keys.bannedMessage)
+        bannedMessage = "This account has been suspended. Contact support if you believe this is a mistake."
     }
 
     func refresh(markDataChange: Bool = false) async {
+        var mePremium: Bool?
+        var meUntil: String?
+
+        // Prefer /me when signed in — entitlement source of truth.
+        if SharedTripAPI.shared.isLoggedIn {
+            do {
+                let me = try await SharedTripAPI.shared.fetchMe()
+                mePremium = me.premium
+                meUntil = me.premiumUntil
+                serverPremium = me.premium
+                serverPremiumUntil = me.premiumUntil
+            } catch let SharedTripAPIError.accountBanned(message) {
+                applyAccountBan(message: message)
+                return
+            } catch {
+                // Fall through to heartbeat.
+            }
+        }
+
         do {
             let payload = try await SharedTripAPI.shared.heartbeat(markDataChange: markDataChange)
             if let cfg = payload.config {
@@ -87,12 +136,34 @@ final class RemoteConfigService: ObservableObject {
                 cache(cfg)
                 maybeShowAnnouncement(cfg.announcement)
             }
-            serverPremium = payload.premium
-            serverPremiumUntil = payload.premiumUntil
             lastHeartbeatAt = Date()
-            ProEntitlementManager.shared.applyServerPremium(payload.premium)
+
+            if payload.banned {
+                applyAccountBan(message: payload.bannedMessage)
+                return
+            }
+
+            // Successful authed heartbeat means the account is not banned.
+            if SharedTripAPI.shared.isLoggedIn || AuthSession.shared.isLoggedIn {
+                // Prefer explicit /me result; otherwise trust heartbeat when it reports premium.
+                let granted = mePremium ?? payload.premium
+                // If /me said true, never let a false heartbeat clear it in the same refresh.
+                let finalGrant = (mePremium == true) ? true : granted
+                serverPremium = finalGrant
+                serverPremiumUntil = meUntil ?? payload.premiumUntil
+                ProEntitlementManager.shared.applyServerPremium(finalGrant)
+            } else {
+                serverPremium = false
+                serverPremiumUntil = nil
+                ProEntitlementManager.shared.applyServerPremium(false)
+            }
+        } catch let SharedTripAPIError.accountBanned(message) {
+            applyAccountBan(message: message)
         } catch {
-            // Soft-fail offline.
+            // Soft-fail offline — keep last known /me result if we got one.
+            if let mePremium {
+                ProEntitlementManager.shared.applyServerPremium(mePremium)
+            }
         }
     }
 

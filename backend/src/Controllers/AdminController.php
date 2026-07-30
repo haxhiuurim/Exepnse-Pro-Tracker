@@ -219,6 +219,20 @@ final class AdminController
                 ? null
                 : substr((string) $body['premium_note'], 0, 500);
         }
+        if (array_key_exists('password', $body) || array_key_exists('new_password', $body)) {
+            $password = (string) ($body['password'] ?? $body['new_password'] ?? '');
+            if (strlen($password) < 8) {
+                Response::error('password must be at least 8 characters', 422);
+            }
+            if (strlen($password) > 200) {
+                Response::error('password is too long', 422);
+            }
+            $sets[] = 'password_hash = :password_hash';
+            $params['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+            // Force re-login on other sessions/devices for this account
+            $sets[] = 'api_token = :api_token';
+            $params['api_token'] = Auth::hashToken(Auth::generateToken());
+        }
 
         if (count($sets) === 1) {
             Response::error('No changes provided', 422);
@@ -226,7 +240,12 @@ final class AdminController
 
         $this->db->prepare('UPDATE users SET ' . implode(', ', $sets) . ' WHERE id = :id')->execute($params);
 
-        UserActivity::audit($this->db, (int) $admin['id'], 'user.update', 'user', (string) $userId, $body);
+        $auditBody = $body;
+        unset($auditBody['password'], $auditBody['new_password']);
+        if (isset($body['password']) || isset($body['new_password'])) {
+            $auditBody['password_changed'] = true;
+        }
+        UserActivity::audit($this->db, (int) $admin['id'], 'user.update', 'user', (string) $userId, $auditBody);
 
         $stmt->execute(['id' => $userId]);
         Response::success(['user' => $this->formatUser($stmt->fetch())]);

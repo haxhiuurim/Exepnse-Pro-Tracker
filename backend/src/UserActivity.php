@@ -17,7 +17,35 @@ final class UserActivity
         if ($until === null || $until === '') {
             return false;
         }
-        return $until >= gmdate('Y-m-d H:i:s');
+        if (is_numeric($until)) {
+            return (int) $until >= time();
+        }
+        $untilStr = trim((string) $until);
+        if ($untilStr === '' || strcasecmp($untilStr, 'null') === 0) {
+            return false;
+        }
+        // Lifetime / far-future grants
+        if (str_starts_with($untilStr, '9999')) {
+            return true;
+        }
+        $ts = strtotime($untilStr . ' UTC');
+        if ($ts === false) {
+            $ts = strtotime($untilStr);
+        }
+        if ($ts === false) {
+            // Fall back to lexicographic compare for Y-m-d H:i:s
+            return $untilStr >= gmdate('Y-m-d H:i:s');
+        }
+        return $ts >= time();
+    }
+
+    /** Reload a user row (fresh premium_until after admin grants). */
+    public static function fetchUser(PDO $db, int $userId): ?array
+    {
+        $stmt = $db->prepare('SELECT * FROM users WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $userId]);
+        $row = $stmt->fetch();
+        return $row ?: null;
     }
 
     public static function touchSeen(PDO $db, int $userId, array $meta = []): void

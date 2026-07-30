@@ -46,7 +46,9 @@ CREATE TABLE IF NOT EXISTS trips (
 CREATE TABLE IF NOT EXISTS trip_members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     trip_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
+    user_id INTEGER NULL,
+    display_name VARCHAR(100) NULL,
+    is_manual INTEGER NOT NULL DEFAULT 0,
     joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (trip_id, user_id),
     FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
@@ -81,6 +83,10 @@ CREATE TABLE IF NOT EXISTS expenses (
     amount DECIMAL(12, 2) NOT NULL,
     paid_by_member_id INTEGER NOT NULL,
     created_by_user_id INTEGER NOT NULL,
+    category_id VARCHAR(64) NULL,
+    category_name VARCHAR(100) NULL,
+    is_settled INTEGER NOT NULL DEFAULT 0,
+    settled_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
     FOREIGN KEY (paid_by_member_id) REFERENCES trip_members(id) ON DELETE CASCADE,
@@ -95,6 +101,17 @@ CREATE TABLE IF NOT EXISTS expense_splits (
     UNIQUE (expense_id, member_id),
     FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE,
     FOREIGN KEY (member_id) REFERENCES trip_members(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS trip_settlements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trip_id INTEGER NOT NULL,
+    settled_by_user_id INTEGER NOT NULL,
+    note TEXT NULL,
+    snapshot TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
+    FOREIGN KEY (settled_by_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS devices (

@@ -60,7 +60,7 @@ struct SettingsView: View {
         .listSectionSpacing(InpensoTheme.Space.lg)
         .contentMargins(.horizontal, InpensoTheme.Space.screen, for: .scrollContent)
         .contentMargins(.vertical, InpensoTheme.Space.md, for: .scrollContent)
-        .sheet(isPresented: $showAuth) {
+        .fullScreenCover(isPresented: $showAuth) {
             AccountAuthView()
         }
         .sheet(isPresented: $showingImportFilePicker) {
@@ -161,7 +161,7 @@ struct SettingsView: View {
                     Label(AppBrand.proName, systemImage: "checkmark.seal")
                         .foregroundStyle(InpensoTheme.ink)
                     Spacer()
-                    Text("Active")
+                    Text(pro.isServerGrantedPro ? "Admin" : "Active")
                         .font(InpensoTheme.label(12, weight: .semibold))
                         .foregroundStyle(InpensoTheme.incomeTint)
                 }
@@ -189,12 +189,24 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            if auth.isLoggedIn {
+                Button {
+                    Task {
+                        await RemoteConfigService.shared.refresh()
+                    }
+                } label: {
+                    Label("Refresh Pro status", systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
         } header: {
             sectionHeader("Pro")
         } footer: {
             Text(pro.isPro
-                 ? "All Pro features are enabled."
-                 : "Pro adds OCR, goals, exports, and unlimited recurring items.")
+                 ? (pro.isServerGrantedPro
+                    ? "Pro is unlocked via your \(AppBrand.name) account (admin grant)."
+                    : "All Pro features are enabled.")
+                 : "Pro adds OCR, goals, exports, and unlimited recurring items. Admin grants apply after you sign in — tap Refresh Pro status.")
                 .font(InpensoTheme.body(12))
                 .foregroundStyle(InpensoTheme.muted)
         }

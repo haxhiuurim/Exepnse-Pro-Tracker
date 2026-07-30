@@ -54,7 +54,7 @@ struct OnboardingView: View {
                 bottomBar
             }
         }
-        .sheet(isPresented: $showAuth) {
+        .fullScreenCover(isPresented: $showAuth) {
             AccountAuthView(
                 onSuccess: { finish(guest: false) },
                 showsGuestHint: true,
@@ -64,6 +64,8 @@ struct OnboardingView: View {
     }
 
     private var lastStep: Int { featurePages.count + 3 }
+    private var moneyStep: Int { featurePages.count + 1 }
+    private var cashStep: Int { featurePages.count + 2 }
 
     private func featurePage(_ page: (icon: String, title: String, body: String)) -> some View {
         VStack(alignment: .leading, spacing: InpensoTheme.Space.lg) {
@@ -192,6 +194,7 @@ struct OnboardingView: View {
 
             VStack(spacing: 10) {
                 Button {
+                    persistOnboardingDraft()
                     showAuth = true
                 } label: {
                     Text("Sign in or create account")
@@ -229,13 +232,13 @@ struct OnboardingView: View {
 
             if step < lastStep {
                 Button("Continue") {
+                    persistOnboardingDraft(for: step)
                     withAnimation { step += 1 }
                 }
                 .buttonStyle(InpensoPrimaryButtonStyle())
             }
         }
         .padding(InpensoTheme.Space.screen)
-        .background(InpensoTheme.foam.opacity(0.95))
     }
 
     private func field(title: String, text: Binding<String>, placeholder: String) -> some View {
@@ -251,7 +254,35 @@ struct OnboardingView: View {
         }
     }
 
+    /// Save money / cash as the user advances so signup cannot lose the draft.
+    private func persistOnboardingDraft(for currentStep: Int? = nil) {
+        let stepIndex = currentStep ?? step
+        settings.selectedCurrency = selectedCurrency
+
+        if stepIndex >= moneyStep {
+            let income = Double(incomeText.replacingOccurrences(of: ",", with: ".")) ?? 0
+            let savings = Double(savingsText.replacingOccurrences(of: ",", with: ".")) ?? 0
+            store.monthlyIncome = max(0, income)
+            store.monthlySavingsTarget = max(0, savings)
+
+            let budget = Double(budgetText.replacingOccurrences(of: ",", with: ".")) ?? 0
+            if budget > 0 {
+                var budgets = StorageService.loadBudgets()
+                budgets[BudgetMonthKey.current()] = budget
+                StorageService.saveBudgets(budgets)
+            }
+        }
+
+        if stepIndex >= cashStep {
+            let wallet = Double(walletText.replacingOccurrences(of: ",", with: ".")) ?? 0
+            let checking = Double(checkingText.replacingOccurrences(of: ",", with: ".")) ?? 0
+            applyCashBalances(wallet: max(0, wallet), checking: max(0, checking))
+        }
+    }
+
     private func finish(guest: Bool) {
+        persistOnboardingDraft()
+
         let income = Double(incomeText.replacingOccurrences(of: ",", with: ".")) ?? 0
         let savings = Double(savingsText.replacingOccurrences(of: ",", with: ".")) ?? 0
         let budget = Double(budgetText.replacingOccurrences(of: ",", with: ".")) ?? 0
@@ -271,9 +302,8 @@ struct OnboardingView: View {
             monthlySavingsTarget: savings,
             monthlyBudget: budget
         )
-        if auth.isLoggedIn {
-            Task { await CloudSyncService.shared.pushAll() }
-        }
+        // Signed-in path: AccountAuthView pushes after onSuccess.
+        // Guest path stays local-only until they create an account later.
     }
 
     private func applyCashBalances(wallet: Double, checking: Double) {

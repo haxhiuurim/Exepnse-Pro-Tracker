@@ -141,7 +141,14 @@ final class ProEntitlementManager: ObservableObject {
         serverPro = granted
         UserDefaults.standard.set(granted, forKey: Keys.serverPro)
         recomputePro()
+        if granted {
+            showPaywall = false
+            showSpecialOffer = false
+        }
     }
+
+    /// True when Pro comes from admin grant (not StoreKit).
+    var isServerGrantedPro: Bool { serverPro }
 
     private func recomputePro() {
         #if DEBUG
@@ -272,9 +279,14 @@ final class ProEntitlementManager: ObservableObject {
 
     #if DEBUG
     func debugTogglePro() {
-        let next = !isPro
-        UserDefaults.standard.set(next, forKey: Keys.debugPro)
-        isPro = next
+        let enabling = !isPro
+        UserDefaults.standard.set(enabling, forKey: Keys.debugPro)
+        if !enabling {
+            // Re-evaluate StoreKit + server grant after clearing debug override.
+            recomputePro()
+        } else {
+            isPro = true
+        }
     }
     #endif
 
@@ -306,6 +318,12 @@ final class ProEntitlementManager: ObservableObject {
     }
 
     func openPaywall(plan: ProPlan = .yearly) {
+        // Never prompt if Pro is already unlocked (StoreKit or admin grant).
+        guard !isPro else {
+            showPaywall = false
+            showSpecialOffer = false
+            return
+        }
         selectedPaywallPlan = plan == .yearlySpecial ? .yearlySpecial : plan
         showPaywall = true
     }

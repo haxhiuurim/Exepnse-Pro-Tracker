@@ -130,6 +130,15 @@ $router->post('/api/trips/{id}/join-requests/{requestId}/accept', static functio
 $router->post('/api/trips/{id}/join-requests/{requestId}/decline', static function (string $id, string $requestId) use ($tripController): void {
     $tripController->declineJoinRequest($id, $requestId);
 });
+$router->post('/api/trips/{id}/members', static function (string $id) use ($tripController): void {
+    $tripController->addManualMember($id);
+});
+$router->delete('/api/trips/{id}/members/{memberId}', static function (string $id, string $memberId) use ($tripController): void {
+    $tripController->removeMember($id, $memberId);
+});
+$router->post('/api/trips/{id}/settle', static function (string $id) use ($tripController): void {
+    $tripController->settle($id);
+});
 
 $router->get('/api/trips/{id}/expenses', static function (string $id) use ($expenseController): void {
     $expenseController->list($id);

@@ -141,22 +141,26 @@ final class CloudSyncService {
         let premium = PremiumDataStore.shared
         if let raw = documents["accounts"],
            let data = try? JSONSerialization.data(withJSONObject: raw),
-           let accounts = try? JSONDecoder().decode([FinanceAccount].self, from: data) {
+           let accounts = try? JSONDecoder().decode([FinanceAccount].self, from: data),
+           !accounts.isEmpty {
             premium.replaceAccounts(accounts)
         }
         if let raw = documents["goals"],
            let data = try? JSONSerialization.data(withJSONObject: raw),
-           let goals = try? JSONDecoder().decode([SavingsGoal].self, from: data) {
+           let goals = try? JSONDecoder().decode([SavingsGoal].self, from: data),
+           !goals.isEmpty {
             premium.replaceGoals(goals)
         }
         if let raw = documents["debts"],
            let data = try? JSONSerialization.data(withJSONObject: raw),
-           let debts = try? JSONDecoder().decode([DebtLoan].self, from: data) {
+           let debts = try? JSONDecoder().decode([DebtLoan].self, from: data),
+           !debts.isEmpty {
             premium.replaceDebts(debts)
         }
         if let raw = documents["merchant_rules"],
            let data = try? JSONSerialization.data(withJSONObject: raw),
-           let rules = try? JSONDecoder().decode([MerchantRule].self, from: data) {
+           let rules = try? JSONDecoder().decode([MerchantRule].self, from: data),
+           !rules.isEmpty {
             premium.replaceMerchantRules(rules)
         }
 
@@ -183,10 +187,10 @@ final class CloudSyncService {
                 UserDefaults.standard.set(currency, forKey: "selectedCurrency")
                 UserDefaults(suiteName: StorageService.appGroupID)?.set(currency, forKey: "selectedCurrency")
             }
-            if let income = settings["monthly_income"] as? Double {
+            if let income = Self.parseSettingsNumber(settings["monthly_income"]) {
                 OnboardingStore.shared.monthlyIncome = income
             }
-            if let savings = settings["monthly_savings_target"] as? Double {
+            if let savings = Self.parseSettingsNumber(settings["monthly_savings_target"]) {
                 OnboardingStore.shared.monthlySavingsTarget = savings
             }
         }
@@ -194,5 +198,15 @@ final class CloudSyncService {
         if let shortcuts = documents["trip_shortcuts"] {
             TripShortcutsStore.shared.applyServerPayload(shortcuts)
         }
+    }
+
+    private static func parseSettingsNumber(_ value: Any?) -> Double? {
+        if let n = value as? Double { return n }
+        if let n = value as? Int { return Double(n) }
+        if let n = value as? NSNumber { return n.doubleValue }
+        if let s = value as? String {
+            return Double(s.replacingOccurrences(of: ",", with: "."))
+        }
+        return nil
     }
 }

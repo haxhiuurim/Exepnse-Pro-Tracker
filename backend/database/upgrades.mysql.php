@@ -22,6 +22,23 @@ return [
     "ALTER TABLE users ADD COLUMN device_model VARCHAR(128) NULL",
     "ALTER TABLE users ADD COLUMN notes TEXT NULL",
     "ALTER TABLE trips ADD COLUMN require_join_approval TINYINT(1) NOT NULL DEFAULT 1 AFTER owner_id",
+    "ALTER TABLE trip_members ADD COLUMN display_name VARCHAR(100) NULL",
+    "ALTER TABLE trip_members ADD COLUMN is_manual TINYINT(1) NOT NULL DEFAULT 0",
+    "ALTER TABLE trip_members DROP FOREIGN KEY fk_members_user",
+    "ALTER TABLE trip_members MODIFY user_id INT NULL",
+    "ALTER TABLE trip_members ADD CONSTRAINT fk_members_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE expenses ADD COLUMN category_id VARCHAR(64) NULL",
+    "ALTER TABLE expenses ADD COLUMN category_name VARCHAR(100) NULL",
+    "ALTER TABLE expenses ADD COLUMN is_settled TINYINT(1) NOT NULL DEFAULT 0",
+    "ALTER TABLE expenses ADD COLUMN settled_at DATETIME NULL",
+    "CREATE TABLE IF NOT EXISTS trip_settlements (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        trip_id INT UNSIGNED NOT NULL,
+        settled_by_user_id INT UNSIGNED NOT NULL,
+        note TEXT NULL,
+        snapshot LONGTEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
     "CREATE TABLE IF NOT EXISTS sync_documents (
         user_id INT UNSIGNED NOT NULL,

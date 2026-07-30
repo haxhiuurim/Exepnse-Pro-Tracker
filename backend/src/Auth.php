@@ -88,7 +88,7 @@ final class Auth
             Response::error('Unauthorized', 401);
         }
         if ((int) ($user['is_banned'] ?? 0) === 1) {
-            Response::error('This account has been suspended.', 403);
+            Response::error('This account has been suspended.', 403, 'account_banned');
         }
 
         return $user;

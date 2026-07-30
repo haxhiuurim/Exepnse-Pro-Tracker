@@ -293,6 +293,12 @@ async function openUser(id) {
       <textarea id="userNotes" rows="3" style="width:100%">${(u.notes||'').replace(/</g,'&lt;')}</textarea>
       <button class="btn sm" style="margin-top:.5rem" onclick="saveNotes(${u.id})">Save notes</button>
     </div>
+    <div class="field" style="margin-top:1rem">
+      <label>Set new password</label>
+      <input id="userNewPassword" type="password" autocomplete="new-password" placeholder="Min. 8 characters" style="width:100%">
+      <button class="btn sm" style="margin-top:.5rem" onclick="savePassword(${u.id})">Update password</button>
+      <p class="muted" style="margin-top:.4rem;font-size:.85rem">Updates login password for this account. Other sessions will need to sign in again.</p>
+    </div>
     <h3 style="margin-top:1rem">Devices</h3>${devices}
     <h3 style="margin-top:1rem">Trips</h3>${trips}
     <h3 style="margin-top:1rem">Sync documents</h3>${docs}`;
@@ -321,6 +327,17 @@ async function saveNotes(id) {
   const notes = document.getElementById('userNotes').value;
   await api('/api/admin/users/' + id, { method:'PATCH', body: JSON.stringify({ notes }) });
   alert('Notes saved');
+}
+async function savePassword(id) {
+  const password = (document.getElementById('userNewPassword').value || '').trim();
+  if (password.length < 8) {
+    alert('Password must be at least 8 characters');
+    return;
+  }
+  if (!confirm('Update password for this user?')) return;
+  await api('/api/admin/users/' + id, { method:'PATCH', body: JSON.stringify({ password }) });
+  document.getElementById('userNewPassword').value = '';
+  alert('Password updated');
 }
 async function deleteUser(id) {
   if (!confirm('Permanently delete this user and related data?')) return;

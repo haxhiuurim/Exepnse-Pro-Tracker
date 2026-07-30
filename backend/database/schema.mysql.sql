@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS trips (
 CREATE TABLE IF NOT EXISTS trip_members (
     id INT AUTO_INCREMENT PRIMARY KEY,
     trip_id INT NOT NULL,
-    user_id INT NOT NULL,
+    user_id INT NULL,
+    display_name VARCHAR(100) NULL,
+    is_manual TINYINT(1) NOT NULL DEFAULT 0,
     joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_trip_user (trip_id, user_id),
     CONSTRAINT fk_members_trip FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
@@ -70,6 +72,10 @@ CREATE TABLE IF NOT EXISTS expenses (
     amount DECIMAL(12, 2) NOT NULL,
     paid_by_member_id INT NOT NULL,
     created_by_user_id INT NOT NULL,
+    category_id VARCHAR(64) NULL,
+    category_name VARCHAR(100) NULL,
+    is_settled TINYINT(1) NOT NULL DEFAULT 0,
+    settled_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_expenses_trip FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
     CONSTRAINT fk_expenses_payer FOREIGN KEY (paid_by_member_id) REFERENCES trip_members(id) ON DELETE CASCADE,
@@ -84,6 +90,17 @@ CREATE TABLE IF NOT EXISTS expense_splits (
     UNIQUE KEY uniq_expense_member (expense_id, member_id),
     CONSTRAINT fk_splits_expense FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE,
     CONSTRAINT fk_splits_member FOREIGN KEY (member_id) REFERENCES trip_members(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS trip_settlements (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    trip_id INT NOT NULL,
+    settled_by_user_id INT NOT NULL,
+    note TEXT NULL,
+    snapshot LONGTEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_settlements_trip FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
+    CONSTRAINT fk_settlements_user FOREIGN KEY (settled_by_user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_trips_owner ON trips(owner_id);

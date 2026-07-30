@@ -22,9 +22,13 @@ final class Response
         self::json(['ok' => true, 'data' => $data], $status);
     }
 
-    public static function error(string $message, int $status = 400): void
+    public static function error(string $message, int $status = 400, ?string $code = null): void
     {
-        self::json(['ok' => false, 'error' => $message], $status);
+        $payload = ['ok' => false, 'error' => $message];
+        if ($code !== null && $code !== '') {
+            $payload['code'] = $code;
+        }
+        self::json($payload, $status);
     }
 
     public static function applyCors(array $corsConfig): void

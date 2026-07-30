@@ -64,11 +64,13 @@ final class TripController
             $tripId = (int) $this->db->lastInsertId();
 
             $memberStmt = $this->db->prepare(
-                'INSERT INTO trip_members (trip_id, user_id, joined_at) VALUES (:trip_id, :user_id, :joined_at)'
+                'INSERT INTO trip_members (trip_id, user_id, display_name, is_manual, joined_at)
+                 VALUES (:trip_id, :user_id, :display_name, 0, :joined_at)'
             );
             $memberStmt->execute([
                 'trip_id' => $tripId,
                 'user_id' => (int) $user['id'],
+                'display_name' => $user['display_name'] ?? 'Owner',
                 'joined_at' => gmdate('Y-m-d H:i:s'),
             ]);
 
@@ -127,11 +129,13 @@ final class TripController
 
         if (!$requiresApproval) {
             $insert = $this->db->prepare(
-                'INSERT INTO trip_members (trip_id, user_id, joined_at) VALUES (:trip_id, :user_id, :joined_at)'
+                'INSERT INTO trip_members (trip_id, user_id, display_name, is_manual, joined_at)
+                 VALUES (:trip_id, :user_id, :display_name, 0, :joined_at)'
             );
             $insert->execute([
                 'trip_id' => $tripId,
                 'user_id' => $userId,
+                'display_name' => $user['display_name'] ?? 'Member',
                 'joined_at' => gmdate('Y-m-d H:i:s'),
             ]);
             Response::success([
@@ -248,12 +252,17 @@ final class TripController
         $now = gmdate('Y-m-d H:i:s');
         if ($accept) {
             if (!$this->userIsMember($id, (int) $request['user_id'])) {
+                $nameStmt = $this->db->prepare('SELECT display_name FROM users WHERE id = :id LIMIT 1');
+                $nameStmt->execute(['id' => (int) $request['user_id']]);
+                $joinName = (string) ($nameStmt->fetchColumn() ?: 'Member');
                 $insert = $this->db->prepare(
-                    'INSERT INTO trip_members (trip_id, user_id, joined_at) VALUES (:trip_id, :user_id, :joined_at)'
+                    'INSERT INTO trip_members (trip_id, user_id, display_name, is_manual, joined_at)
+                     VALUES (:trip_id, :user_id, :display_name, 0, :joined_at)'
                 );
                 $insert->execute([
                     'trip_id' => $id,
                     'user_id' => (int) $request['user_id'],
+                    'display_name' => $joinName,
                     'joined_at' => $now,
                 ]);
             }
@@ -278,9 +287,121 @@ final class TripController
         ]);
     }
 
+    public function addManualMember(string $tripId): void
+    {
+        $user = Auth::requireUser($this->db);
+        $id = (int) $tripId;
+        $trip = $this->fetchTripById($id);
+        if ($trip === null || !$this->userIsMember($id, (int) $user['id'])) {
+            Response::error('Trip not found', 404);
+        }
+
+        $body = Response::readJsonBody();
+        $name = trim((string) ($body['display_name'] ?? $body['name'] ?? ''));
+        if ($name === '') {
+            Response::error('display_name is required', 422);
+        }
+        if (mb_strlen($name) > 100) {
+            Response::error('display_name must be 100 characters or fewer', 422);
+        }
+
+        $ins = $this->db->prepare(
+            'INSERT INTO trip_members (trip_id, user_id, display_name, is_manual, joined_at)
+             VALUES (:trip_id, NULL, :display_name, 1, :joined_at)'
+        );
+        $ins->execute([
+            'trip_id' => $id,
+            'display_name' => $name,
+            'joined_at' => gmdate('Y-m-d H:i:s'),
+        ]);
+
+        Response::success([
+            'member_id' => (int) $this->db->lastInsertId(),
+            'trip' => $this->getTripDetail($id, (int) $user['id']),
+        ], 201);
+    }
+
+    public function removeMember(string $tripId, string $memberId): void
+    {
+        $user = Auth::requireUser($this->db);
+        $id = (int) $tripId;
+        $mid = (int) $memberId;
+        $trip = $this->fetchTripById($id);
+        if ($trip === null || (int) $trip['owner_id'] !== (int) $user['id']) {
+            Response::error('Only the trip owner can remove members', 403);
+        }
+
+        $stmt = $this->db->prepare('SELECT * FROM trip_members WHERE id = :id AND trip_id = :trip_id LIMIT 1');
+        $stmt->execute(['id' => $mid, 'trip_id' => $id]);
+        $member = $stmt->fetch();
+        if (!$member) {
+            Response::error('Member not found', 404);
+        }
+        if ((int) ($member['user_id'] ?? 0) === (int) $trip['owner_id']) {
+            Response::error('Cannot remove the trip owner', 422);
+        }
+        if ($this->countMemberExpenses($mid) > 0) {
+            Response::error('Cannot remove a member who is on expenses. Settle or delete those first.', 422);
+        }
+
+        $this->db->prepare('DELETE FROM trip_members WHERE id = :id')->execute(['id' => $mid]);
+        Response::success(['deleted' => true, 'trip' => $this->getTripDetail($id, (int) $user['id'])]);
+    }
+
+    public function settle(string $tripId): void
+    {
+        $user = Auth::requireUser($this->db);
+        $id = (int) $tripId;
+        $trip = $this->fetchTripById($id);
+        if ($trip === null || (int) $trip['owner_id'] !== (int) $user['id']) {
+            Response::error('Only the trip owner can settle debts', 403);
+        }
+
+        $detail = $this->getTripDetail($id, (int) $user['id']);
+        $now = gmdate('Y-m-d H:i:s');
+
+        $this->db->beginTransaction();
+        try {
+            $snap = json_encode([
+                'balances' => $detail['balances'] ?? [],
+                'total_spent' => $detail['total_spent'] ?? '0.00',
+            ], JSON_UNESCAPED_UNICODE);
+
+            $ins = $this->db->prepare(
+                'INSERT INTO trip_settlements (trip_id, settled_by_user_id, note, snapshot, created_at)
+                 VALUES (:trip_id, :uid, :note, :snapshot, :created)'
+            );
+            $ins->execute([
+                'trip_id' => $id,
+                'uid' => (int) $user['id'],
+                'note' => 'Owner settled outstanding balances',
+                'snapshot' => $snap,
+                'created' => $now,
+            ]);
+
+            $upd = $this->db->prepare(
+                'UPDATE expenses SET is_settled = 1, settled_at = :t
+                 WHERE trip_id = :trip_id AND COALESCE(is_settled, 0) = 0'
+            );
+            $upd->execute(['t' => $now, 'trip_id' => $id]);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            Response::error('Settle failed: ' . $e->getMessage(), 500);
+        }
+
+        Response::success([
+            'settled' => true,
+            'trip' => $this->getTripDetail($id, (int) $user['id']),
+        ]);
+    }
+
     public function list(): void
     {
         $user = Auth::requireUser($this->db);
+        $userId = (int) $user['id'];
 
         $stmt = $this->db->prepare(
             'SELECT t.*,
@@ -288,14 +409,34 @@ final class TripController
                     (SELECT COUNT(*) FROM expenses e WHERE e.trip_id = t.id) AS expense_count,
                     (SELECT COALESCE(SUM(e.amount), 0) FROM expenses e WHERE e.trip_id = t.id) AS total_spent
              FROM trips t
-             INNER JOIN trip_members m ON m.trip_id = t.id
-             WHERE m.user_id = :user_id
+             INNER JOIN trip_members m ON m.trip_id = t.id AND m.user_id = :user_id
              ORDER BY t.created_at DESC'
         );
-        $stmt->execute(['user_id' => (int) $user['id']]);
+        $stmt->execute(['user_id' => $userId]);
         $trips = $stmt->fetchAll();
 
-        Response::success(array_map(fn (array $trip) => $this->formatTripSummary($trip, (int) $user['id']), $trips));
+        $summaries = [];
+        foreach ($trips as $trip) {
+            $summary = $this->formatTripSummary($trip, $userId);
+            $detailBalances = $this->calculateBalances(
+                $this->fetchMembers((int) $trip['id']),
+                $this->fetchExpenses((int) $trip['id'], false)
+            );
+            $myMember = $this->fetchMemberByUser((int) $trip['id'], $userId);
+            $myNet = 0.0;
+            if ($myMember) {
+                foreach ($detailBalances as $b) {
+                    if ((int) $b['member_id'] === (int) $myMember['id']) {
+                        $myNet = (float) $b['net'];
+                        break;
+                    }
+                }
+            }
+            $summary['my_net'] = $this->formatMoney($myNet);
+            $summaries[] = $summary;
+        }
+
+        Response::success($summaries);
     }
 
     public function show(string $tripId): void
@@ -372,14 +513,64 @@ final class TripController
         }
 
         $members = $this->fetchMembers($tripId);
-        $expenses = $this->fetchExpenses($tripId);
-        $balances = $this->calculateBalances($members, $expenses);
+        $expenses = $this->fetchExpenses($tripId, true);
+        $balances = $this->calculateBalances($members, $this->fetchExpenses($tripId, false));
+
+        $byMember = [];
+        foreach ($balances as $b) {
+            $byMember[(int) $b['member_id']] = $b;
+        }
+
+        $membersWithBalances = [];
+        $myNet = 0.0;
+        foreach ($members as $member) {
+            $mid = (int) $member['id'];
+            $bal = $byMember[$mid] ?? [
+                'paid' => '0.00',
+                'owed' => '0.00',
+                'net' => '0.00',
+            ];
+            $member['paid'] = $bal['paid'];
+            $member['owed'] = $bal['owed'];
+            $member['net'] = $bal['net'];
+            $membersWithBalances[] = $member;
+            if ((int) ($member['user_id'] ?? 0) === $userId) {
+                $myNet = (float) $bal['net'];
+            }
+        }
+
+        $totalSpent = 0.0;
+        $categoryTotals = [];
+        foreach ($expenses as $expense) {
+            $totalSpent += (float) $expense['amount'];
+            $cat = trim((string) ($expense['category_name'] ?? ''));
+            if ($cat === '') {
+                $cat = 'Other';
+            }
+            if (!isset($categoryTotals[$cat])) {
+                $categoryTotals[$cat] = 0.0;
+            }
+            $categoryTotals[$cat] += (float) $expense['amount'];
+        }
+
+        $categoryBreakdown = [];
+        foreach ($categoryTotals as $name => $sum) {
+            $categoryBreakdown[] = [
+                'category_name' => $name,
+                'amount' => $this->formatMoney($sum),
+            ];
+        }
+        usort($categoryBreakdown, fn ($a, $b) => (float) $b['amount'] <=> (float) $a['amount']);
 
         $formatted = $this->formatTrip($trip);
         $formatted['is_owner'] = (int) $trip['owner_id'] === $userId;
-        $formatted['members'] = $members;
+        $formatted['members'] = $membersWithBalances;
         $formatted['expenses'] = $expenses;
         $formatted['balances'] = $balances;
+        $formatted['total_spent'] = $this->formatMoney($totalSpent);
+        $formatted['my_net'] = $this->formatMoney($myNet);
+        $formatted['category_breakdown'] = $categoryBreakdown;
+        $formatted['settlements'] = $this->fetchSettlements($tripId);
 
         return $formatted;
     }
@@ -396,47 +587,70 @@ final class TripController
     private function fetchMembers(int $tripId): array
     {
         $stmt = $this->db->prepare(
-            'SELECT m.id, m.trip_id, m.user_id, m.joined_at, u.display_name
+            'SELECT m.id, m.trip_id, m.user_id, m.joined_at,
+                    m.display_name AS member_display_name,
+                    COALESCE(m.is_manual, 0) AS is_manual,
+                    u.display_name AS user_display_name
              FROM trip_members m
-             INNER JOIN users u ON u.id = m.user_id
+             LEFT JOIN users u ON u.id = m.user_id
              WHERE m.trip_id = :trip_id
-             ORDER BY m.joined_at ASC'
+             ORDER BY COALESCE(m.is_manual, 0) ASC, m.joined_at ASC, m.id ASC'
         );
         $stmt->execute(['trip_id' => $tripId]);
         $rows = $stmt->fetchAll();
 
         return array_map(function (array $row): array {
+            $isManual = (int) ($row['is_manual'] ?? 0) === 1;
+            $name = trim((string) ($row['member_display_name'] ?? ''));
+            if ($name === '') {
+                $name = trim((string) ($row['user_display_name'] ?? ''));
+            }
+            if ($name === '') {
+                $name = $isManual ? 'Guest' : 'Member';
+            }
+
             return [
                 'id' => (int) $row['id'],
                 'trip_id' => (int) $row['trip_id'],
-                'user_id' => (int) $row['user_id'],
-                'display_name' => $row['display_name'],
+                'user_id' => $row['user_id'] !== null ? (int) $row['user_id'] : null,
+                'display_name' => $name,
+                'is_manual' => $isManual,
                 'joined_at' => $row['joined_at'],
             ];
         }, $rows);
     }
 
-    private function fetchExpenses(int $tripId): array
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchExpenses(int $tripId, bool $includeSettled = true): array
     {
-        $stmt = $this->db->prepare(
-            'SELECT e.id, e.trip_id, e.title, e.amount, e.paid_by_member_id, e.created_by_user_id, e.created_at,
-                    payer.display_name AS paid_by_display_name
-             FROM expenses e
-             INNER JOIN trip_members pm ON pm.id = e.paid_by_member_id
-             INNER JOIN users payer ON payer.id = pm.user_id
-             WHERE e.trip_id = :trip_id
-             ORDER BY e.created_at DESC, e.id DESC'
-        );
+        $sql = 'SELECT e.id, e.trip_id, e.title, e.amount, e.paid_by_member_id, e.created_by_user_id, e.created_at,
+                       e.category_id, e.category_name, COALESCE(e.is_settled, 0) AS is_settled, e.settled_at,
+                       COALESCE(NULLIF(pm.display_name, \'\'), up.display_name, \'Member\') AS paid_by_display_name,
+                       COALESCE(uc.display_name, \'Member\') AS created_by_display_name
+                FROM expenses e
+                INNER JOIN trip_members pm ON pm.id = e.paid_by_member_id
+                LEFT JOIN users up ON up.id = pm.user_id
+                LEFT JOIN users uc ON uc.id = e.created_by_user_id
+                WHERE e.trip_id = :trip_id';
+        if (!$includeSettled) {
+            $sql .= ' AND COALESCE(e.is_settled, 0) = 0';
+        }
+        $sql .= ' ORDER BY e.created_at DESC, e.id DESC';
+
+        $stmt = $this->db->prepare($sql);
         $stmt->execute(['trip_id' => $tripId]);
         $expenses = $stmt->fetchAll();
 
         $result = [];
         foreach ($expenses as $expense) {
             $splitStmt = $this->db->prepare(
-                'SELECT s.member_id, s.amount, u.display_name
+                'SELECT s.member_id, s.amount,
+                        COALESCE(NULLIF(m.display_name, \'\'), u.display_name, \'Member\') AS display_name
                  FROM expense_splits s
                  INNER JOIN trip_members m ON m.id = s.member_id
-                 INNER JOIN users u ON u.id = m.user_id
+                 LEFT JOIN users u ON u.id = m.user_id
                  WHERE s.expense_id = :expense_id
                  ORDER BY s.member_id ASC'
             );
@@ -451,6 +665,11 @@ final class TripController
                 'paid_by_member_id' => (int) $expense['paid_by_member_id'],
                 'paid_by_display_name' => $expense['paid_by_display_name'],
                 'created_by_user_id' => (int) $expense['created_by_user_id'],
+                'created_by_display_name' => $expense['created_by_display_name'],
+                'category_id' => $expense['category_id'] !== null ? (string) $expense['category_id'] : null,
+                'category_name' => $expense['category_name'],
+                'is_settled' => (int) ($expense['is_settled'] ?? 0) === 1,
+                'settled_at' => $expense['settled_at'] ?? null,
                 'created_at' => $expense['created_at'],
                 'splits' => array_map(fn (array $split) => [
                     'member_id' => (int) $split['member_id'],
@@ -461,6 +680,35 @@ final class TripController
         }
 
         return $result;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchSettlements(int $tripId): array
+    {
+        try {
+            $stmt = $this->db->prepare(
+                'SELECT s.id, s.trip_id, s.settled_by_user_id, s.note, s.created_at, u.display_name
+                 FROM trip_settlements s
+                 LEFT JOIN users u ON u.id = s.settled_by_user_id
+                 WHERE s.trip_id = :trip_id
+                 ORDER BY s.created_at DESC'
+            );
+            $stmt->execute(['trip_id' => $tripId]);
+            $rows = $stmt->fetchAll();
+        } catch (PDOException) {
+            return [];
+        }
+
+        return array_map(static fn (array $row): array => [
+            'id' => (int) $row['id'],
+            'trip_id' => (int) $row['trip_id'],
+            'settled_by_user_id' => (int) $row['settled_by_user_id'],
+            'settled_by_display_name' => $row['display_name'] ?? 'Owner',
+            'note' => $row['note'],
+            'created_at' => $row['created_at'],
+        ], $rows);
     }
 
     /**
@@ -481,6 +729,9 @@ final class TripController
         }
 
         foreach ($expenses as $expense) {
+            if (!empty($expense['is_settled'])) {
+                continue;
+            }
             $paidBy = (int) $expense['paid_by_member_id'];
             $amount = (float) $expense['amount'];
 
@@ -498,13 +749,17 @@ final class TripController
         }
 
         $balances = [];
-        foreach ($net as &$entry) {
-            $entry['paid'] = $this->formatMoney($entry['paid']);
-            $entry['owed'] = $this->formatMoney($entry['owed']);
-            $entry['net'] = $this->formatMoney((float) $entry['paid'] - (float) $entry['owed']);
-            $balances[] = $entry;
+        foreach ($net as $entry) {
+            $paid = (float) $entry['paid'];
+            $owed = (float) $entry['owed'];
+            $balances[] = [
+                'member_id' => $entry['member_id'],
+                'display_name' => $entry['display_name'],
+                'paid' => $this->formatMoney($paid),
+                'owed' => $this->formatMoney($owed),
+                'net' => $this->formatMoney($paid - $owed),
+            ];
         }
-        unset($entry);
 
         usort($balances, fn ($a, $b) => (float) $b['net'] <=> (float) $a['net']);
 

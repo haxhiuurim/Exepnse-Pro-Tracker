@@ -41,6 +41,9 @@ final class ExpenseController
         $amount = $body['amount'] ?? null;
         $paidByMemberId = $body['paid_by_member_id'] ?? null;
         $splitMap = $body['split'] ?? null;
+        $splitMemberIds = $body['split_member_ids'] ?? null;
+        $categoryId = isset($body['category_id']) ? trim((string) $body['category_id']) : null;
+        $categoryName = isset($body['category_name']) ? trim((string) $body['category_name']) : null;
 
         if ($title === '') {
             Response::error('title is required', 422);
@@ -69,19 +72,53 @@ final class ExpenseController
             Response::error('paid_by_member_id is not a member of this trip', 422);
         }
 
-        $members = $this->fetchMemberIds($id);
-        if ($members === []) {
+        $allMembers = $this->fetchMemberIds($id);
+        if ($allMembers === []) {
             Response::error('Trip has no members', 422);
         }
 
-        $splits = $this->buildSplits($members, $amountValue, $splitMap);
+        $splitTargets = $allMembers;
+        if (is_array($splitMemberIds) && $splitMemberIds !== []) {
+            $splitTargets = [];
+            foreach ($splitMemberIds as $rawId) {
+                if (!is_numeric($rawId)) {
+                    Response::error('split_member_ids must be member IDs', 422);
+                }
+                $mid = (int) $rawId;
+                if (!in_array($mid, $allMembers, true)) {
+                    Response::error("Member {$mid} is not part of this trip", 422);
+                }
+                $splitTargets[] = $mid;
+            }
+            $splitTargets = array_values(array_unique($splitTargets));
+            if ($splitTargets === []) {
+                Response::error('At least one split member is required', 422);
+            }
+        }
+
+        if ($categoryName !== null && $categoryName === '') {
+            $categoryName = null;
+        }
+        if ($categoryId !== null && $categoryId === '') {
+            $categoryId = null;
+        }
+        if ($categoryName !== null && mb_strlen($categoryName) > 100) {
+            Response::error('category_name must be 100 characters or fewer', 422);
+        }
+
+        $splits = $this->buildSplits($splitTargets, $allMembers, $amountValue, $splitMap);
 
         try {
             $this->db->beginTransaction();
 
             $stmt = $this->db->prepare(
-                'INSERT INTO expenses (trip_id, title, amount, paid_by_member_id, created_by_user_id, created_at)
-                 VALUES (:trip_id, :title, :amount, :paid_by_member_id, :created_by_user_id, :created_at)'
+                'INSERT INTO expenses (
+                    trip_id, title, amount, paid_by_member_id, created_by_user_id,
+                    category_id, category_name, is_settled, created_at
+                 ) VALUES (
+                    :trip_id, :title, :amount, :paid_by_member_id, :created_by_user_id,
+                    :category_id, :category_name, 0, :created_at
+                 )'
             );
             $stmt->execute([
                 'trip_id' => $id,
@@ -89,6 +126,8 @@ final class ExpenseController
                 'amount' => $amountValue,
                 'paid_by_member_id' => $paidByMemberId,
                 'created_by_user_id' => (int) $user['id'],
+                'category_id' => $categoryId,
+                'category_name' => $categoryName,
                 'created_at' => gmdate('Y-m-d H:i:s'),
             ]);
 
@@ -106,6 +145,60 @@ final class ExpenseController
                 ]);
             }
 
+            $this->db->commit();
+        } catch (PDOException $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            // Fallback without category columns if migration not yet applied
+            if (str_contains(strtolower($e->getMessage()), 'unknown column')
+                || str_contains(strtolower($e->getMessage()), 'no such column')) {
+                $this->createLegacyExpense($id, $title, $amountValue, $paidByMemberId, (int) $user['id'], $splits);
+                return;
+            }
+            Response::error('Failed to create expense: ' . $e->getMessage(), 500);
+        }
+
+        $expense = $this->fetchExpenseById($expenseId);
+        Response::success($expense, 201);
+    }
+
+    /**
+     * @param array<int, float> $splits
+     */
+    private function createLegacyExpense(
+        int $tripId,
+        string $title,
+        float $amountValue,
+        int $paidByMemberId,
+        int $userId,
+        array $splits
+    ): void {
+        try {
+            $this->db->beginTransaction();
+            $stmt = $this->db->prepare(
+                'INSERT INTO expenses (trip_id, title, amount, paid_by_member_id, created_by_user_id, created_at)
+                 VALUES (:trip_id, :title, :amount, :paid_by_member_id, :created_by_user_id, :created_at)'
+            );
+            $stmt->execute([
+                'trip_id' => $tripId,
+                'title' => $title,
+                'amount' => $amountValue,
+                'paid_by_member_id' => $paidByMemberId,
+                'created_by_user_id' => $userId,
+                'created_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+            $expenseId = (int) $this->db->lastInsertId();
+            $splitStmt = $this->db->prepare(
+                'INSERT INTO expense_splits (expense_id, member_id, amount) VALUES (:expense_id, :member_id, :amount)'
+            );
+            foreach ($splits as $memberId => $splitAmount) {
+                $splitStmt->execute([
+                    'expense_id' => $expenseId,
+                    'member_id' => $memberId,
+                    'amount' => $splitAmount,
+                ]);
+            }
             $this->db->commit();
         } catch (PDOException $e) {
             if ($this->db->inTransaction()) {
@@ -156,13 +249,14 @@ final class ExpenseController
     }
 
     /**
-     * @param array<int, int> $memberIds
+     * @param array<int, int> $splitTargets
+     * @param array<int, int> $allMemberIds
      * @return array<int, float>
      */
-    private function buildSplits(array $memberIds, float $amount, mixed $splitMap): array
+    private function buildSplits(array $splitTargets, array $allMemberIds, float $amount, mixed $splitMap): array
     {
         if ($splitMap === null) {
-            return $this->splitEqually($memberIds, $amount);
+            return $this->splitEqually($splitTargets, $amount);
         }
 
         if (!is_array($splitMap)) {
@@ -178,7 +272,7 @@ final class ExpenseController
             }
 
             $memberId = (int) $memberId;
-            if (!in_array($memberId, $memberIds, true)) {
+            if (!in_array($memberId, $allMemberIds, true)) {
                 Response::error("Member {$memberId} is not part of this trip", 422);
             }
 
@@ -187,8 +281,15 @@ final class ExpenseController
             }
 
             $value = round((float) $splitAmount, 2);
+            if ($value <= 0) {
+                continue;
+            }
             $splits[$memberId] = $value;
             $total += $value;
+        }
+
+        if ($splits === []) {
+            Response::error('At least one positive split is required', 422);
         }
 
         if (abs($total - $amount) > 0.01) {
@@ -286,25 +387,46 @@ final class ExpenseController
         $placeholders = implode(',', array_fill(0, count($expenseIds), '?'));
         $stmt = $this->db->prepare(
             "SELECT e.id, e.trip_id, e.title, e.amount, e.paid_by_member_id, e.created_by_user_id, e.created_at,
-                    payer.display_name AS paid_by_display_name
+                    e.category_id, e.category_name, COALESCE(e.is_settled, 0) AS is_settled, e.settled_at,
+                    COALESCE(NULLIF(pm.display_name, ''), up.display_name, 'Member') AS paid_by_display_name,
+                    COALESCE(uc.display_name, 'Member') AS created_by_display_name
              FROM expenses e
              INNER JOIN trip_members pm ON pm.id = e.paid_by_member_id
-             INNER JOIN users payer ON payer.id = pm.user_id
+             LEFT JOIN users up ON up.id = pm.user_id
+             LEFT JOIN users uc ON uc.id = e.created_by_user_id
              WHERE e.id IN ($placeholders)
              ORDER BY e.created_at DESC, e.id DESC"
         );
-        $stmt->execute($expenseIds);
-        $expenses = $stmt->fetchAll();
+        try {
+            $stmt->execute($expenseIds);
+            $expenses = $stmt->fetchAll();
+        } catch (PDOException) {
+            // Pre-migration schema without category/settled columns
+            $stmt = $this->db->prepare(
+                "SELECT e.id, e.trip_id, e.title, e.amount, e.paid_by_member_id, e.created_by_user_id, e.created_at,
+                        COALESCE(NULLIF(pm.display_name, ''), up.display_name, 'Member') AS paid_by_display_name,
+                        COALESCE(uc.display_name, 'Member') AS created_by_display_name
+                 FROM expenses e
+                 INNER JOIN trip_members pm ON pm.id = e.paid_by_member_id
+                 LEFT JOIN users up ON up.id = pm.user_id
+                 LEFT JOIN users uc ON uc.id = e.created_by_user_id
+                 WHERE e.id IN ($placeholders)
+                 ORDER BY e.created_at DESC, e.id DESC"
+            );
+            $stmt->execute($expenseIds);
+            $expenses = $stmt->fetchAll();
+        }
 
         $result = [];
         foreach ($expenses as $expense) {
             $splitStmt = $this->db->prepare(
-                'SELECT s.member_id, s.amount, u.display_name
+                "SELECT s.member_id, s.amount,
+                        COALESCE(NULLIF(m.display_name, ''), u.display_name, 'Member') AS display_name
                  FROM expense_splits s
                  INNER JOIN trip_members m ON m.id = s.member_id
-                 INNER JOIN users u ON u.id = m.user_id
+                 LEFT JOIN users u ON u.id = m.user_id
                  WHERE s.expense_id = :expense_id
-                 ORDER BY s.member_id ASC'
+                 ORDER BY s.member_id ASC"
             );
             $splitStmt->execute(['expense_id' => (int) $expense['id']]);
             $splits = $splitStmt->fetchAll();
@@ -317,6 +439,12 @@ final class ExpenseController
                 'paid_by_member_id' => (int) $expense['paid_by_member_id'],
                 'paid_by_display_name' => $expense['paid_by_display_name'],
                 'created_by_user_id' => (int) $expense['created_by_user_id'],
+                'created_by_display_name' => $expense['created_by_display_name'],
+                'category_id' => isset($expense['category_id']) && $expense['category_id'] !== null
+                    ? (string) $expense['category_id'] : null,
+                'category_name' => $expense['category_name'] ?? null,
+                'is_settled' => (int) ($expense['is_settled'] ?? 0) === 1,
+                'settled_at' => $expense['settled_at'] ?? null,
                 'created_at' => $expense['created_at'],
                 'splits' => array_map(fn (array $split) => [
                     'member_id' => (int) $split['member_id'],

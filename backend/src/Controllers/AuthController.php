@@ -7,6 +7,7 @@ namespace Inpenso\Controllers;
 use Inpenso\Auth;
 use Inpenso\RateLimiter;
 use Inpenso\Response;
+use Inpenso\UserActivity;
 use PDO;
 
 final class AuthController
@@ -93,13 +94,18 @@ final class AuthController
         }
 
         $stmt = $this->db->prepare(
-            'SELECT id, email, display_name, password_hash FROM users WHERE email = :email LIMIT 1'
+            'SELECT id, email, display_name, password_hash, premium_until, premium_note, is_banned, is_admin
+             FROM users WHERE email = :email LIMIT 1'
         );
         $stmt->execute(['email' => $email]);
         $user = $stmt->fetch();
 
         if (!$user || empty($user['password_hash']) || !password_verify($password, (string) $user['password_hash'])) {
             Response::error('Invalid email or password', 401);
+        }
+
+        if ((int) ($user['is_banned'] ?? 0) === 1) {
+            Response::error('This account has been suspended.', 403, 'account_banned');
         }
 
         $token = Auth::generateToken();
@@ -120,6 +126,9 @@ final class AuthController
             'email' => $user['email'],
             'display_name' => $user['display_name'],
             'api_token' => $token,
+            'premium' => UserActivity::isPremium($user),
+            'premium_until' => $user['premium_until'] ?? null,
+            'is_admin' => (int) ($user['is_admin'] ?? 0) === 1,
         ]);
     }
 

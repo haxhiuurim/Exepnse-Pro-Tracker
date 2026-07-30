@@ -13,6 +13,7 @@ enum SharedTripAPIError: LocalizedError {
     case decoding
     case unauthorized
     case loginRequired
+    case accountBanned(String)
 
     var errorDescription: String? {
         switch self {
@@ -21,6 +22,7 @@ enum SharedTripAPIError: LocalizedError {
         case .decoding: return "Could not read the server response."
         case .unauthorized: return "Session expired. Please sign in again."
         case .loginRequired: return "Sign in to use Trips and sync your data."
+        case .accountBanned(let message): return message
         }
     }
 }
@@ -90,6 +92,9 @@ final class SharedTripAPI {
 
     var isLoggedIn: Bool { token != nil && userID != nil }
 
+    /// Backend user id for the signed-in account, used to match trip members without relying on display names.
+    var currentUserID: Int? { userID }
+
     private var token: String? {
         get { defaults.string(forKey: tokenKey) }
         set { defaults.set(newValue, forKey: tokenKey) }
@@ -103,11 +108,40 @@ final class SharedTripAPI {
         set { defaults.set(newValue ?? 0, forKey: userIDKey) }
     }
 
+    /// Backend money fields are formatted as decimal strings (e.g. "100.00"); this reads
+    /// Double, NSNumber, Int, or String (with comma decimal separators) uniformly.
+    static func parseMoney(_ value: Any?) -> Double {
+        if let value = value as? Double { return value }
+        if let value = value as? NSNumber { return value.doubleValue }
+        if let value = value as? Int { return Double(value) }
+        if let value = value as? String {
+            let cleaned = value
+                .replacingOccurrences(of: ",", with: ".")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return Double(cleaned) ?? 0
+        }
+        return 0
+    }
+
+    /// JSONSerialization often boxes booleans as NSNumber — `as? Bool` then fails.
+    static func parseBool(_ value: Any?) -> Bool {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber { return value.boolValue }
+        if let value = value as? Int { return value != 0 }
+        if let value = value as? String {
+            let lowered = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return lowered == "1" || lowered == "true" || lowered == "yes"
+        }
+        return false
+    }
+
     // MARK: - Sync / telemetry
 
     struct HeartbeatResult {
         var premium: Bool
         var premiumUntil: String?
+        var banned: Bool
+        var bannedMessage: String?
         var config: RemoteAppConfig?
     }
 
@@ -131,13 +165,21 @@ final class SharedTripAPI {
             authed: isLoggedIn
         )
 
-        let premium = data["premium"] as? Bool ?? false
+        let premium = Self.parseBool(data["premium"])
         let until = data["premium_until"] as? String
+        let banned = Self.parseBool(data["banned"])
+        let bannedMessage = data["banned_message"] as? String
         var remote: RemoteAppConfig?
         if let cfg = data["config"] as? [String: Any] {
             remote = Self.parseRemoteConfig(cfg)
         }
-        return HeartbeatResult(premium: premium, premiumUntil: until, config: remote)
+        return HeartbeatResult(
+            premium: premium,
+            premiumUntil: until,
+            banned: banned,
+            bannedMessage: bannedMessage,
+            config: remote
+        )
     }
 
     func fetchPublicConfig() async throws -> RemoteAppConfig {
@@ -200,14 +242,32 @@ final class SharedTripAPI {
         try applyAuthResponse(data)
     }
 
+    /// Fetch current account + admin Pro grant (source of truth for server premium).
+    @MainActor
+    func fetchMe() async throws -> (premium: Bool, premiumUntil: String?) {
+        try requireLogin()
+        let data = try await getJSON(path: "/api/auth/me")
+        let premium = Self.parseBool(data["premium"])
+        let until = data["premium_until"] as? String
+        ProEntitlementManager.shared.applyServerPremium(premium)
+        return (premium, until)
+    }
+
     @MainActor
     func logout() async {
         if token != nil {
             _ = try? await postJSON(path: "/api/auth/logout", body: [:], authed: true)
         }
+        revokeSessionLocally()
+    }
+
+    /// Drop credentials without calling the server (used when the account is banned).
+    @MainActor
+    func revokeSessionLocally() {
         token = nil
         userID = nil
         AuthSession.shared.clearSession()
+        ProEntitlementManager.shared.applyServerPremium(false)
     }
 
     @MainActor
@@ -223,6 +283,10 @@ final class SharedTripAPI {
         self.displayName = name
         defaults.set(email, forKey: emailKey)
         AuthSession.shared.applyLogin(userID: userID, email: email, displayName: name, token: apiToken)
+
+        if data["premium"] != nil {
+            ProEntitlementManager.shared.applyServerPremium(Self.parseBool(data["premium"]))
+        }
     }
 
     /// Trips require a logged-in backend account.
@@ -344,18 +408,67 @@ final class SharedTripAPI {
         tripID: Int,
         title: String,
         amount: Double,
-        paidByMemberID: Int
+        paidByMemberID: Int,
+        splitMemberIDs: [Int]? = nil,
+        categoryID: String? = nil,
+        categoryName: String? = nil
     ) async throws {
         try requireLogin()
+        var body: [String: Any] = [
+            "title": title,
+            "amount": amount,
+            "paid_by_member_id": paidByMemberID
+        ]
+        if let splitMemberIDs {
+            body["split_member_ids"] = splitMemberIDs
+        }
+        if let categoryID {
+            body["category_id"] = categoryID
+        }
+        if let categoryName {
+            body["category_name"] = categoryName
+        }
         _ = try await postJSON(
             path: "/api/trips/\(tripID)/expenses",
-            body: [
-                "title": title,
-                "amount": amount,
-                "paid_by_member_id": paidByMemberID
-            ],
+            body: body,
             authed: true
         )
+    }
+
+    func addManualMember(tripID: Int, displayName: String) async throws -> SharedTripDetail {
+        try requireLogin()
+        let data = try await postJSON(
+            path: "/api/trips/\(tripID)/members",
+            body: ["display_name": displayName],
+            authed: true
+        )
+        guard let tripDict = data["trip"] as? [String: Any], let detail = SharedTripDetail(dict: tripDict) else {
+            throw SharedTripAPIError.decoding
+        }
+        return detail
+    }
+
+    func removeMember(tripID: Int, memberID: Int) async throws -> SharedTripDetail {
+        try requireLogin()
+        let data = try await request(
+            path: "/api/trips/\(tripID)/members/\(memberID)",
+            method: "DELETE",
+            body: nil,
+            authed: true
+        )
+        guard let tripDict = data["trip"] as? [String: Any], let detail = SharedTripDetail(dict: tripDict) else {
+            throw SharedTripAPIError.decoding
+        }
+        return detail
+    }
+
+    func settleTrip(tripID: Int) async throws -> SharedTripDetail {
+        try requireLogin()
+        let data = try await postJSON(path: "/api/trips/\(tripID)/settle", body: [:], authed: true)
+        guard let tripDict = data["trip"] as? [String: Any], let detail = SharedTripDetail(dict: tripDict) else {
+            throw SharedTripAPIError.decoding
+        }
+        return detail
     }
 
     func deleteExpense(tripID: Int, expenseID: Int) async throws {
@@ -442,11 +555,20 @@ final class SharedTripAPI {
             await MainActor.run { AuthSession.shared.clearSession() }
             throw SharedTripAPIError.unauthorized
         }
+        let errorMessage = envelope["error"] as? String
+        let errorCode = envelope["code"] as? String
+        if http.statusCode == 403,
+           errorCode == "account_banned"
+            || (errorMessage?.localizedCaseInsensitiveContains("suspended") == true) {
+            throw SharedTripAPIError.accountBanned(
+                errorMessage ?? "This account has been suspended."
+            )
+        }
         // 202 Accepted is success for pending join
         if !ok && !(200...299).contains(http.statusCode) {
-            throw SharedTripAPIError.server(envelope["error"] as? String ?? "Request failed (\(http.statusCode))")
+            throw SharedTripAPIError.server(errorMessage ?? "Request failed (\(http.statusCode))")
         }
-        if !ok, let err = envelope["error"] as? String {
+        if !ok, let err = errorMessage {
             throw SharedTripAPIError.server(err)
         }
         return envelope["data"] ?? [:]
@@ -464,6 +586,8 @@ struct SharedTripSummary: Identifiable, Hashable {
     let expenseCount: Int
     let totalSpent: Double
     let isOwner: Bool
+    /// Signed-in user's net balance on this trip (positive = owed to them, negative = they owe).
+    let myNet: Double
 
     init(
         id: Int,
@@ -473,7 +597,8 @@ struct SharedTripSummary: Identifiable, Hashable {
         memberCount: Int,
         expenseCount: Int,
         totalSpent: Double,
-        isOwner: Bool
+        isOwner: Bool,
+        myNet: Double = 0
     ) {
         self.id = id
         self.name = name
@@ -483,6 +608,7 @@ struct SharedTripSummary: Identifiable, Hashable {
         self.expenseCount = expenseCount
         self.totalSpent = totalSpent
         self.isOwner = isOwner
+        self.myNet = myNet
     }
 
     init?(dict: [String: Any]) {
@@ -495,22 +621,17 @@ struct SharedTripSummary: Identifiable, Hashable {
             ?? (dict["members"] as? [Any])?.count
             ?? 0
         self.expenseCount = dict["expense_count"] as? Int ?? 0
-        if let total = dict["total_spent"] as? Double {
-            self.totalSpent = total
-        } else if let total = dict["total_spent"] as? NSNumber {
-            self.totalSpent = total.doubleValue
-        } else if let total = dict["total_spent"] as? String {
-            self.totalSpent = Double(total) ?? 0
-        } else {
-            self.totalSpent = 0
-        }
+        self.totalSpent = SharedTripAPI.parseMoney(dict["total_spent"])
         self.isOwner = dict["is_owner"] as? Bool ?? false
+        self.myNet = SharedTripAPI.parseMoney(dict["my_net"])
     }
 }
 
 struct SharedTripMember: Identifiable, Hashable {
     let id: Int
     let name: String
+    let userID: Int?
+    let isManual: Bool
     let paid: Double
     let owed: Double
     let net: Double
@@ -519,9 +640,11 @@ struct SharedTripMember: Identifiable, Hashable {
         guard let id = dict["id"] as? Int ?? (dict["member_id"] as? Int) else { return nil }
         self.id = id
         self.name = dict["display_name"] as? String ?? dict["name"] as? String ?? "Member"
-        self.paid = (dict["paid"] as? Double) ?? (dict["paid"] as? NSNumber)?.doubleValue ?? 0
-        self.owed = (dict["owed"] as? Double) ?? (dict["owed"] as? NSNumber)?.doubleValue ?? 0
-        self.net = (dict["net"] as? Double) ?? (dict["net"] as? NSNumber)?.doubleValue ?? 0
+        self.userID = dict["user_id"] as? Int
+        self.isManual = dict["is_manual"] as? Bool ?? false
+        self.paid = SharedTripAPI.parseMoney(dict["paid"])
+        self.owed = SharedTripAPI.parseMoney(dict["owed"])
+        self.net = SharedTripAPI.parseMoney(dict["net"])
     }
 }
 
@@ -530,16 +653,28 @@ struct SharedTripExpense: Identifiable, Hashable {
     let title: String
     let amount: Double
     let paidByName: String
+    let createdByName: String
+    let categoryID: String?
+    let categoryName: String?
+    let isSettled: Bool
     let createdAt: String
 
     init?(dict: [String: Any]) {
         guard let id = dict["id"] as? Int else { return nil }
         self.id = id
         self.title = dict["title"] as? String ?? "Expense"
-        self.amount = (dict["amount"] as? Double) ?? (dict["amount"] as? NSNumber)?.doubleValue ?? 0
-        self.paidByName = dict["paid_by_name"] as? String
+        self.amount = SharedTripAPI.parseMoney(dict["amount"])
+        self.paidByName = dict["paid_by_display_name"] as? String
+            ?? dict["paid_by_name"] as? String
             ?? dict["payer_name"] as? String
             ?? "Someone"
+        self.createdByName = dict["created_by_display_name"] as? String
+            ?? dict["created_by_name"] as? String
+            ?? "Someone"
+        self.categoryID = dict["category_id"] as? String
+        let category = (dict["category_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.categoryName = (category?.isEmpty ?? true) ? nil : category
+        self.isSettled = dict["is_settled"] as? Bool ?? false
         self.createdAt = dict["created_at"] as? String ?? ""
     }
 }
@@ -549,14 +684,26 @@ struct SharedTripDetail {
     let members: [SharedTripMember]
     let expenses: [SharedTripExpense]
     let myMemberID: Int?
+    let categoryBreakdown: [(name: String, amount: Double)]
 
     init?(dict: [String: Any]) {
         let tripDict = (dict["trip"] as? [String: Any]) ?? dict
         guard var trip = SharedTripSummary(dict: tripDict) else { return nil }
         self.members = (dict["members"] as? [[String: Any]] ?? []).compactMap(SharedTripMember.init(dict:))
         self.expenses = (dict["expenses"] as? [[String: Any]] ?? []).compactMap(SharedTripExpense.init(dict:))
+        self.categoryBreakdown = (dict["category_breakdown"] as? [[String: Any]] ?? []).map { entry in
+            (
+                name: entry["category_name"] as? String ?? "Other",
+                amount: SharedTripAPI.parseMoney(entry["amount"])
+            )
+        }
+
+        let currentUserID = SharedTripAPI.shared.currentUserID
         self.myMemberID = dict["my_member_id"] as? Int
+            ?? members.first(where: { currentUserID != nil && $0.userID == currentUserID })?.id
             ?? members.first(where: { $0.name == SharedTripAPI.shared.displayName })?.id
+
+        let resolvedTotalSpent = trip.totalSpent > 0 ? trip.totalSpent : expenses.reduce(0) { $0 + $1.amount }
         if let isOwner = dict["is_owner"] as? Bool {
             trip = SharedTripSummary(
                 id: trip.id,
@@ -565,10 +712,11 @@ struct SharedTripDetail {
                 currency: trip.currency,
                 memberCount: max(trip.memberCount, members.count),
                 expenseCount: max(trip.expenseCount, expenses.count),
-                totalSpent: trip.totalSpent > 0 ? trip.totalSpent : expenses.reduce(0) { $0 + $1.amount },
-                isOwner: isOwner
+                totalSpent: resolvedTotalSpent,
+                isOwner: isOwner,
+                myNet: trip.myNet
             )
-        } else if trip.memberCount == 0 || trip.expenseCount == 0 {
+        } else if trip.memberCount == 0 || trip.expenseCount == 0 || trip.totalSpent != resolvedTotalSpent {
             trip = SharedTripSummary(
                 id: trip.id,
                 name: trip.name,
@@ -576,8 +724,9 @@ struct SharedTripDetail {
                 currency: trip.currency,
                 memberCount: max(trip.memberCount, members.count),
                 expenseCount: max(trip.expenseCount, expenses.count),
-                totalSpent: trip.totalSpent > 0 ? trip.totalSpent : expenses.reduce(0) { $0 + $1.amount },
-                isOwner: trip.isOwner
+                totalSpent: resolvedTotalSpent,
+                isOwner: trip.isOwner,
+                myNet: trip.myNet
             )
         }
         self.trip = trip
