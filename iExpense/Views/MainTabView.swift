@@ -81,7 +81,7 @@ struct MainTabView: View {
                 }
                 .tag(AppTab.more.rawValue)
             }
-            .tint(InpensoTheme.ink)
+            .tint(InpensoTheme.tide)
             .id(settingsViewModel.selectedCurrency)
             .preferredColorScheme(settingsViewModel.selectedTheme.colorScheme)
             .sheet(item: $quickAddRequest) { request in
@@ -240,7 +240,7 @@ struct MainTabView: View {
             .foregroundColor: UIColor(InpensoTheme.muted)
         ]
         let selectedAttributes: [NSAttributedString.Key: Any] = [
-            .foregroundColor: UIColor(InpensoTheme.ink)
+            .foregroundColor: UIColor(InpensoTheme.tide)
         ]
 
         for layout in [
@@ -250,13 +250,13 @@ struct MainTabView: View {
         ] {
             layout.normal.iconColor = UIColor(InpensoTheme.muted)
             layout.normal.titleTextAttributes = normalAttributes
-            layout.selected.iconColor = UIColor(InpensoTheme.ink)
+            layout.selected.iconColor = UIColor(InpensoTheme.tide)
             layout.selected.titleTextAttributes = selectedAttributes
         }
 
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
-        UITabBar.appearance().tintColor = UIColor(InpensoTheme.ink)
+        UITabBar.appearance().tintColor = UIColor(InpensoTheme.tide)
         UITabBar.appearance().unselectedItemTintColor = UIColor(InpensoTheme.muted)
     }
 }

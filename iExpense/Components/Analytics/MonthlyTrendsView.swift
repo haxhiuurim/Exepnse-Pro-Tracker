@@ -199,6 +199,11 @@ struct ProjectionView: View {
             VStack(alignment: .leading, spacing: InpensoTheme.Space.md) {
                 InpensoSectionHeader(title: "On track this month")
 
+                Text("Spent so far stays where it is; on-track extrapolates that daily pace to month end.")
+                    .font(InpensoTheme.body(13))
+                    .foregroundStyle(InpensoTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 Text("Based on spend so far, you’re pacing toward \(projectedMonthlySpend.formatted(.currency(code: currencyCode))) by month end.")
                     .font(InpensoTheme.body(13))
                     .foregroundStyle(InpensoTheme.muted)

@@ -156,28 +156,25 @@ struct SharedTripsView: View {
     // MARK: - Header
 
     private var tripsBrandHeader: some View {
-        HStack(alignment: .center, spacing: InpensoTheme.Space.sm) {
+        HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Trips")
-                    .font(InpensoTheme.brandFont(28, weight: .heavy))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(InpensoTheme.ink)
                 Text("Shared spend with friends")
-                    .font(InpensoTheme.label(13))
+                    .font(.system(size: 13))
                     .foregroundStyle(InpensoTheme.muted)
             }
 
             Spacer(minLength: 8)
 
-            HStack(spacing: InpensoTheme.Space.xs) {
+            HStack(spacing: 8) {
                 Text(model.displayName)
-                    .font(InpensoTheme.label(12, weight: .semibold))
-                    .foregroundStyle(InpensoTheme.tide)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(InpensoTheme.ink)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(
-                        InpensoTheme.tide.opacity(0.12),
-                        in: Capsule()
-                    )
+                    .background(Capsule().fill(Color.white.opacity(0.7)))
                     .lineLimit(1)
 
                 Button {
@@ -186,11 +183,8 @@ struct SharedTripsView: View {
                     Image(systemName: "pencil")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(InpensoTheme.ink)
-                        .frame(width: 34, height: 34)
-                        .background(
-                            InpensoTheme.mist,
-                            in: RoundedRectangle(cornerRadius: InpensoTheme.Radius.sm, style: .continuous)
-                        )
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Color.white.opacity(0.7)))
                 }
             }
         }

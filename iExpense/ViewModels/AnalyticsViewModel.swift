@@ -118,6 +118,7 @@ class AnalyticsViewModel: ObservableObject {
         let calendar = Calendar.current
 
         let filteredTransactions = expenses.filter { expense in
+            guard !expense.isBalanceAdjustment else { return false }
             let expenseMonth = calendar.component(.month, from: expense.date)
             let expenseYear = calendar.component(.year, from: expense.date)
             return expenseMonth == selectedMonth && expenseYear == selectedYear
@@ -190,16 +191,44 @@ class AnalyticsViewModel: ObservableObject {
             averageDailySpend = 0
         }
 
-        if averageDailySpend > 0 {
-            // Flux-style: pace from days elapsed so far this month.
-            let today = min(calendar.component(.day, from: Date()), dailyData.count)
-            let elapsed = max(1, today)
-            let spentSoFar = dailyData.prefix(elapsed).reduce(0.0) { $0 + $1.amount }
-            let pacePerDay = spentSoFar / Double(elapsed)
-            projectedMonthlySpend = pacePerDay * Double(dailyData.count)
-        } else {
-            projectedMonthlySpend = totalSpent
+        projectedMonthlySpend = Self.projectedMonthEndSpend(
+            dailyData: dailyData,
+            selectedMonth: selectedMonth,
+            selectedYear: selectedYear,
+            calendar: calendar
+        )
+    }
+
+    /// Pace projection: (spent so far ÷ calendar days elapsed) × days in month.
+    /// Past months = actual total. Future months = 0. Always rounded to cents.
+    static func projectedMonthEndSpend(
+        dailyData: [DailySpending],
+        selectedMonth: Int,
+        selectedYear: Int,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Double {
+        let daysInMonth = dailyData.count
+        guard daysInMonth > 0 else { return 0 }
+
+        let spentSoFar = dailyData.reduce(0.0) { $0 + $1.amount }
+        let nowMonth = calendar.component(.month, from: now)
+        let nowYear = calendar.component(.year, from: now)
+
+        if selectedYear < nowYear || (selectedYear == nowYear && selectedMonth < nowMonth) {
+            return (spentSoFar * 100).rounded() / 100
         }
+        if selectedYear > nowYear || (selectedYear == nowYear && selectedMonth > nowMonth) {
+            return 0
+        }
+
+        guard spentSoFar > 0 else { return 0 }
+
+        let today = min(calendar.component(.day, from: now), daysInMonth)
+        let elapsed = max(1, today)
+        let pacePerDay = spentSoFar / Double(elapsed)
+        let projected = pacePerDay * Double(daysInMonth)
+        return (projected * 100).rounded() / 100
     }
 
     private func calculateMonthlyTrends() {
@@ -214,6 +243,7 @@ class AnalyticsViewModel: ObservableObject {
 
             let totalAmount = expenses
                 .filter { expense in
+                    guard !expense.isBalanceAdjustment else { return false }
                     let expenseMonth = calendar.component(.month, from: expense.date)
                     let expenseYear = calendar.component(.year, from: expense.date)
                     return expense.type == .expense && expenseMonth == month && expenseYear == year
@@ -235,6 +265,7 @@ class AnalyticsViewModel: ObservableObject {
         let calendar = Calendar.current
 
         let currentMonthExpenses = expenses.filter { expense in
+            guard !expense.isBalanceAdjustment else { return false }
             let expenseMonth = calendar.component(.month, from: expense.date)
             let expenseYear = calendar.component(.year, from: expense.date)
             return expense.type == .expense && expenseMonth == selectedMonth && expenseYear == selectedYear
@@ -255,6 +286,7 @@ class AnalyticsViewModel: ObservableObject {
         let previousYear = calendar.component(.year, from: previousMonthDate)
 
         let previousMonthExpenses = expenses.filter { expense in
+            guard !expense.isBalanceAdjustment else { return false }
             let expenseMonth = calendar.component(.month, from: expense.date)
             let expenseYear = calendar.component(.year, from: expense.date)
             return expense.type == .expense && expenseMonth == previousMonth && expenseYear == previousYear
@@ -298,6 +330,7 @@ class AnalyticsViewModel: ObservableObject {
 
                 let previousMonthSpent = expenses
                     .filter {
+                        !$0.isBalanceAdjustment &&
                         $0.type == .expense &&
                         Calendar.current.component(.month, from: $0.date) == prevMonth &&
                         Calendar.current.component(.year, from: $0.date) == prevYear

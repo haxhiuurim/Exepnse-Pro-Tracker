@@ -131,8 +131,8 @@ enum LedgerRangeMode: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Home only uses day/week/month
-    static var homeModes: [LedgerRangeMode] { [.day, .week, .month] }
+    /// Period chips shared by Home & Activity
+    static var homeModes: [LedgerRangeMode] { allCases }
 }
 
 struct LedgerDateSelection: Equatable {

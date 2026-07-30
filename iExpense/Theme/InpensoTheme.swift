@@ -2,8 +2,7 @@
 //  InpensoTheme.swift
 //  iExpense
 //
-//  North — new-app visual system for Inpenso.
-//  Soft blue canvas, navy type, cobalt accent. Quiet surfaces, clear money color.
+//  Obsidian + Jade — calm stone canvas, charcoal hero cards, jade accent.
 //
 
 import SwiftUI
@@ -11,29 +10,33 @@ import SwiftUI
 enum InpensoTheme {
     // MARK: - Palette
 
-    /// Deep navy — text & chrome
-    static let ink = Color(inpensoHex: "#0B1B33")
-    static let inkSoft = Color(inpensoHex: "#152A47")
-    /// Cobalt — links, charts, selected chrome
-    static let tide = Color(inpensoHex: "#3B6EF5")
+    /// Obsidian forest — text & hero base
+    static let ink = Color(inpensoHex: "#0E1C1A")
+    static let inkSoft = Color(inpensoHex: "#1A302C")
+    /// Jade — links, selected chrome, Available today
+    static let tide = Color(inpensoHex: "#0F9F74")
+    static let tideSoft = Color(inpensoHex: "#C8F0DF")
     /// Soft mint highlight
-    static let seafoam = Color(inpensoHex: "#34D399")
+    static let seafoam = Color(inpensoHex: "#3DDC97")
     /// Chip / quiet fill
-    static let mist = Color(inpensoHex: "#E4EAF3")
-    static let mistDeep = Color(inpensoHex: "#D5DEEB")
-    /// App canvas
-    static let foam = Color(inpensoHex: "#EEF1F6")
-    /// Primary CTA (navy)
-    static let copper = Color(inpensoHex: "#0B1B33")
-    static let copperSoft = Color(inpensoHex: "#243B5C")
-    static let slate = Color(inpensoHex: "#3A4A63")
-    static let muted = Color(inpensoHex: "#6B7A90")
-    /// Rose — expense
-    static let danger = Color(inpensoHex: "#F0435D")
-    /// Green — income
-    static let surplus = Color(inpensoHex: "#12B981")
-    static let hairline = Color(inpensoHex: "#D7DEEA")
+    static let mist = Color(inpensoHex: "#E2EBE7")
+    static let mistDeep = Color(inpensoHex: "#D0DDD8")
+    /// App canvas — cool sage stone (not cream)
+    static let foam = Color(inpensoHex: "#EEF3F1")
+    static let foamDeep = Color(inpensoHex: "#E4EDE9")
+    /// Primary CTA
+    static let copper = Color(inpensoHex: "#0E1C1A")
+    static let copperSoft = Color(inpensoHex: "#2A453F")
+    static let slate = Color(inpensoHex: "#3D544E")
+    static let muted = Color(inpensoHex: "#6E817A")
+    /// Coral — expense
+    static let danger = Color(inpensoHex: "#E85A4F")
+    /// Jade green — income
+    static let surplus = Color(inpensoHex: "#0F9F74")
+    static let hairline = Color(inpensoHex: "#D3DFDA")
     static let panelFill = Color.white
+    /// Warm highlight for hero glow
+    static let glow = Color(inpensoHex: "#7CFFC4")
 
     // MARK: - Semantic
 
@@ -98,7 +101,7 @@ enum InpensoTheme {
     }
 
     static func sectionLabel() -> Font {
-        .system(size: 14, weight: .bold, design: .rounded)
+        .system(size: 13, weight: .bold, design: .rounded)
     }
 }
 
@@ -108,15 +111,114 @@ struct AtmosphereBackground: View {
     var intensity: Double = 1.0
 
     var body: some View {
-        LinearGradient(
-            colors: [
-                InpensoTheme.foam,
-                Color(inpensoHex: "#E8EDF6")
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        ZStack {
+            LinearGradient(
+                colors: [
+                    InpensoTheme.foam,
+                    InpensoTheme.foamDeep
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            // Soft jade glow — top trailing
+            Circle()
+                .fill(InpensoTheme.glow.opacity(0.14 * intensity))
+                .frame(width: 280, height: 280)
+                .blur(radius: 60)
+                .offset(x: 130, y: -80)
+
+            // Quiet mist — bottom leading
+            Circle()
+                .fill(InpensoTheme.tide.opacity(0.06 * intensity))
+                .frame(width: 320, height: 320)
+                .blur(radius: 70)
+                .offset(x: -140, y: 420)
+        }
         .ignoresSafeArea()
+    }
+}
+
+// MARK: - Banking hero surface
+
+struct BankingHeroBackground: View {
+    var radius: CGFloat = InpensoTheme.Radius.hero
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        InpensoTheme.ink,
+                        Color(inpensoHex: "#143029"),
+                        InpensoTheme.inkSoft
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(alignment: .topTrailing) {
+                Circle()
+                    .fill(InpensoTheme.glow.opacity(0.18))
+                    .frame(width: 140, height: 140)
+                    .blur(radius: 36)
+                    .offset(x: 28, y: -34)
+            }
+            .overlay(alignment: .bottomLeading) {
+                Circle()
+                    .fill(InpensoTheme.tide.opacity(0.22))
+                    .frame(width: 110, height: 110)
+                    .blur(radius: 28)
+                    .offset(x: -30, y: 36)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .shadow(color: InpensoTheme.ink.opacity(0.22), radius: 20, y: 10)
+    }
+}
+
+struct BankingPeriodChips: View {
+    @Binding var selection: LedgerDateSelection
+    var modes: [LedgerRangeMode] = LedgerRangeMode.allCases
+    var onDark: Bool = true
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(modes) { mode in
+                let selected = selection.mode == mode
+                Button {
+                    HapticFeedback.selection()
+                    withAnimation(InpensoTheme.Motion.snappy) {
+                        selection.mode = mode
+                    }
+                } label: {
+                    Text(mode.title)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(chipForeground(selected: selected))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(chipFill(selected: selected))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func chipForeground(selected: Bool) -> Color {
+        if onDark {
+            return selected ? InpensoTheme.ink : .white.opacity(0.88)
+        }
+        return selected ? .white : InpensoTheme.slate
+    }
+
+    private func chipFill(selected: Bool) -> Color {
+        if onDark {
+            return selected ? Color.white : Color.white.opacity(0.12)
+        }
+        return selected ? InpensoTheme.ink : InpensoTheme.mist
     }
 }
 
@@ -156,7 +258,7 @@ struct SurfacePanel<Content: View>: View {
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(InpensoTheme.panelFill)
-                    .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 12, y: 4)
+                    .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 14, y: 5)
             )
     }
 }
@@ -296,7 +398,7 @@ extension View {
         background(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(InpensoTheme.panelFill)
-                .shadow(color: InpensoTheme.ink.opacity(0.04), radius: 12, y: 4)
+                .shadow(color: InpensoTheme.ink.opacity(0.05), radius: 14, y: 5)
         )
     }
 

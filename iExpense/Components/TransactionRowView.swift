@@ -9,6 +9,7 @@ struct TransactionRowView: View {
     let expense: Expense
     let currencyCode: String
     let category: FinanceCategory
+    var showsDate: Bool = true
 
     var body: some View {
         HStack(spacing: InpensoTheme.Space.sm) {
@@ -27,15 +28,23 @@ struct TransactionRowView: View {
                     .foregroundStyle(InpensoTheme.ink)
                     .lineLimit(1)
 
-                HStack(spacing: 6) {
-                    Text(expense.date, format: .dateTime.month(.abbreviated).day())
-                        .font(InpensoTheme.label(12))
-                        .foregroundStyle(InpensoTheme.muted)
-                    if !expense.tags.isEmpty {
-                        Text(expense.tags.prefix(2).map { "#\($0)" }.joined(separator: " "))
-                            .font(InpensoTheme.label(11, weight: .semibold))
-                            .foregroundStyle(InpensoTheme.tide)
-                            .lineLimit(1)
+                if showsDate || !expense.tags.isEmpty {
+                    HStack(spacing: 6) {
+                        if showsDate {
+                            Text(expense.date, format: .dateTime.month(.abbreviated).day())
+                                .font(InpensoTheme.label(12))
+                                .foregroundStyle(InpensoTheme.muted)
+                        } else {
+                            Text(category.displayName)
+                                .font(InpensoTheme.label(12))
+                                .foregroundStyle(InpensoTheme.muted)
+                        }
+                        if !expense.tags.isEmpty {
+                            Text(expense.tags.prefix(2).map { "#\($0)" }.joined(separator: " "))
+                                .font(InpensoTheme.label(11, weight: .semibold))
+                                .foregroundStyle(InpensoTheme.tide)
+                                .lineLimit(1)
+                        }
                     }
                 }
             }
